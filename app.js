@@ -161,7 +161,8 @@ $("btnTogglePassword").addEventListener("click", () => {
 $("formLogin").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
- 
+
+ showAlert("Intentando login… " + location.href, "ok");
   showAlert("Intentando login…", "ok");
 
   const btn = $("btnLogin");
@@ -177,7 +178,7 @@ $("formLogin").addEventListener("submit", async (e) => {
     await safeInit();
   } catch (err) {
     setBusy(btn, false);
-    showAlert(err?.message || "Error de red/JS al iniciar sesión.", "error");
+    showAlert("Catch: " + (err?.message || err), "error");
   }
 });
 
