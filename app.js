@@ -144,6 +144,108 @@ async function loadParticipants() {
   `).join("");
 }
 
+async function loadPools() {
+  const { data, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, status, round, competition, season, price, commission_pct, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) return showAlert(error.message, "error");
+
+  const rows = data || [];
+  const active = rows.find(p => p.status === "open");
+  $("activePoolName").textContent = active ? active.name : "—";
+
+  $("poolsList").innerHTML = rows.map(p => {
+    const badge =
+      p.status === "open" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300" :
+      p.status === "closed" ? "bg-amber-500/10 border-amber-500/20 text-amber-300" :
+      "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
+
+    const statusLabel =
+      p.status === "open" ? "Abierta" :
+      p.status === "closed" ? "Cerrada" : "Finalizada";
+
+    return `
+      <div class="p-3 bg-zinc-950 border border-zinc-800 rounded">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <div class="font-semibold">${p.name}</div>
+            <div class="text-xs text-zinc-400">
+              $${Number(p.price).toFixed(0)} • Comisión ${Number(p.commission_pct).toFixed(0)}% • ${p.competition} • ${p.season}
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="text-xs px-2 py-1 rounded-full border ${badge}">${statusLabel}</span>
+
+            ${p.status !== "open" ? `
+              <button data-open="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
+                Marcar activa
+              </button>
+            ` : `
+              <button data-close="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
+                Cerrar
+              </button>
+            `}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  // listeners botones
+  document.querySelectorAll("[data-open]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-open");
+      await setPoolOpen(id);
+    });
+  });
+
+  document.querySelectorAll("[data-close]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-close");
+      await setPoolClosed(id);
+    });
+  });
+}
+
+async function setPoolOpen(poolId) {
+  hideAlert();
+
+  // regla simple: solo 1 abierta
+  const { error: closeErr } = await supabaseClient
+    .from("pools")
+    .update({ status: "closed" })
+    .eq("status", "open");
+
+  if (closeErr) return showAlert(closeErr.message, "error");
+
+  const { error } = await supabaseClient
+    .from("pools")
+    .update({ status: "open" })
+    .eq("id", poolId);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Jornada marcada como activa ✅", "ok");
+  loadPools();
+}
+
+async function setPoolClosed(poolId) {
+  hideAlert();
+
+  const { error } = await supabaseClient
+    .from("pools")
+    .update({ status: "closed" })
+    .eq("id", poolId);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Jornada cerrada ✅", "ok");
+  loadPools();
+}
+
 // =====================
 // Eventos
 // =====================
@@ -254,6 +356,30 @@ $("formParticipant").addEventListener("submit", async (e) => {
   $("pWhatsapp").value = "";
 
   loadParticipants();
+});
+
+// Jornadas: insertar
+$("formPool").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideAlert();
+
+  const round = Number($("poolRound").value);
+  const competition = $("poolCompetition").value.trim() || "Liga MX";
+  const season = $("poolSeason").value.trim() || "Clausura 2026";
+  const price = Number($("poolPrice").value || 20);
+  const commission_pct = Number($("poolCommission").value || 15);
+
+  const name = `Jornada ${round} - ${competition} - ${season}`;
+
+  const { error } = await supabaseClient.from("pools").insert({
+    round, competition, season, name, price, commission_pct, status: "open"
+  });
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Jornada creada ✅", "ok");
+  $("poolRound").value = "";
+  loadPools();
 });
 
 // Logout
