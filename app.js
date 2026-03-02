@@ -246,6 +246,126 @@ async function setPoolClosed(poolId) {
   loadPools();
 }
 
+function money(n) {
+  const x = Number(n || 0);
+  return "$" + x.toFixed(0);
+}
+
+async function fillEntryPoolsSelect() {
+  const { data, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, status, price, commission_pct, created_at")
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) return showAlert(error.message, "error");
+
+  const sel = $("entryPool");
+  sel.innerHTML = (data || []).map(p => {
+    const tag = p.status === "open" ? " (Activa)" : "";
+    return `<option value="${p.id}">${p.name}${tag}</option>`;
+  }).join("");
+
+  // Si hay activa, seleccionarla por defecto
+  const active = (data || []).find(p => p.status === "open");
+  if (active) sel.value = active.id;
+}
+
+async function fillEntryParticipantsSelect() {
+  const { data, error } = await supabaseClient
+    .from("participants")
+    .select("id, name, area")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) return showAlert(error.message, "error");
+
+  const sel = $("entryParticipant");
+  sel.innerHTML = (data || []).map(p => {
+    const area = p.area ? ` • ${p.area}` : "";
+    return `<option value="${p.id}">${p.name}${area}</option>`;
+  }).join("");
+}
+
+async function addEntry() {
+  hideAlert();
+
+  const pool_id = $("entryPool").value;
+  const participant_id = $("entryParticipant").value;
+  const paid = $("entryPaid").checked;
+
+  if (!pool_id || !participant_id) return showAlert("Falta seleccionar pool/participante.", "error");
+
+  const payload = {
+    pool_id,
+    participant_id,
+    paid,
+    paid_at: paid ? new Date().toISOString() : null
+  };
+
+  const { error } = await supabaseClient.from("entries").insert(payload);
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Boleto registrado ✅", "ok");
+  $("entryPaid").checked = false;
+  await loadEntriesAndStats();
+}
+
+async function loadEntriesAndStats() {
+  const pool_id = $("entryPool").value;
+  if (!pool_id) return;
+
+  // Stats desde vista pool_stats
+  const { data: stats, error: stErr } = await supabaseClient
+    .from("pool_stats")
+    .select("paid_count, total_collected, commission_amount, prize_pool")
+    .eq("pool_id", pool_id)
+    .maybeSingle();
+
+  if (stErr) {
+    showAlert(stErr.message, "error");
+  } else {
+    const paidCount = Number(stats?.paid_count || 0);
+    const total = Number(stats?.total_collected || 0);
+    const comm = Number(stats?.commission_amount || 0);
+    const prize = Number(stats?.prize_pool || 0);
+
+    $("kpiPaid").textContent = paidCount;
+    $("kpiTotal").textContent = money(total);
+    $("kpiCommission").textContent = money(comm);
+    $("kpiPrize").textContent = money(prize);
+    $("kpiPrize2").textContent = money(prize);
+  }
+
+  // Lista de entries recientes
+  const { data: rows, error } = await supabaseClient
+    .from("entries")
+    .select("id, paid, created_at, participants(name), pools(name)")
+    .eq("pool_id", pool_id)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) return showAlert(error.message, "error");
+
+  $("entriesList").innerHTML = (rows || []).map(r => {
+    const badge = r.paid
+      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+      : "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
+
+    return `
+      <div class="p-2 bg-zinc-950 border border-zinc-800 rounded flex items-center justify-between gap-2">
+        <div>
+          <div class="font-semibold">${r.participants?.name || "—"}</div>
+          <div class="text-xs text-zinc-400">${new Date(r.created_at).toLocaleString("es-MX")}</div>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full border ${badge}">
+          ${r.paid ? "Pagado" : "Pendiente"}
+        </span>
+      </div>
+    `;
+  }).join("");
+}
+
 // =====================
 // Eventos
 // =====================
@@ -382,6 +502,12 @@ $("formPool").addEventListener("submit", async (e) => {
   loadPools();
 });
 
+//Registrar Boletos Pagos
+$("btnAddEntry").addEventListener("click", addEntry);
+$("btnRefreshStats").addEventListener("click", loadEntriesAndStats);
+
+$("entryPool").addEventListener("change", loadEntriesAndStats);
+
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
   await supabaseClient.auth.signOut();
@@ -453,9 +579,15 @@ async function init() {
   $("greetingMain").textContent = `👋 ${saludo}, ${profile.display_name}`;
 $("greetingDate").textContent = fecha;
 
+await fillEntryPoolsSelect();
+await fillEntryParticipantsSelect();
+await loadEntriesAndStats();
+
   setView("viewDash");
   loadParticipants();
+  fillEntryParticipantsSelect()
   loadPools();
+  fillEntryPoolsSelect()
 }
 
 // Arranque
