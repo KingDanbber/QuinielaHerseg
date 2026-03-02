@@ -62,23 +62,23 @@ function getGreetingByHour(h) {
 
 // Formato: "Dom, 01 Marzo, 2026"
 function formatMxHeader(date=new Date()) {
-  const parts = new Intl.DateTimeFormat("es-MX", {
+  const formatter = new Intl.DateTimeFormat("es-MX", {
     timeZone: "America/Monterrey",
-    weekday: "short",
+    weekday: "long",
     day: "2-digit",
     month: "long",
     year: "numeric"
-  }).formatToParts(date);
+  });
 
-  const get = (t) => (parts.find(p => p.type === t) || {}).value || "";
-  const wdRaw = get("weekday").replace(".", "").trim();
-  const weekday = wdRaw ? wdRaw[0].toUpperCase() + wdRaw.slice(1) : "";
-  const day = get("day");
-  const mRaw = get("month").trim();
-  const month = mRaw ? mRaw[0].toUpperCase() + mRaw.slice(1) : "";
-  const year = get("year");
+  let formatted = formatter.format(date);
 
-  return `${weekday}, ${day} ${month}, ${year}`;
+  // Capitalizar primera letra
+  formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+
+  // Convertir "02 marzo 2026" a "02 de Marzo 2026"
+  formatted = formatted.replace(/(\d{2}) (\w+) (\d{4})/, "$1 de $2 $3");
+
+  return formatted;
 }
 
 // =====================
@@ -301,7 +301,8 @@ async function init() {
   const saludo = getGreetingByHour(getMonterreyHour(now));
   const fecha = formatMxHeader(now);
 
-  $("greeting").textContent = `${saludo}, ${profile.display_name}. ${fecha}`;
+  $("greetingMain").textContent = `👋 ${saludo}, ${profile.display_name}`;
+$("greetingDate").textContent = fecha;
 
   setView("viewDash");
   loadParticipants();
