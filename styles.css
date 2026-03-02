@@ -1,0 +1,11 @@
+/* Aquí casi todo lo maneja Tailwind.
+   Este archivo es por si quieres meter ajustes globales. */
+
+:root {
+  color-scheme: dark;
+}
+
+/* Opcional: que los inputs se vean uniformes */
+input::placeholder {
+  opacity: .85;
+}
