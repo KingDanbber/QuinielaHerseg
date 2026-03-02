@@ -170,6 +170,58 @@
   </div>
 </div>
 
+<!-- PAGOS / ENTRIES -->
+<div class="bg-zinc-900 p-4 rounded-xl border border-zinc-800 mb-6">
+  <div class="flex items-center justify-between gap-3 flex-wrap">
+    <h3 class="font-semibold">Pagos (Boletos)</h3>
+    <div class="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+      Bolsa: <span id="kpiPrize">$0</span>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-5 gap-2 mt-4">
+    <select id="entryPool" class="p-2 bg-zinc-950 border border-zinc-800 rounded"></select>
+    <select id="entryParticipant" class="p-2 bg-zinc-950 border border-zinc-800 rounded"></select>
+
+    <label class="flex items-center gap-2 p-2 bg-zinc-950 border border-zinc-800 rounded">
+      <input id="entryPaid" type="checkbox" class="accent-emerald-500">
+      <span class="text-sm">Pagado</span>
+    </label>
+
+    <button id="btnAddEntry" class="bg-emerald-600 hover:bg-emerald-500 rounded font-semibold">
+      Registrar boleto
+    </button>
+
+    <button id="btnRefreshStats" class="bg-zinc-800 hover:bg-zinc-700 rounded font-semibold">
+      Actualizar
+    </button>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4 text-sm">
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded">
+      <div class="text-xs text-zinc-400">Pagados</div>
+      <div id="kpiPaid" class="font-semibold">0</div>
+    </div>
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded">
+      <div class="text-xs text-zinc-400">Total</div>
+      <div id="kpiTotal" class="font-semibold">$0</div>
+    </div>
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded">
+      <div class="text-xs text-zinc-400">Comisión</div>
+      <div id="kpiCommission" class="font-semibold">$0</div>
+    </div>
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded">
+      <div class="text-xs text-zinc-400">Premio</div>
+      <div id="kpiPrize2" class="font-semibold">$0</div>
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <div class="text-zinc-400 text-sm mb-2">Boletos registrados (últimos 30):</div>
+    <div id="entriesList" class="space-y-2 text-sm"></div>
+  </div>
+</div>
+
   <script src="./app.js"></script>
 </body>
 </html>
