@@ -31,6 +31,26 @@ function setView(v) {
   $(v).classList.remove("hidden");
 }
 
+let __initRunning = false;
+let __initQueued = false;
+
+async function safeInit() {
+  if (__initRunning) {
+    __initQueued = true;
+    return;
+  }
+  __initRunning = true;
+  try {
+    await init(); // tu init real
+  } finally {
+    __initRunning = false;
+    if (__initQueued) {
+      __initQueued = false;
+      safeInit();
+    }
+  }
+}
+
 function setBusy(btn, busy, textBusy="Procesando…") {
   if (!btn) return;
   if (!btn.dataset.text) btn.dataset.text = btn.textContent;
@@ -141,6 +161,8 @@ $("btnTogglePassword").addEventListener("click", () => {
 $("formLogin").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
+ 
+  showAlert("Intentando login…", "ok");
 
   const btn = $("btnLogin");
   setBusy(btn, true, "Entrando…");
@@ -152,7 +174,7 @@ $("formLogin").addEventListener("submit", async (e) => {
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     setBusy(btn, false);
     if (error) return showAlert(error.message, "error");
-    await init();
+    await safeInit();
   } catch (err) {
     setBusy(btn, false);
     showAlert(err?.message || "Error de red/JS al iniciar sesión.", "error");
@@ -204,7 +226,7 @@ $("formProfile").addEventListener("submit", async (e) => {
   try {
     await upsertProfile(userId, displayName);
     setBusy(btn, false);
-    await init();
+    await safeInit();
   } catch (err) {
     setBusy(btn, false);
     showAlert(err?.message || "Error guardando nombre.", "error");
@@ -249,7 +271,7 @@ $("btnDeniedSignOut").addEventListener("click", async () => {
 // =====================
 // Init
 // =====================
-supabaseClient.auth.onAuthStateChange(() => init());
+supabaseClient.auth.onAuthStateChange(() => safeInit());
 
 async function init() {
   hideAlert();
@@ -310,7 +332,7 @@ $("greetingDate").textContent = fecha;
 
 // Arranque
 setView("viewLogin");
-init();
+safeInit();
 
 // Errores globales visibles
 window.addEventListener("error", (e) => showAlert("JS error: " + e.message, "error"));
