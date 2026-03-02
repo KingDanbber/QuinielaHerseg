@@ -455,6 +455,7 @@ $("greetingDate").textContent = fecha;
 
   setView("viewDash");
   loadParticipants();
+  loadPools();
 }
 
 // Arranque
