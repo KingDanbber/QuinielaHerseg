@@ -85,3 +85,56 @@ input::placeholder {
 .sheet-row.second{
   grid-template-columns: repeat(4, 1fr);
 }
+
+/* ===== Fix overflow móvil (Plantillas editor + preview) ===== */
+
+/* Filas editor */
+.tpl-row{
+  display:grid;
+  grid-template-columns: 58px 1fr 1fr;
+  gap:8px;
+  align-items:center;
+}
+
+.tpl-no{
+  padding:10px;
+  text-align:center;
+  font-size:14px;
+  border-radius:10px;
+  background:#0a0e13;
+  border:1px solid #1f2937;
+  color:#e5e7eb;
+}
+
+.tpl-in{
+  padding:10px;
+  border-radius:10px;
+  background:#0a0e13;
+  border:1px solid #1f2937;
+  color:#e5e7eb;
+  width:100%;
+  min-width:0; /* clave para que el input NO empuje el grid */
+}
+
+/* En pantallas chicas, poner Local y Visita en 2 filas */
+@media (max-width: 420px){
+  .tpl-row{
+    grid-template-columns: 58px 1fr;
+    grid-template-rows: auto auto;
+  }
+  .tpl-row input[data-away]{
+    grid-column: 2 / 3;
+  }
+}
+
+/* Preview: que nunca se desborde */
+#tplPreviewWrap{
+  overflow-x:auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* La tarjeta excel: permitir escalar en móvil */
+.qh-card{
+  max-width: 100%;
+  width: 360px;
+}
