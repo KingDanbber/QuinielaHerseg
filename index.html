@@ -138,6 +138,35 @@
 
         <div id="participantsList" class="text-sm space-y-2"></div>
       </div>
+
+<!-- PLANTILLAS (MATCHES) -->
+<div class="bg-zinc-900 p-4 rounded-xl border border-zinc-800 mb-6">
+  <div class="flex items-center justify-between gap-3 flex-wrap">
+    <h3 class="font-semibold">Plantillas (por Jornada)</h3>
+    <div class="flex gap-2">
+      <button id="btnExportPDF" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-sm">Exportar PDF (todas)</button>
+      <button id="btnExportPNGs" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-sm">Exportar Imágenes</button>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-5 gap-2 mt-4">
+    <select id="tplPool" class="p-2 bg-zinc-950 border border-zinc-800 rounded md:col-span-2"></select>
+    <input id="tplNumMatches" type="number" min="1" value="9"
+           class="p-2 bg-zinc-950 border border-zinc-800 rounded" placeholder="# Partidos">
+    <button id="btnBuildRows" class="bg-zinc-800 hover:bg-zinc-700 rounded font-semibold">Armar filas</button>
+    <button id="btnSaveTemplate" class="bg-emerald-600 hover:bg-emerald-500 rounded font-semibold">Guardar plantilla</button>
+  </div>
+
+  <div id="tplRows" class="mt-4 space-y-2"></div>
+
+  <div class="mt-5">
+    <div class="text-zinc-400 text-sm mb-2">Vista previa (formato Excel):</div>
+    <div id="tplPreviewWrap" class="overflow-auto p-2 bg-zinc-950 border border-zinc-800 rounded-xl"></div>
+  </div>
+</div>
+
+<!-- Contenedor oculto para exportación -->
+<div id="printArea" class="hidden"></div>
     </section>
 
   </div>
