@@ -158,3 +158,12 @@ select {
     width: 100%;
   }
 }
+
+/* Suaviza sombras y bordes de cards */
+.bg-zinc-900 {
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+
+.qh-card{
+  box-shadow: 0 10px 30px rgba(0,0,0,.30);
+}
