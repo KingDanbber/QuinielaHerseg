@@ -856,18 +856,17 @@ $("greetingDate").textContent = fecha;
 await fillEntryPoolsSelect();
 await fillEntryParticipantsSelect();
 await loadEntriesAndStats();
-await fillTplPools();
-buildTplRowsUI(Number($("tplNumMatches").value || 9));
-await renderPreview();
+
 
   setView("viewDash");
   loadParticipants();
   fillEntryParticipantsSelect();
   loadPools();
   fillEntryPoolsSelect();
-  fillTplPools();
-  renderPreview();
-  buildTplRowsUI();
+  
+  await fillTplPools();
+  buildTplRowsUI(Number($.("tplNumMatches").value || 9));
+  await renderPreview();
 }
 
 // Arranque
