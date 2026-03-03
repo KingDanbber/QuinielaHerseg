@@ -847,22 +847,26 @@ async function init() {
     return;
   }
 
+  // ✅ YA TODO OK -> MOSTRAR DASH
+  setView("viewDash");
+
+  // Saludo
   const now = new Date();
   const saludo = getGreetingByHour(getMonterreyHour(now));
   const fecha = formatMxHeader(now);
-
   $("greetingMain").textContent = `👋 ${saludo}, ${profile.display_name}`;
-$("greetingDate").textContent = fecha;
+  $("greetingDate").textContent = fecha;
 
-await fillEntryPoolsSelect();
-await fillEntryParticipantsSelect();
-await loadEntriesAndStats();
+  // Cargar listas base
+  await loadParticipants();
+  await loadPools();
 
+  // Selects de pagos
+  await fillEntryPoolsSelect();
+  await fillEntryParticipantsSelect();
+  await loadEntriesAndStats();
 
-  setView("viewDash");
-  loadParticipants();
-  loadPools();
-  
+  // Selects + preview de plantillas
   await fillTplPools();
   buildTplRowsUI(Number($("tplNumMatches").value || 9));
   await renderPreview();
