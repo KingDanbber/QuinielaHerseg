@@ -867,6 +867,7 @@ await renderPreview();
   fillEntryPoolsSelect();
   fillTplPools();
   renderPreview();
+  buildTplRowsUI();
 }
 
 // Arranque
