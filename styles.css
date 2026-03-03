@@ -9,3 +9,79 @@
 input::placeholder {
   opacity: .85;
 }
+
+/* ====== Plantilla tipo Excel ====== */
+.qh-card {
+  width: 360px;               /* tamaño visual similar a recuadro */
+  background: #0b0f14;
+  border: 1px solid #1f2937;
+  border-radius: 14px;
+  padding: 10px;
+  color: #e5e7eb;
+  font-family: ui-sans-serif, system-ui, -apple-system;
+}
+
+.qh-title { font-weight: 800; text-align: center; font-size: 16px; }
+.qh-sub   { text-align: center; font-size: 12px; color:#a1a1aa; margin-top:2px; }
+
+.qh-meta {
+  display:grid;
+  grid-template-columns: 1fr 1fr 60px;
+  gap:6px;
+  margin-top:8px;
+  font-size: 12px;
+}
+.qh-meta > div{
+  border:1px solid #2a3648;
+  border-radius:10px;
+  padding:6px;
+  text-align:center;
+  background:#0a0e13;
+}
+
+.qh-table { margin-top:10px; display:grid; gap:6px; }
+
+.qh-match {
+  display:grid;
+  grid-template-columns: 36px 1fr 36px 1fr 36px;
+  align-items:center;
+  gap:8px;
+}
+
+.qh-box {
+  width:36px; height:26px;
+  border:1.5px solid #94a3b8;
+  border-radius:6px;
+  background:#0a0e13;
+}
+
+.qh-team{
+  text-align:center;
+  font-weight:700;
+  letter-spacing:.2px;
+  font-size:12px;
+}
+
+.qh-foot{
+  margin-top:10px;
+  font-size:11px;
+  color:#cbd5e1;
+}
+.qh-foot .line{ margin-top:4px; }
+
+/* ====== Layout de impresión (idéntico a tu hoja Excel: 5 arriba + 4 abajo) ====== */
+.sheet {
+  width: 1120px;              /* “canvas” ancho para landscape */
+  padding: 14px;
+  background: #0b0f14;
+}
+
+.sheet-row{
+  display:grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap:12px;
+  margin-bottom:12px;
+}
+.sheet-row.second{
+  grid-template-columns: repeat(4, 1fr);
+}
