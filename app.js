@@ -381,7 +381,7 @@ async function fillTplPools() {
     return `<option value="${p.id}">${p.name}${tag}</option>`;
   }).join("");
 }
-}
+
 
 function buildTplRowsUI(n) {
   const wrap = $("tplRows");
@@ -861,12 +861,10 @@ await loadEntriesAndStats();
 
   setView("viewDash");
   loadParticipants();
-  fillEntryParticipantsSelect();
   loadPools();
-  fillEntryPoolsSelect();
   
   await fillTplPools();
-  buildTplRowsUI(Number($.("tplNumMatches").value || 9));
+  buildTplRowsUI(Number($("tplNumMatches").value || 9));
   await renderPreview();
 }
 
