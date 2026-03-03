@@ -866,7 +866,6 @@ await loadEntriesAndStats();
   fillEntryParticipantsSelect();
   loadPools();
   fillEntryPoolsSelect();
-  fillTplPools();
   
   await fillTplPools();
   buildTplRowsUI(Number($.("tplNumMatches").value || 9));
