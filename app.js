@@ -366,6 +366,272 @@ async function loadEntriesAndStats() {
   }).join("");
 }
 
+async function fillTplPools() {
+  const { data, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, status, round, competition, season, price")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) return showAlert(error.message, "error");
+
+  const sel = $("tplPool");
+  sel.innerHTML = (data || []).map(p => {
+    const tag = p.status === "open" ? " (Activa)" : "";
+    return `<option value="${p.id}">${p.name}${tag}</option>`;
+  }).join("");
+}
+
+function buildTplRowsUI(n) {
+  const wrap = $("tplRows");
+  wrap.innerHTML = "";
+
+  for (let i = 1; i <= n; i++) {
+    const row = document.createElement("div");
+    row.className = "grid grid-cols-[70px_1fr_1fr] gap-2";
+    row.innerHTML = `
+      <div class="p-2 bg-zinc-950 border border-zinc-800 rounded text-sm text-center">#${i}</div>
+      <input data-home="${i}" class="p-2 bg-zinc-950 border border-zinc-800 rounded" placeholder="Local (Ej. AMÉRICA)">
+      <input data-away="${i}" class="p-2 bg-zinc-950 border border-zinc-800 rounded" placeholder="Visita (Ej. CHIVAS)">
+    `;
+    wrap.appendChild(row);
+  }
+}
+
+async function saveTemplateMatches() {
+  hideAlert();
+
+  const pool_id = $("tplPool").value;
+  const n = Number($("tplNumMatches").value || 9);
+
+  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+
+  // borrar plantilla anterior y volver a insertar (simple y confiable)
+  const { error: delErr } = await supabaseClient.from("matches").delete().eq("pool_id", pool_id);
+  if (delErr) return showAlert(delErr.message, "error");
+
+  const rows = [];
+  for (let i = 1; i <= n; i++) {
+    const home = document.querySelector(`[data-home="${i}"]`)?.value?.trim();
+    const away = document.querySelector(`[data-away="${i}"]`)?.value?.trim();
+    if (!home || !away) return showAlert(`Falta Local/Visita en partido #${i}`, "error");
+    rows.push({ pool_id, match_no: i, home_team: home.toUpperCase(), away_team: away.toUpperCase() });
+  }
+
+  const { error } = await supabaseClient.from("matches").insert(rows);
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Plantilla guardada ✅", "ok");
+  await renderPreview();
+}
+
+async function getPoolInfo(pool_id){
+  const { data, error } = await supabaseClient
+    .from("pools")
+    .select("name, round, competition, season, price")
+    .eq("id", pool_id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getMatches(pool_id){
+  const { data, error } = await supabaseClient
+    .from("matches")
+    .select("match_no, home_team, away_team")
+    .eq("pool_id", pool_id)
+    .order("match_no", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+function makeTemplateCard({title, subtitle, jornadaText, dateText, priceText, matches}) {
+  const card = document.createElement("div");
+  card.className = "qh-card";
+
+  card.innerHTML = `
+    <div class="qh-title">${title}</div>
+    <div class="qh-sub">${subtitle}</div>
+
+    <div class="qh-meta">
+      <div>${jornadaText}</div>
+      <div>${dateText}</div>
+      <div>${priceText}</div>
+    </div>
+
+    <div class="qh-table"></div>
+
+    <div class="qh-foot">
+      <div class="line">Nombre:______________________________________</div>
+      <div class="line">Área:________________________</div>
+      <div class="line">*WhatsApp:___________________________________</div>
+      <div class="line">*Registro 1vez para envío link Aplicación Resultados, Quinielas y Premio Acumulado</div>
+    </div>
+  `;
+
+  const table = card.querySelector(".qh-table");
+  matches.forEach(m => {
+    const r = document.createElement("div");
+    r.className = "qh-match";
+    r.innerHTML = `
+      <div class="qh-box"></div>
+      <div class="qh-team">${m.home_team}</div>
+      <div class="qh-box"></div>
+      <div class="qh-team">${m.away_team}</div>
+      <div class="qh-box"></div>
+    `;
+    table.appendChild(r);
+  });
+
+  return card;
+}
+
+async function renderPreview() {
+  const pool_id = $("tplPool").value;
+  if (!pool_id) return;
+
+  const wrap = $("tplPreviewWrap");
+  wrap.innerHTML = "";
+
+  let pool, matches;
+  try {
+    pool = await getPoolInfo(pool_id);
+    matches = await getMatches(pool_id);
+  } catch (e) {
+    return showAlert(e.message, "error");
+  }
+
+  const card = makeTemplateCard({
+    title: "Quiniela Herseg MX",
+    subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
+    jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
+    dateText: "FECHAS",              // tú lo editarás manual, o luego lo automatizamos
+    priceText: Number(pool?.price || 20),
+    matches
+  });
+
+  wrap.appendChild(card);
+}
+
+async function exportAllToPDF() {
+  hideAlert();
+
+  // trae pools que tengan plantilla
+  const { data: pools, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, round, season, price, created_at")
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (error) return showAlert(error.message, "error");
+
+  // filtra solo pools con matches
+  const cards = [];
+  for (const p of (pools || [])) {
+    const ms = await getMatches(p.id);
+    if (!ms.length) continue;
+
+    cards.push(makeTemplateCard({
+      title: "Quiniela Herseg MX",
+      subtitle: `"Pasión X Ganar" ⚽ ${p.season || ""}`.trim(),
+      jornadaText: p.round ? `Jornada ${p.round}` : p.name,
+      dateText: "FECHAS",
+      priceText: Number(p.price || 20),
+      matches: ms
+    }));
+  }
+
+  if (!cards.length) return showAlert("No hay plantillas guardadas aún.", "error");
+
+  const printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+  const perPage = 9; // 5 + 4 (idéntico a tu Excel)
+  let pageIndex = 0;
+
+  for (let i = 0; i < cards.length; i += perPage) {
+    const chunk = cards.slice(i, i + perPage);
+
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+
+    const row1 = document.createElement("div");
+    row1.className = "sheet-row";
+    chunk.slice(0,5).forEach(c => row1.appendChild(c));
+    sheet.appendChild(row1);
+
+    const row2 = document.createElement("div");
+    row2.className = "sheet-row second";
+    chunk.slice(5,9).forEach(c => row2.appendChild(c));
+    sheet.appendChild(row2);
+
+    printArea.appendChild(sheet);
+
+    const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: "#0b0f14" });
+    const imgData = canvas.toDataURL("image/png");
+
+    if (pageIndex > 0) pdf.addPage();
+    pdf.addImage(imgData, "PNG", 10, 10, 822, 575); // A4 landscape aprox (pt)
+    pageIndex++;
+
+    printArea.innerHTML = "";
+  }
+
+  printArea.classList.add("hidden");
+  pdf.save("Plantillas-Quiniela-Herseg.pdf");
+  showAlert("PDF generado ✅", "ok");
+}
+
+async function exportAllToPNGs() {
+  hideAlert();
+
+  const { data: pools, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, round, season, price, created_at")
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (error) return showAlert(error.message, "error");
+
+  const printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  let count = 0;
+
+  for (const p of (pools || [])) {
+    const ms = await getMatches(p.id);
+    if (!ms.length) continue;
+
+    const card = makeTemplateCard({
+      title: "Quiniela Herseg MX",
+      subtitle: `"Pasión X Ganar" ⚽ ${p.season || ""}`.trim(),
+      jornadaText: p.round ? `Jornada ${p.round}` : p.name,
+      dateText: "FECHAS",
+      priceText: Number(p.price || 20),
+      matches: ms
+    });
+
+    printArea.appendChild(card);
+
+    const canvas = await html2canvas(card, { scale: 2, backgroundColor: "#0b0f14" });
+    const a = document.createElement("a");
+    a.download = `Plantilla-${(p.round ?? p.name ?? "Jornada")}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+
+    printArea.innerHTML = "";
+    count++;
+  }
+
+  printArea.classList.add("hidden");
+  showAlert(`Imágenes generadas: ${count} ✅`, "ok");
+}
+
 // =====================
 // Eventos
 // =====================
@@ -508,6 +774,14 @@ $("btnRefreshStats").addEventListener("click", loadEntriesAndStats);
 
 $("entryPool").addEventListener("change", loadEntriesAndStats);
 
+// Plantillas
+$("btnBuildRows").addEventListener("click", () => buildTplRowsUI(Number($("tplNumMatches").value || 9)));
+$("btnSaveTemplate").addEventListener("click", saveTemplateMatches);
+$("tplPool").addEventListener("change", renderPreview);
+
+$("btnExportPDF").addEventListener("click", exportAllToPDF);
+$("btnExportPNGs").addEventListener("click", exportAllToPNGs);
+
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
   await supabaseClient.auth.signOut();
@@ -582,12 +856,15 @@ $("greetingDate").textContent = fecha;
 await fillEntryPoolsSelect();
 await fillEntryParticipantsSelect();
 await loadEntriesAndStats();
+await fillTplPools();
+buildTplRowsUI(Number($("tplNumMatches").value || 9));
+await renderPreview();
 
   setView("viewDash");
   loadParticipants();
-  fillEntryParticipantsSelect()
+  fillEntryParticipantsSelect();
   loadPools();
-  fillEntryPoolsSelect()
+  fillEntryPoolsSelect();
 }
 
 // Arranque
