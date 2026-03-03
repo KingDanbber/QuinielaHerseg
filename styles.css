@@ -138,3 +138,23 @@ input::placeholder {
   max-width: 100%;
   width: 360px;
 }
+
+/* ==== Anti overflow global en móvil ==== */
+input, select, button {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Selects: que el texto largo no rompa */
+select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Botones en header de Plantillas: apilarlos en móvil */
+@media (max-width: 520px){
+  #btnExportPDF, #btnExportPNGs{
+    width: 100%;
+  }
+}
