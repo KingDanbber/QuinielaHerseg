@@ -865,6 +865,8 @@ await renderPreview();
   fillEntryParticipantsSelect();
   loadPools();
   fillEntryPoolsSelect();
+  fillTplPools();
+  renderPreview();
 }
 
 // Arranque
