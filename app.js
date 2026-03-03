@@ -429,7 +429,7 @@ async function saveTemplateMatches() {
 async function getPoolInfo(pool_id){
   const { data, error } = await supabaseClient
     .from("pools")
-    .select("name, round, competition, season, price")
+    .select("name, round, competition, season, price, date_label")
     .eq("id", pool_id)
     .maybeSingle();
   if (error) throw error;
@@ -506,7 +506,7 @@ async function renderPreview() {
     title: "Quiniela Herseg MX",
     subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
     jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
-    dateText: "FECHAS",              // tú lo editarás manual, o luego lo automatizamos
+    dateText: (pool?.date_label || "FECHAS"),
     priceText: Number(pool?.price || 20),
     matches
   });
@@ -520,7 +520,7 @@ async function exportAllToPDF() {
   // trae pools que tengan plantilla
   const { data: pools, error } = await supabaseClient
     .from("pools")
-    .select("id, name, round, season, price, created_at")
+    .select("id, name, round, season, price, date_label, created_at")
     .order("created_at", { ascending: true })
     .limit(200);
 
@@ -536,7 +536,7 @@ async function exportAllToPDF() {
       title: "Quiniela Herseg MX",
       subtitle: `"Pasión X Ganar" ⚽ ${p.season || ""}`.trim(),
       jornadaText: p.round ? `Jornada ${p.round}` : p.name,
-      dateText: "FECHAS",
+      dateText: (p.date_label || "FECHAS"),
       priceText: Number(p.price || 20),
       matches: ms
     }));
@@ -592,7 +592,7 @@ async function exportAllToPNGs() {
 
   const { data: pools, error } = await supabaseClient
     .from("pools")
-    .select("id, name, round, season, price, created_at")
+    .select("id, name, round, season, price, date_label, created_at")
     .order("created_at", { ascending: true })
     .limit(200);
 
@@ -612,7 +612,7 @@ async function exportAllToPNGs() {
       title: "Quiniela Herseg MX",
       subtitle: `"Pasión X Ganar" ⚽ ${p.season || ""}`.trim(),
       jornadaText: p.round ? `Jornada ${p.round}` : p.name,
-      dateText: "FECHAS",
+      dateText: (p.date_label || "FECHAS"),
       priceText: Number(p.price || 20),
       matches: ms
     });
@@ -753,13 +753,14 @@ $("formPool").addEventListener("submit", async (e) => {
   const round = Number($("poolRound").value);
   const competition = $("poolCompetition").value.trim() || "Liga MX";
   const season = $("poolSeason").value.trim() || "Clausura 2026";
+const date_label = $("poolDates").value.trim() || null;
   const price = Number($("poolPrice").value || 20);
   const commission_pct = Number($("poolCommission").value || 15);
 
   const name = `Jornada ${round} - ${competition} - ${season}`;
 
   const { error } = await supabaseClient.from("pools").insert({
-    round, competition, season, name, price, commission_pct, status: "open"
+    round, competition, season, name, price, commission_pct, status: "open", date_label
   });
 
   if (error) return showAlert(error.message, "error");
