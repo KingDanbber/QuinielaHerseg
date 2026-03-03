@@ -389,11 +389,11 @@ function buildTplRowsUI(n) {
 
   for (let i = 1; i <= n; i++) {
     const row = document.createElement("div");
-    row.className = "grid grid-cols-[70px_1fr_1fr] gap-2";
+    row.className = "tpl-row";
     row.innerHTML = `
-      <div class="p-2 bg-zinc-950 border border-zinc-800 rounded text-sm text-center">#${i}</div>
-      <input data-home="${i}" class="p-2 bg-zinc-950 border border-zinc-800 rounded" placeholder="Local (Ej. AMÉRICA)">
-      <input data-away="${i}" class="p-2 bg-zinc-950 border border-zinc-800 rounded" placeholder="Visita (Ej. CHIVAS)">
+      <div class="tpl-no">#${i}</div>
+      <input data-home="${i}" class="tpl-in" placeholder="Local (Ej. AMÉRICA)">
+      <input data-away="${i}" class="tpl-in" placeholder="Visita (Ej. CHIVAS)">
     `;
     wrap.appendChild(row);
   }
