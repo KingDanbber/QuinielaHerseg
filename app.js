@@ -380,6 +380,9 @@ async function fillTplPools() {
     const tag = p.status === "open" ? " (Activa)" : "";
     return `<option value="${p.id}">${p.name}${tag}</option>`;
   }).join("");
+if (!data || data.length === 0) {
+  $("tplPool").innerHTML = `<option value="">No hay jornadas aún</option>`;
+}
 }
 
 function buildTplRowsUI(n) {
