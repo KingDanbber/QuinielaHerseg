@@ -147,7 +147,7 @@ async function loadParticipants() {
 async function loadPools() {
   const { data, error } = await supabaseClient
     .from("pools")
-    .select("id, name, status, round, competition, season, price, commission_pct, created_at")
+    .select("id, name, status, round, competition, season, price, commission_pct, date_label, created_at")
     .order("created_at", { ascending: false });
 
   if (error) return showAlert(error.message, "error");
@@ -179,6 +179,11 @@ async function loadPools() {
           <div class="flex items-center gap-2">
             <span class="text-xs px-2 py-1 rounded-full border ${badge}">${statusLabel}</span>
 
+<button data-dates="${p.id}" data-curdates="${(p.date_label || "").replace(/"/g, "&quot;")}"
+  class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
+  Editar fechas
+</button>
+
             ${p.status !== "open" ? `
               <button data-open="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
                 Marcar activa
@@ -208,6 +213,45 @@ async function loadPools() {
       await setPoolClosed(id);
     });
   });
+
+document.querySelectorAll("[data-dates]").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.getAttribute("data-dates");
+    const cur = btn.getAttribute("data-curdates") || "";
+    await editPoolDates(id, cur);
+  });
+});
+
+}
+
+async function editPoolDates(poolId, currentDates) {
+  hideAlert();
+
+  const next = prompt(
+    "Editar FECHAS (Ej: 06/07/08 Marzo)\n\nDeja vacío para borrar.",
+    currentDates || ""
+  );
+
+  if (next === null) return; // cancelado
+
+  const date_label = next.trim() ? next.trim() : null;
+
+  // (Opcional) Validador si ya lo tienes
+  if (date_label && typeof validateDateLabel === "function" && !validateDateLabel(date_label)) {
+    return showAlert("Formato inválido. Ejemplo: 06/07/08 Marzo", "error");
+  }
+
+  const { error } = await supabaseClient
+    .from("pools")
+    .update({ date_label })
+    .eq("id", poolId);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Fechas actualizadas ✅", "ok");
+  await loadPools();
+  await fillTplPools();
+  await renderPreview();
 }
 
 async function setPoolOpen(poolId) {
