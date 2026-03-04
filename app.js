@@ -172,8 +172,9 @@ async function loadPools() {
           <div>
             <div class="font-semibold">${p.name}</div>
             <div class="text-xs text-zinc-400">
-              $${Number(p.price).toFixed(0)} • Comisión ${Number(p.commission_pct).toFixed(0)}% • ${p.competition} • ${p.season}
-            </div>
+  $${Number(p.price).toFixed(0)} • Comisión ${Number(p.commission_pct).toFixed(0)}% • ${p.competition} • ${p.season}
+</div>
+${p.date_label ? `<div class="text-xs text-emerald-300/90 mt-1">Fechas: ${p.date_label}</div>` : ""}
           </div>
 
           <div class="flex items-center gap-2">
