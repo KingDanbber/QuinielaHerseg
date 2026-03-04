@@ -463,8 +463,8 @@ function buildTplRowsUI(n) {
     row.className = "tpl-row";
     row.innerHTML = `
       <div class="tpl-no">#${i}</div>
-      <input data-home="${i}" class="tpl-in" placeholder="Local (Ej. AMÉRICA)">
-      <input data-away="${i}" class="tpl-in" placeholder="Visita (Ej. CHIVAS)">
+      <input data-home="${i}" class="tpl-in" placeholder="Local">
+      <input data-away="${i}" class="tpl-in" placeholder="Visita">
     `;
     wrap.appendChild(row);
   }
