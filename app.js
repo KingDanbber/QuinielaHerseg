@@ -129,9 +129,10 @@ async function upsertProfile(userId, displayName) {
 
 async function loadParticipants() {
   const { data, error } = await supabaseClient
-    .from("participants")
-    .select("*")
-    .order("created_at", { ascending: false });
+  .from("participants")
+  .select("id, name, area, whatsapp, is_active, created_at")
+  .eq("is_active", true)
+  .order("created_at", { ascending: false });
 
   if (error) return showAlert(error.message, "error");
 
@@ -140,6 +141,10 @@ async function loadParticipants() {
     <div class="p-2 bg-zinc-950 border border-zinc-800 rounded">
       <div class="font-semibold">${p.name}</div>
       <div class="text-zinc-400">${p.area || ""} • ${p.whatsapp || ""}</div>
+<button data-archive="${p.id}"
+class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
+Eliminar
+</button>
     </div>
   `).join("");
 }
@@ -220,6 +225,27 @@ document.querySelectorAll("[data-dates]").forEach(btn => {
     const id = btn.getAttribute("data-dates");
     const cur = btn.getAttribute("data-curdates") || "";
     await editPoolDates(id, cur);
+  });
+});
+
+document.querySelectorAll("[data-archive]").forEach(btn => {
+  btn.addEventListener("click", async () => {
+
+    const id = btn.getAttribute("data-archive");
+
+    if (!confirm("¿Eliminar participante? (Se ocultará del sistema)")) return;
+
+    const { error } = await supabaseClient
+      .from("participants")
+      .update({ is_active: false })
+      .eq("id", id);
+
+    if (error) return showAlert(error.message, "error");
+
+    showAlert("Participante eliminado ✅", "ok");
+
+    await loadParticipants();
+    await fillEntryParticipantsSelect();
   });
 });
 
