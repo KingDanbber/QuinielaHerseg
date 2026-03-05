@@ -1021,3 +1021,12 @@ safeInit();
 // Errores globales visibles
 window.addEventListener("error", (e) => showAlert("JS error: " + e.message, "error"));
 window.addEventListener("unhandledrejection", (e) => showAlert("Promise error: " + (e.reason?.message || e.reason), "error"));
+
+// Errores init
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    init();
+  } catch (e) {
+    showFatal(e.message || String(e));
+  }
+});
