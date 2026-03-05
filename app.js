@@ -190,7 +190,8 @@ async function loadParticipants() {
 async function loadPools() {
   const { data, error } = await supabaseClient
     .from("pools")
-    .select("id, name, status, round, competition, season, price, commission_pct, date_label, created_at")
+    .select("id, name, status, round, competition, season, price, commission_pct, date_label, mode_code,
+carryover_enabled, created_at")
     .order("created_at", { ascending: false });
 
   if (error) return showAlert(error.message, "error");
@@ -865,6 +866,8 @@ $("formPool").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
 
+const mode_code = $("poolMode").value;
+const carryover_enabled = (mode_code === "ACUMULADA" || mode_code === "GOLEO");
   const round = Number($("poolRound").value);
   const competition = $("poolCompetition").value.trim() || "Liga MX";
   const season = $("poolSeason").value.trim() || "Clausura 2026";
