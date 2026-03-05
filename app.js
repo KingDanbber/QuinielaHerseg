@@ -3,6 +3,23 @@ document.body.insertAdjacentHTML(
   '<div id="jsok" style="position:fixed;bottom:12px;right:12px;z-index:9999;padding:6px 10px;border-radius:8px;background:#0a7;color:#fff;font:12px system-ui;">JS OK</div>'
 );
 
+window.addEventListener("error", (e) => {
+  const msg = (e && e.message) ? e.message : "Error JS";
+  showFatal(msg);
+});
+
+window.addEventListener("unhandledrejection", (e) => {
+  const msg = (e && e.reason && e.reason.message) ? e.reason.message : ("" + (e.reason || "Promise error"));
+  showFatal(msg);
+});
+
+function showFatal(msg) {
+  const el = document.createElement("div");
+  el.style.cssText = "position:fixed;top:12px;left:12px;right:12px;z-index:99999;padding:10px;border-radius:12px;background:#4b0000;color:#fff;font:13px system-ui;";
+  el.textContent = "ERROR: " + msg;
+  document.body.appendChild(el);
+}
+
 // =====================
 // CONFIG SUPABASE
 // =====================
