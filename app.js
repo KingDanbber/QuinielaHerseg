@@ -1,3 +1,8 @@
+document.body.insertAdjacentHTML(
+  "beforeend",
+  '<div id="jsok" style="position:fixed;bottom:12px;right:12px;z-index:9999;padding:6px 10px;border-radius:8px;background:#0a7;color:#fff;font:12px system-ui;">JS OK</div>'
+);
+
 // =====================
 // CONFIG SUPABASE
 // =====================
