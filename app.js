@@ -7,6 +7,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_qYDfuLHeUz6Uy3Vy5t8mFA_QfXbMU9v";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
 
+let showArchivedParticipants = false;
+
 // =====================
 // UI Helpers
 // =====================
@@ -128,25 +130,61 @@ async function upsertProfile(userId, displayName) {
 }
 
 async function loadParticipants() {
-  const { data, error } = await supabaseClient
-  .from("participants")
-  .select("id, name, area, whatsapp, is_active, created_at")
-  .eq("is_active", true)
-  .order("created_at", { ascending: false });
+  const q = supabaseClient
+    .from("participants")
+    .select("id, name, area, whatsapp, is_active, created_at")
+    .order("created_at", { ascending: false });
+
+  const { data, error } = showArchivedParticipants
+    ? await q.eq("is_active", false)
+    : await q.eq("is_active", true);
 
   if (error) return showAlert(error.message, "error");
 
   const rows = data || [];
   $("participantsList").innerHTML = rows.map(p => `
-    <div class="p-2 bg-zinc-950 border border-zinc-800 rounded">
-      <div class="font-semibold">${p.name}</div>
-      <div class="text-zinc-400">${p.area || ""} • ${p.whatsapp || ""}</div>
-<button data-archive="${p.id}"
-class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-Eliminar
-</button>
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded flex justify-between items-center gap-2">
+      <div>
+        <div class="font-semibold">${p.name}</div>
+        <div class="text-xs text-zinc-400">${p.area || "-"} • ${p.whatsapp || "-"}</div>
+      </div>
+
+      ${
+        showArchivedParticipants
+          ? `<button data-restore="${p.id}" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">Restaurar</button>`
+          : `<button data-archive="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">Eliminar</button>`
+      }
     </div>
   `).join("");
+
+  // Archivar
+  document.querySelectorAll("[data-archive]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-archive");
+      if (!confirm("¿Eliminar participante? (Se ocultará, no se borra historial)")) return;
+
+      const { error } = await supabaseClient.from("participants").update({ is_active: false }).eq("id", id);
+      if (error) return showAlert(error.message, "error");
+
+      showAlert("Participante eliminado ✅", "ok");
+      await loadParticipants();
+      await fillEntryParticipantsSelect();
+    });
+  });
+
+  // Restaurar
+  document.querySelectorAll("[data-restore]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-restore");
+
+      const { error } = await supabaseClient.from("participants").update({ is_active: true }).eq("id", id);
+      if (error) return showAlert(error.message, "error");
+
+      showAlert("Participante restaurado ✅", "ok");
+      await loadParticipants();
+      await fillEntryParticipantsSelect();
+    });
+  });
 }
 
 async function loadPools() {
@@ -226,6 +264,12 @@ document.querySelectorAll("[data-dates]").forEach(btn => {
     const cur = btn.getAttribute("data-curdates") || "";
     await editPoolDates(id, cur);
   });
+});
+
+$("btnToggleArchived").addEventListener("click", async () => {
+  showArchivedParticipants = !showArchivedParticipants;
+  $("btnToggleArchived").textContent = showArchivedParticipants ? "👁️ Ver activos" : "👁️ Ver archivados";
+  await loadParticipants();
 });
 
 document.querySelectorAll("[data-archive]").forEach(btn => {
