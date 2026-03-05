@@ -513,7 +513,6 @@ function buildTplRowsUI(n) {
     `;
     wrap.appendChild(row);
   }
-}
 
 async function saveTemplateMatches() {
   hideAlert();
