@@ -142,6 +142,12 @@
     </div>
 
     <form id="formPool" class="grid md:grid-cols-6 gap-2 mt-4">
+<select id="poolMode" class="p-2 bg-zinc-950 border border-zinc-800 rounded">
+  <option value="SENCILLA">Quiniela Sencilla</option>
+  <option value="ACUMULADA">Quiniela Acumulada</option>
+  <option value="GOLEO">Campeón de Goleo</option>
+  <option value="CAMPEON_CAMPEONES">Campeón de Campeones</option>
+</select>
       <input id="poolRound" type="number" min="1" placeholder="Jornada" required class="p-2 bg-zinc-950 border border-zinc-800 rounded"/>
       <input id="poolCompetition" placeholder="Competencia" value="" class="p-2 bg-zinc-950 border border-zinc-800 rounded"/>
       <input id="poolSeason" placeholder="Temporada" value="" class="p-2 bg-zinc-950 border border-zinc-800 rounded"/>
