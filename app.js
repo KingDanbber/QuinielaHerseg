@@ -237,7 +237,9 @@ async function loadPools() {
         <div class="flex items-center justify-between gap-2 flex-wrap">
           <div>
             <div class="font-semibold">${p.name}</div>
-            <div class="text-xs text-zinc-400">
+            <div class="text-xs text-zinc-400"><div class="text-xs text-emerald-300 mt-1">
+Modo: ${p.mode_code}
+</div>
   $${Number(p.price).toFixed(0)} • Comisión ${Number(p.commission_pct).toFixed(0)}% • ${p.competition} • ${p.season}
 </div>
 ${p.date_label ? `<div class="text-xs text-emerald-300/90 mt-1">Fechas: ${p.date_label}</div>` : ""}
@@ -289,11 +291,7 @@ document.querySelectorAll("[data-dates]").forEach(btn => {
   });
 });
 
-$("btnToggleArchived").addEventListener("click", async () => {
-  showArchivedParticipants = !showArchivedParticipants;
-  $("btnToggleArchived").textContent = showArchivedParticipants ? "👁️ Ver activos" : "👁️ Ver archivados";
-  await loadParticipants();
-});
+
 
 document.querySelectorAll("[data-archive]").forEach(btn => {
   btn.addEventListener("click", async () => {
@@ -881,6 +879,13 @@ $("formParticipant").addEventListener("submit", async (e) => {
   $("pWhatsapp").value = "";
 
   loadParticipants();
+});
+
+//Ver archivados
+$("btnToggleArchived").addEventListener("click", async () => {
+  showArchivedParticipants = !showArchivedParticipants;
+  $("btnToggleArchived").textContent = showArchivedParticipants ? "👁️ Ver activos" : "👁️ Ver archivados";
+  await loadParticipants();
 });
 
 // Jornadas: insertar
