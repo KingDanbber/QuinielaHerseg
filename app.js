@@ -190,7 +190,8 @@ async function loadParticipants() {
 async function loadPools() {
   const { data, error } = await supabaseClient
     .from("pools")
-    .select("id, name, status, round, competition, season, price, commission_pct, date_label, created_at")
+    .select("id, name, status, round, competition, season, price, commission_pct, date_label, mode_code,
+carryover_enabled, created_at")
     .order("created_at", { ascending: false });
 
   if (error) return showAlert(error.message, "error");
