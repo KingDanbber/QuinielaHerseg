@@ -167,3 +167,19 @@ select {
 .qh-card{
   box-shadow: 0 10px 30px rgba(0,0,0,.30);
 }
+
+.pickbtn{
+  width:100%;
+  padding:14px 0;
+  border-radius:14px;
+  background:#0a0e13;
+  border:1px solid #1f2937;
+  color:#e5e7eb;
+  font-weight:800;
+  font-size:18px;
+}
+.pickbtn-on{
+  background: rgba(16,185,129,.15);
+  border-color: rgba(16,185,129,.45);
+  color:#34d399;
+}
