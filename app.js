@@ -85,6 +85,36 @@ function setBusy(btn, busy, textBusy="Procesando…") {
   btn.textContent = busy ? textBusy : btn.dataset.text;
 }
 
+function pickLabel(code) {
+  if (code === "H") return "L";
+  if (code === "D") return "E";
+  if (code === "A") return "V";
+  return "";
+}
+
+function renderPickRow({ match_no, home_team, away_team, match_id, selected }) {
+  // Botones grandes para celular
+  return `
+  <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <div class="text-xs text-zinc-400">#${match_no}</div>
+      <div class="text-sm font-semibold">${home_team} vs ${away_team}</div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2">
+      <button data-pickbtn="H" data-mid="${match_id}" class="pickbtn ${selected === "H" ? "pickbtn-on" : ""}">
+        L
+      </button>
+      <button data-pickbtn="D" data-mid="${match_id}" class="pickbtn ${selected === "D" ? "pickbtn-on" : ""}">
+        E
+      </button>
+      <button data-pickbtn="A" data-mid="${match_id}" class="pickbtn ${selected === "A" ? "pickbtn-on" : ""}">
+        V
+      </button>
+    </div>
+  </div>`;
+}
+
 // =====================
 // Fecha / Saludo
 // =====================
@@ -769,6 +799,148 @@ async function exportAllToPNGs() {
   showAlert(`Imágenes generadas: ${count} ✅`, "ok");
 }
 
+let currentPickEntryId = null;
+let currentPickPoolId = null;
+let currentPickParticipantId = null;
+
+async function fillPickSelectors() {
+  // reutiliza tus pools/participants si ya tienes funciones; si no:
+  const poolsRes = await supabaseClient
+    .from("pools")
+    .select("id, name, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (poolsRes.error) return showAlert(poolsRes.error.message, "error");
+
+  $("pickPool").innerHTML = (poolsRes.data || []).map(p =>
+    `<option value="${p.id}">${p.name}${p.status === "open" ? " (Activa)" : ""}</option>`
+  ).join("");
+
+  const partsRes = await supabaseClient
+    .from("participants")
+    .select("id, name, area, is_active, created_at")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (partsRes.error) return showAlert(partsRes.error.message, "error");
+
+  $("pickParticipant").innerHTML = (partsRes.data || []).map(p =>
+    `<option value="${p.id}">${p.name}${p.area ? " • " + p.area : ""}</option>`
+  ).join("");
+}
+
+async function loadEntryForPick(poolId, participantId) {
+  // 1) buscar el entry (boleto) más reciente de ese participante en ese pool
+  const { data: entry, error: eErr } = await supabaseClient
+    .from("entries")
+    .select("id, paid, created_at")
+    .eq("pool_id", poolId)
+    .eq("participant_id", participantId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (eErr) return showAlert(eErr.message, "error");
+  if (!entry) {
+    currentPickEntryId = null;
+    $("pickEntryLabel").textContent = "No hay boleto";
+    $("pickMatches").innerHTML = "";
+    return showAlert("Ese participante no tiene boleto registrado en esta jornada.", "error");
+  }
+
+  currentPickEntryId = entry.id;
+  currentPickPoolId = poolId;
+  currentPickParticipantId = participantId;
+  $("pickEntryLabel").textContent = entry.paid ? "Pagado ✅" : "No pagado";
+
+  // 2) cargar matches de la plantilla
+  const { data: matches, error: mErr } = await supabaseClient
+    .from("matches")
+    .select("id, match_no, home_team, away_team")
+    .eq("pool_id", poolId)
+    .order("match_no", { ascending: true });
+
+  if (mErr) return showAlert(mErr.message, "error");
+
+  // 3) cargar picks existentes
+  const { data: picks, error: pErr } = await supabaseClient
+    .from("predictions_1x2")
+    .select("match_id, pick")
+    .eq("entry_id", entry.id);
+
+  if (pErr) return showAlert(pErr.message, "error");
+
+  const pickMap = new Map((picks || []).map(x => [x.match_id, x.pick]));
+
+  // 4) render UI
+  $("pickMatches").innerHTML = (matches || []).map(m =>
+    renderPickRow({
+      match_no: m.match_no,
+      home_team: m.home_team,
+      away_team: m.away_team,
+      match_id: m.id,
+      selected: pickMap.get(m.id) || null
+    })
+  ).join("");
+
+  // 5) listeners botones
+  wirePickButtons();
+}
+
+function wirePickButtons() {
+  document.querySelectorAll("[data-pickbtn]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const mid = btn.getAttribute("data-mid");
+      const pick = btn.getAttribute("data-pickbtn");
+
+      // apaga los 3 del mismo partido
+      document.querySelectorAll(`[data-mid="${mid}"]`).forEach(b => b.classList.remove("pickbtn-on"));
+      // enciende seleccionado
+      btn.classList.add("pickbtn-on");
+      btn.setAttribute("data-selected", "1");
+    });
+  });
+}
+
+async function savePicks() {
+  if (!currentPickEntryId) return showAlert("Primero carga un boleto.", "error");
+
+  // construir lista de picks desde UI
+  const rows = [];
+  const groups = new Map(); // match_id => pick
+
+  document.querySelectorAll("[data-pickbtn].pickbtn-on").forEach(btn => {
+    const mid = btn.getAttribute("data-mid");
+    const pick = btn.getAttribute("data-pickbtn");
+    groups.set(mid, pick);
+  });
+
+  if (groups.size === 0) return showAlert("No seleccionaste ningún pronóstico.", "error");
+
+  groups.forEach((pick, match_id) => {
+    rows.push({
+      entry_id: currentPickEntryId,
+      match_id,
+      pick
+    });
+  });
+
+  // Upsert: requiere UNIQUE(entry_id, match_id) en predictions_1x2
+  const { error } = await supabaseClient
+    .from("predictions_1x2")
+    .upsert(rows, { onConflict: "entry_id,match_id" });
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Pronósticos guardados ✅", "ok");
+}
+
+function clearPicksUI() {
+  document.querySelectorAll("[data-pickbtn]").forEach(b => b.classList.remove("pickbtn-on"));
+}
+
 // =====================
 // Eventos
 // =====================
@@ -1016,6 +1188,18 @@ async function init() {
   await fillTplPools();
   buildTplRowsUI(Number($("tplNumMatches").value || 9));
   await renderPreview();
+
+await fillPickSelectors();
+
+$("btnLoadEntryForPick").addEventListener("click", async () => {
+  const poolId = $("pickPool").value;
+  const partId = $("pickParticipant").value;
+  await loadEntryForPick(poolId, partId);
+});
+
+$("btnSavePicks").addEventListener("click", savePicks);
+$("btnClearPicks").addEventListener("click", clearPicksUI);
+
 }
 
 // Arranque
