@@ -154,7 +154,7 @@ select {
 
 /* Botones en header de Plantillas: apilarlos en móvil */
 @media (max-width: 520px){
-  #btnExportPDF, #btnExportPNGs{
+  #btnExportPDF, #btnExportCurrentPNG{
     width: 100%;
   }
 }
