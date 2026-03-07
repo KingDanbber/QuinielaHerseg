@@ -31,6 +31,9 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const $ = (id) => document.getElementById(id);
 
 let showArchivedParticipants = false;
+let currentPickEntryId = null;
+let currentPickPoolId = null;
+let currentPickParticipantId = null;
 
 // =====================
 // UI Helpers
@@ -451,6 +454,199 @@ async function fillEntryParticipantsSelect() {
     const area = p.area ? ` • ${p.area}` : "";
     return `<option value="${p.id}">${p.name}${area}</option>`;
   }).join("");
+}
+
+async function fillPickPoolsSelect() {
+  const { data, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) return showAlert(error.message, "error");
+
+  const sel = $("pickPool");
+  sel.innerHTML = (data || []).map(p => {
+    const tag = p.status === "open" ? " (Activa)" : "";
+    return `<option value="${p.id}">${p.name}${tag}</option>`;
+  }).join("");
+
+  const active = (data || []).find(p => p.status === "open");
+  if (active) sel.value = active.id;
+}
+
+async function fillPickParticipantsSelect() {
+  const { data, error } = await supabaseClient
+    .from("participants")
+    .select("id, name, area, is_active")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) return showAlert(error.message, "error");
+
+  const sel = $("pickParticipant");
+  sel.innerHTML = (data || []).map(p => {
+    const area = p.area ? ` • ${p.area}` : "";
+    return `<option value="${p.id}">${p.name}${area}</option>`;
+  }).join("");
+}
+
+function renderPickRow(match, selectedPick = null) {
+  return `
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div class="text-xs text-zinc-400">Partido #${match.match_no}</div>
+        <div class="text-sm font-semibold text-center flex-1">
+          ${match.home_team} vs ${match.away_team}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <button type="button"
+          data-match-id="${match.id}"
+          data-pick="H"
+          class="pick-btn px-3 py-3 rounded-lg border ${selectedPick === "H" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-zinc-900 border-zinc-700"}">
+          L
+        </button>
+
+        <button type="button"
+          data-match-id="${match.id}"
+          data-pick="D"
+          class="pick-btn px-3 py-3 rounded-lg border ${selectedPick === "D" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-zinc-900 border-zinc-700"}">
+          E
+        </button>
+
+        <button type="button"
+          data-match-id="${match.id}"
+          data-pick="A"
+          class="pick-btn px-3 py-3 rounded-lg border ${selectedPick === "A" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-zinc-900 border-zinc-700"}">
+          V
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function loadEntryForPick() {
+  hideAlert();
+
+  const pool_id = $("pickPool").value;
+  const participant_id = $("pickParticipant").value;
+
+  if (!pool_id || !participant_id) {
+    return showAlert("Selecciona jornada y participante.", "error");
+  }
+
+  // Buscar boleto del participante en esa jornada
+  const { data: entry, error: entryError } = await supabaseClient
+    .from("entries")
+    .select("id, paid, created_at")
+    .eq("pool_id", pool_id)
+    .eq("participant_id", participant_id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (entryError) return showAlert(entryError.message, "error");
+
+  if (!entry) {
+    currentPickEntryId = null;
+    $("pickEntryLabel").textContent = "Sin boleto";
+    $("pickMatches").innerHTML = "";
+    return showAlert("Ese participante no tiene boleto registrado en esta jornada.", "error");
+  }
+
+  currentPickEntryId = entry.id;
+  currentPickPoolId = pool_id;
+  currentPickParticipantId = participant_id;
+
+  $("pickEntryLabel").textContent = entry.paid ? "Pagado ✅" : "Pendiente";
+
+  // Cargar partidos de la plantilla
+  const { data: matches, error: matchError } = await supabaseClient
+    .from("matches")
+    .select("id, match_no, home_team, away_team")
+    .eq("pool_id", pool_id)
+    .order("match_no", { ascending: true });
+
+  if (matchError) return showAlert(matchError.message, "error");
+
+  // Cargar picks ya guardados
+  const { data: existingPicks, error: picksError } = await supabaseClient
+    .from("predictions_1x2")
+    .select("match_id, pick")
+    .eq("entry_id", entry.id);
+
+  if (picksError) return showAlert(picksError.message, "error");
+
+  const picksMap = new Map((existingPicks || []).map(p => [p.match_id, p.pick]));
+
+  $("pickMatches").innerHTML = (matches || [])
+    .map(match => renderPickRow(match, picksMap.get(match.id) || null))
+    .join("");
+
+  attachPickButtonsEvents();
+}
+
+function attachPickButtonsEvents() {
+  document.querySelectorAll(".pick-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const matchId = btn.getAttribute("data-match-id");
+      const pick = btn.getAttribute("data-pick");
+
+      // Limpiar solo los del mismo partido
+      document.querySelectorAll(`.pick-btn[data-match-id="${matchId}"]`).forEach(b => {
+        b.classList.remove("bg-emerald-600", "border-emerald-500", "text-white");
+        b.classList.add("bg-zinc-900", "border-zinc-700");
+      });
+
+      btn.classList.remove("bg-zinc-900", "border-zinc-700");
+      btn.classList.add("bg-emerald-600", "border-emerald-500", "text-white");
+      btn.dataset.selected = "1";
+    });
+  });
+}
+
+async function savePicks() {
+  hideAlert();
+
+  if (!currentPickEntryId) {
+    return showAlert("Primero carga un boleto.", "error");
+  }
+
+  const selected = {};
+  document.querySelectorAll(".pick-btn[data-selected='1'], .pick-btn.bg-emerald-600").forEach(btn => {
+    const matchId = btn.getAttribute("data-match-id");
+    const pick = btn.getAttribute("data-pick");
+    selected[matchId] = pick;
+  });
+
+  const rows = Object.entries(selected).map(([match_id, pick]) => ({
+    entry_id: currentPickEntryId,
+    match_id,
+    pick
+  }));
+
+  if (rows.length === 0) {
+    return showAlert("No seleccionaste pronósticos.", "error");
+  }
+
+  const { error } = await supabaseClient
+    .from("predictions_1x2")
+    .upsert(rows, { onConflict: "entry_id,match_id" });
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Pronósticos guardados ✅", "ok");
+}
+
+function clearPicksSelection() {
+  document.querySelectorAll(".pick-btn").forEach(btn => {
+    btn.classList.remove("bg-emerald-600", "border-emerald-500", "text-white");
+    btn.classList.add("bg-zinc-900", "border-zinc-700");
+    btn.dataset.selected = "";
+  });
 }
 
 async function addEntry() {
@@ -1101,6 +1297,11 @@ $("tplPool").addEventListener("change", renderPreview);
 $("btnExportPDF").addEventListener("click", exportAllToPDF);
 $("btnExportPNGs").addEventListener("click", exportAllToPNGs);
 
+//Guardar Pronosticos
+$("btnLoadEntryForPick").addEventListener("click", loadEntryForPick);
+$("btnSavePicks").addEventListener("click", savePicks);
+$("btnClearPicks").addEventListener("click", clearPicksSelection);
+
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
   await supabaseClient.auth.signOut();
@@ -1183,6 +1384,8 @@ async function init() {
   await fillEntryPoolsSelect();
   await fillEntryParticipantsSelect();
   await loadEntriesAndStats();
+await fillPickPoolsSelect();
+await fillPickParticipantsSelect();
 
   // Selects + preview de plantillas
   await fillTplPools();
