@@ -949,6 +949,56 @@ async function exportAllToPDF() {
   showAlert("PDF generado ✅", "ok");
 }
 
+async function exportCurrentTemplatePNG() {
+  hideAlert();
+
+  const pool_id = $("tplPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+
+  let pool, matches;
+  try {
+    pool = await getPoolInfo(pool_id);
+    matches = await getMatches(pool_id);
+  } catch (e) {
+    return showAlert(e.message, "error");
+  }
+
+  if (!matches || matches.length === 0) {
+    return showAlert("Esta jornada no tiene plantilla guardada.", "error");
+  }
+
+  const printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  const card = makeTemplateCard({
+    title: "Quiniela Herseg MX",
+    subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
+    jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
+    dateText: (pool?.date_label || "FECHAS"),
+    priceText: Number(pool?.price || 20),
+    matches
+  });
+
+  printArea.appendChild(card);
+
+  const canvas = await html2canvas(card, {
+    scale: 2,
+    backgroundColor: "#0b0f14"
+  });
+
+  const a = document.createElement("a");
+  const safeName = (pool?.name || "Plantilla").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+  a.download = `${safeName}.png`;
+  a.href = canvas.toDataURL("image/png");
+  a.click();
+
+  printArea.innerHTML = "";
+  printArea.classList.add("hidden");
+
+  showAlert("Imagen generada ✅", "ok");
+}
+
 async function exportAllToPNGs() {
   hideAlert();
 
@@ -1282,6 +1332,8 @@ const date_label = $("poolDates").value.trim() || null;
   $("poolRound").value = "";
   loadPools();
 });
+
+$("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
 
 //Registrar Boletos Pagos
 $("btnAddEntry").addEventListener("click", addEntry);
