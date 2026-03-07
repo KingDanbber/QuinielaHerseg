@@ -769,22 +769,40 @@ async function saveTemplateMatches() {
 
   if (!pool_id) return showAlert("Selecciona una jornada.", "error");
 
-  // borrar plantilla anterior y volver a insertar (simple y confiable)
-  const { error: delErr } = await supabaseClient.from("matches").delete().eq("pool_id", pool_id);
-  if (delErr) return showAlert(delErr.message, "error");
-
   const rows = [];
   for (let i = 1; i <= n; i++) {
     const home = document.querySelector(`[data-home="${i}"]`)?.value?.trim();
     const away = document.querySelector(`[data-away="${i}"]`)?.value?.trim();
-    if (!home || !away) return showAlert(`Falta Local/Visita en partido #${i}`, "error");
-    rows.push({ pool_id, match_no: i, home_team: home.toUpperCase(), away_team: away.toUpperCase() });
+
+    if (!home || !away) {
+      return showAlert(`Falta Local/Visita en partido #${i}`, "error");
+    }
+
+    rows.push({
+      pool_id,
+      match_no: i,
+      home_team: home.toUpperCase(),
+      away_team: away.toUpperCase()
+    });
   }
 
-  const { error } = await supabaseClient.from("matches").insert(rows);
-  if (error) return showAlert(error.message, "error");
+  showAlert(`Intentando guardar ${rows.length} partidos...`, "ok");
 
-  showAlert("Plantilla guardada ✅", "ok");
+  // borra la plantilla anterior de esa jornada
+  const { error: delErr } = await supabaseClient
+    .from("matches")
+    .delete()
+    .eq("pool_id", pool_id);
+
+  if (delErr) return showAlert("Error borrando plantilla anterior: " + delErr.message, "error");
+
+  const { error } = await supabaseClient
+    .from("matches")
+    .insert(rows);
+
+  if (error) return showAlert("Error guardando plantilla: " + error.message, "error");
+
+  showAlert(`Plantilla guardada ✅ (${rows.length} partidos)`, "ok");
   await renderPreview();
 }
 
@@ -874,6 +892,11 @@ async function renderPreview() {
   });
 
   wrap.appendChild(card);
+
+$("tplSavedStatus").textContent = matches.length
+  ? `Plantilla guardada: ${matches.length} partidos`
+  : "Sin plantilla guardada";
+
 }
 
 async function exportAllToPDF() {
