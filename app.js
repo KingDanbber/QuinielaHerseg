@@ -767,14 +767,19 @@ async function saveTemplateMatches() {
   const pool_id = $("tplPool").value;
   const n = Number($("tplNumMatches").value || 9);
 
-  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+  if (!pool_id) {
+    $("tplSavedStatus").textContent = "Selecciona una jornada.";
+    return showAlert("Selecciona una jornada.", "error");
+  }
 
   const rows = [];
+
   for (let i = 1; i <= n; i++) {
     const home = document.querySelector(`[data-home="${i}"]`)?.value?.trim();
     const away = document.querySelector(`[data-away="${i}"]`)?.value?.trim();
 
     if (!home || !away) {
+      $("tplSavedStatus").textContent = `Falta capturar Local/Visita en partido #${i}`;
       return showAlert(`Falta Local/Visita en partido #${i}`, "error");
     }
 
@@ -786,23 +791,32 @@ async function saveTemplateMatches() {
     });
   }
 
+  $("tplSavedStatus").textContent = `Intentando guardar ${rows.length} partidos...`;
   showAlert(`Intentando guardar ${rows.length} partidos...`, "ok");
 
-  // borra la plantilla anterior de esa jornada
+  // borrar plantilla previa de esa jornada
   const { error: delErr } = await supabaseClient
     .from("matches")
     .delete()
     .eq("pool_id", pool_id);
 
-  if (delErr) return showAlert("Error borrando plantilla anterior: " + delErr.message, "error");
+  if (delErr) {
+    $("tplSavedStatus").textContent = "Error borrando plantilla anterior.";
+    return showAlert("Error borrando plantilla anterior: " + delErr.message, "error");
+  }
 
   const { error } = await supabaseClient
     .from("matches")
     .insert(rows);
 
-  if (error) return showAlert("Error guardando plantilla: " + error.message, "error");
+  if (error) {
+    $("tplSavedStatus").textContent = "Error guardando plantilla.";
+    return showAlert("Error guardando plantilla: " + error.message, "error");
+  }
 
+  $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
   showAlert(`Plantilla guardada ✅ (${rows.length} partidos)`, "ok");
+
   await renderPreview();
 }
 
@@ -869,7 +883,11 @@ function makeTemplateCard({title, subtitle, jornadaText, dateText, priceText, ma
 
 async function renderPreview() {
   const pool_id = $("tplPool").value;
-  if (!pool_id) return;
+  if (!pool_id) {
+    $("tplPreviewWrap").innerHTML = "";
+    $("tplSavedStatus").textContent = "Sin jornada seleccionada.";
+    return;
+  }
 
   const wrap = $("tplPreviewWrap");
   wrap.innerHTML = "";
@@ -879,7 +897,18 @@ async function renderPreview() {
     pool = await getPoolInfo(pool_id);
     matches = await getMatches(pool_id);
   } catch (e) {
+    $("tplSavedStatus").textContent = "Error cargando vista previa.";
     return showAlert(e.message, "error");
+  }
+
+  if (!matches || matches.length === 0) {
+    $("tplSavedStatus").textContent = "Sin plantilla guardada.";
+    wrap.innerHTML = `
+      <div class="text-sm text-zinc-400 p-4">
+        No hay partidos guardados para esta jornada todavía.
+      </div>
+    `;
+    return;
   }
 
   const card = makeTemplateCard({
@@ -891,13 +920,8 @@ async function renderPreview() {
     matches
   });
 
-$("tplSavedStatus").textContent = matches.length
-  ? `Plantilla guardada: ${matches.length} partidos`
-  : "Sin plantilla guardada";
-
   wrap.appendChild(card);
-
-
+  $("tplSavedStatus").textContent = `Plantilla guardada: ${matches.length} partidos`;
 }
 
 async function exportAllToPDF() {
