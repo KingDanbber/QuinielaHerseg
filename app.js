@@ -1069,10 +1069,6 @@ async function exportAllToPNGs() {
   showAlert(`Imágenes generadas: ${count} ✅`, "ok");
 }
 
-let currentPickEntryId = null;
-let currentPickPoolId = null;
-let currentPickParticipantId = null;
-
 async function fillPickSelectors() {
   // reutiliza tus pools/participants si ya tienes funciones; si no:
   const poolsRes = await supabaseClient
@@ -1357,7 +1353,6 @@ const date_label = $("poolDates").value.trim() || null;
   loadPools();
 });
 
-$("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
 
 //Registrar Boletos Pagos
 $("btnAddEntry").addEventListener("click", addEntry);
@@ -1370,8 +1365,9 @@ $("btnBuildRows").addEventListener("click", () => buildTplRowsUI(Number($("tplNu
 $("btnSaveTemplate").addEventListener("click", saveTemplateMatches);
 $("tplPool").addEventListener("change", renderPreview);
 
+//PDF, PNG
 $("btnExportPDF").addEventListener("click", exportAllToPDF);
-$("btnExportPNGs").addEventListener("click", exportAllToPNGs);
+$("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
 
 //Guardar Pronosticos
 $("btnLoadEntryForPick").addEventListener("click", loadEntryForPick);
