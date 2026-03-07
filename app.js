@@ -791,33 +791,45 @@ async function saveTemplateMatches() {
     });
   }
 
-  $("tplSavedStatus").textContent = `Intentando guardar ${rows.length} partidos...`;
+  console.log("POOL_ID:", pool_id);
+  console.log("ROWS:", rows);
+
+  $("tplSavedStatus").textContent = `Paso 1/3: validando ${rows.length} partidos...`;
   showAlert(`Intentando guardar ${rows.length} partidos...`, "ok");
 
-  // borrar plantilla previa de esa jornada
-  const { error: delErr } = await supabaseClient
-    .from("matches")
-    .delete()
-    .eq("pool_id", pool_id);
+  try {
+    $("tplSavedStatus").textContent = "Paso 2/3: borrando plantilla anterior...";
 
-  if (delErr) {
-    $("tplSavedStatus").textContent = "Error borrando plantilla anterior.";
-    return showAlert("Error borrando plantilla anterior: " + delErr.message, "error");
+    const { error: delErr } = await supabaseClient
+      .from("matches")
+      .delete()
+      .eq("pool_id", pool_id);
+
+    if (delErr) {
+      $("tplSavedStatus").textContent = "Error borrando plantilla anterior.";
+      return showAlert("Error borrando plantilla anterior: " + delErr.message, "error");
+    }
+
+    $("tplSavedStatus").textContent = "Paso 3/3: guardando nueva plantilla...";
+
+    const { data, error } = await supabaseClient
+      .from("matches")
+      .insert(rows)
+      .select();
+
+    if (error) {
+      $("tplSavedStatus").textContent = "Error guardando plantilla.";
+      return showAlert("Error guardando plantilla: " + error.message, "error");
+    }
+
+    $("tplSavedStatus").textContent = `Plantilla guardada: ${data?.length || rows.length} partidos ✅`;
+    showAlert(`Plantilla guardada ✅ (${data?.length || rows.length} partidos)`, "ok");
+
+    await renderPreview();
+  } catch (err) {
+    $("tplSavedStatus").textContent = "Error inesperado al guardar.";
+    showAlert("Error inesperado: " + (err?.message || err), "error");
   }
-
-  const { error } = await supabaseClient
-    .from("matches")
-    .insert(rows);
-
-  if (error) {
-    $("tplSavedStatus").textContent = "Error guardando plantilla.";
-    return showAlert("Error guardando plantilla: " + error.message, "error");
-  }
-
-  $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
-  showAlert(`Plantilla guardada ✅ (${rows.length} partidos)`, "ok");
-
-  await renderPreview();
 }
 
 async function getPoolInfo(pool_id){
