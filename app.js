@@ -896,9 +896,6 @@ async function renderPreview() {
 $("tplSavedStatus").textContent = matches.length
   ? `Plantilla guardada: ${matches.length} partidos`
   : "Sin plantilla guardada";
-$("tplSavedStatus").textContent = matches.length
-  ? `Plantilla guardada: ${matches.length} partidos`
-  : "Sin plantilla guardada";
 }
 
 async function exportAllToPDF() {
