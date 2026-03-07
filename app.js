@@ -891,11 +891,13 @@ async function renderPreview() {
     matches
   });
 
-  wrap.appendChild(card);
-
 $("tplSavedStatus").textContent = matches.length
   ? `Plantilla guardada: ${matches.length} partidos`
   : "Sin plantilla guardada";
+
+  wrap.appendChild(card);
+
+
 }
 
 async function exportAllToPDF() {
