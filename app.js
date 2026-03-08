@@ -825,6 +825,7 @@ async function saveTemplateMatches() {
     $("tplSavedStatus").textContent = `Plantilla guardada: ${data?.length || rows.length} partidos ✅`;
     showAlert(`Plantilla guardada ✅ (${data?.length || rows.length} partidos)`, "ok");
 
+await loadTemplateIntoEditor();
     await renderPreview();
   } catch (err) {
     $("tplSavedStatus").textContent = "Error inesperado al guardar.";
@@ -891,6 +892,48 @@ function makeTemplateCard({title, subtitle, jornadaText, dateText, priceText, ma
   });
 
   return card;
+}
+
+async function loadTemplateIntoEditor() {
+  hideAlert();
+
+  const pool_id = $("tplPool").value;
+  if (!pool_id) return;
+
+  const { data: matches, error } = await supabaseClient
+    .from("matches")
+    .select("match_no, home_team, away_team")
+    .eq("pool_id", pool_id)
+    .order("match_no", { ascending: true });
+
+  if (error) {
+    $("tplSavedStatus").textContent = "Error cargando plantilla.";
+    return showAlert(error.message, "error");
+  }
+
+  const rows = matches || [];
+
+  // Si no hay plantilla guardada, deja el editor limpio con el número actual
+  if (rows.length === 0) {
+    buildTplRowsUI(Number($("tplNumMatches").value || 9));
+    $("tplSavedStatus").textContent = "Sin plantilla guardada.";
+    return;
+  }
+
+  // Ajustar cantidad de filas al número guardado
+  $("tplNumMatches").value = rows.length;
+  buildTplRowsUI(rows.length);
+
+  // Rellenar inputs con lo ya guardado
+  rows.forEach(m => {
+    const homeInput = document.querySelector(`[data-home="${m.match_no}"]`);
+    const awayInput = document.querySelector(`[data-away="${m.match_no}"]`);
+
+    if (homeInput) homeInput.value = m.home_team || "";
+    if (awayInput) awayInput.value = m.away_team || "";
+  });
+
+  $("tplSavedStatus").textContent = `Plantilla cargada en editor: ${rows.length} partidos`;
 }
 
 async function renderPreview() {
@@ -1399,7 +1442,10 @@ $("entryPool").addEventListener("change", loadEntriesAndStats);
 // Plantillas
 $("btnBuildRows").addEventListener("click", () => buildTplRowsUI(Number($("tplNumMatches").value || 9)));
 $("btnSaveTemplate").addEventListener("click", saveTemplateMatches);
-$("tplPool").addEventListener("change", renderPreview);
+$("tplPool").addEventListener("change", async () => {
+  await loadTemplateIntoEditor();
+  await renderPreview();
+});
 
 //PDF, PNG
 $("btnExportPDF").addEventListener("click", exportAllToPDF);
@@ -1497,8 +1543,8 @@ await fillPickParticipantsSelect();
 
   // Selects + preview de plantillas
   await fillTplPools();
-  buildTplRowsUI(Number($("tplNumMatches").value || 9));
-  await renderPreview();
+await loadTemplateIntoEditor();
+await renderPreview();
 
 await fillPickSelectors();
 
