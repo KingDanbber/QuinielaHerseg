@@ -162,43 +162,6 @@ function formatMxHeader(date=new Date()) {
 // =====================
 // Supabase helpers
 // =====================
-async function testFrontInsertMatch() {
-  hideAlert();
-
-  const pool_id = $("tplPool").value;
-  if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
-
-  showAlert("Probando insert directo en matches...", "ok");
-  $("tplSavedStatus").textContent = "Probando insert directo en matches...";
-
-  try {
-    const payload = {
-      pool_id,
-      match_no: 99,
-      home_team: "PRUEBA_LOCAL",
-      away_team: "PRUEBA_VISITA"
-    };
-
-    console.log("TEST INSERT PAYLOAD:", payload);
-
-    const { data, error } = await supabaseClient
-      .from("matches")
-      .insert(payload)
-      .select();
-
-    if (error) {
-      $("tplSavedStatus").textContent = "Error en insert de prueba.";
-      return showAlert("Error test insert: " + error.message, "error");
-    }
-
-    $("tplSavedStatus").textContent = "Insert de prueba exitoso ✅";
-    showAlert("Insert de prueba exitoso ✅", "ok");
-    console.log("TEST INSERT RESULT:", data);
-  } catch (err) {
-    $("tplSavedStatus").textContent = "Error inesperado en insert de prueba.";
-    showAlert("Error inesperado test insert: " + (err?.message || err), "error");
-  }
-}
 
 async function isAdmin() {
   const { data, error } = await supabaseClient.rpc("is_admin");
@@ -806,7 +769,6 @@ async function saveTemplateMatches() {
   const n = Number($("tplNumMatches").value || 9);
 
   if (!pool_id) {
-    $("tplSavedStatus").textContent = "Selecciona una jornada.";
     return showAlert("Selecciona una jornada.", "error");
   }
 
@@ -817,81 +779,46 @@ async function saveTemplateMatches() {
     const away = document.querySelector(`[data-away="${i}"]`)?.value?.trim();
 
     if (!home || !away) {
-      $("tplSavedStatus").textContent = `Falta capturar Local/Visita en partido #${i}`;
       return showAlert(`Falta Local/Visita en partido #${i}`, "error");
     }
 
     rows.push({
-      pool_id,
+      pool_id: pool_id,
       match_no: i,
       home_team: home.toUpperCase(),
       away_team: away.toUpperCase()
     });
   }
 
-  showAlert(`Guardando ${rows.length} partidos...`, "ok");
-  $("tplSavedStatus").textContent = `Preparando guardado de ${rows.length} partidos...`;
+  $("tplSavedStatus").textContent = "Guardando plantilla...";
+  showAlert("Guardando plantilla...", "ok");
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    $("tplSavedStatus").textContent = `Guardando partido ${i + 1}/${rows.length}...`;
+  try {
 
-    // 1) Ver si ya existe ese partido en esa jornada
-    const { data: existing, error: findErr } = await supabaseClient
+    // borrar plantilla previa
+    await supabaseClient
       .from("matches")
-      .select("id")
-      .eq("pool_id", row.pool_id)
-      .eq("match_no", row.match_no)
-      .maybeSingle();
+      .delete()
+      .eq("pool_id", pool_id);
 
-    if (findErr) {
-      $("tplSavedStatus").textContent = `Error buscando partido #${row.match_no}`;
-      return showAlert(`Error buscando partido #${row.match_no}: ${findErr.message}`, "error");
+    // insertar todos los partidos de una vez
+    const { error } = await supabaseClient
+      .from("matches")
+      .insert(rows);
+
+    if (error) {
+      return showAlert("Error guardando plantilla: " + error.message, "error");
     }
 
-    // 2) Si existe -> update
-    if (existing?.id) {
-      const { error: updErr } = await supabaseClient
-        .from("matches")
-        .update({
-          home_team: row.home_team,
-          away_team: row.away_team
-        })
-        .eq("id", existing.id);
+    $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
+    showAlert(`Plantilla guardada (${rows.length} partidos)`, "ok");
 
-      if (updErr) {
-        $("tplSavedStatus").textContent = `Error actualizando partido #${row.match_no}`;
-        return showAlert(`Error actualizando partido #${row.match_no}: ${updErr.message}`, "error");
-      }
-    } else {
-      // 3) Si no existe -> insert
-      const { error: insErr } = await supabaseClient
-        .from("matches")
-        .insert(row);
+    await loadTemplateIntoEditor();
+    await renderPreview();
 
-      if (insErr) {
-        $("tplSavedStatus").textContent = `Error insertando partido #${row.match_no}`;
-        return showAlert(`Error insertando partido #${row.match_no}: ${insErr.message}`, "error");
-      }
-    }
+  } catch (err) {
+    showAlert("Error inesperado: " + err.message, "error");
   }
-
-  // borrar partidos sobrantes si antes la jornada tenía más
-  const { error: cleanupError } = await supabaseClient
-    .from("matches")
-    .delete()
-    .eq("pool_id", pool_id)
-    .gt("match_no", n);
-
-  if (cleanupError) {
-    console.warn("No se pudieron borrar partidos sobrantes:", cleanupError.message);
-  }
-
-  $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
-  showAlert(`Plantilla guardada ✅ (${rows.length} partidos)`, "ok");
-
-  await loadTemplateIntoEditor();
-  await renderPreview();
 }
 
 async function getPoolInfo(pool_id){
@@ -1548,9 +1475,6 @@ $("btnDeniedSignOut").addEventListener("click", async () => {
   $("btnSignOut").classList.add("hidden");
   setView("viewLogin");
 });
-
-// Prueba Guardar plantilla
-$("btnTestInsertMatch").addEventListener("click", testFrontInsertMatch);
 
 // =====================
 // Init
