@@ -791,21 +791,29 @@ async function saveTemplateMatches() {
     });
   }
 
-  $("tplSavedStatus").textContent = `Paso 1/2: guardando ${rows.length} partidos...`;
-  showAlert(`Intentando guardar ${rows.length} partidos...`, "ok");
+  showAlert(`Guardando ${rows.length} partidos...`, "ok");
+  $("tplSavedStatus").textContent = `Guardando ${rows.length} partidos...`;
 
-  // ✅ Guardar sin borrar antes
-  const { data, error } = await supabaseClient
-    .from("matches")
-    .upsert(rows, { onConflict: "pool_id,match_no" })
-    .select();
+  // Guardar uno por uno
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
 
-  if (error) {
-    $("tplSavedStatus").textContent = "Error guardando plantilla.";
-    return showAlert("Error guardando plantilla: " + error.message, "error");
+    $("tplSavedStatus").textContent = `Guardando partido ${i + 1}/${rows.length}...`;
+
+    const { error } = await supabaseClient
+      .from("matches")
+      .upsert(row, { onConflict: "pool_id,match_no" });
+
+    if (error) {
+      $("tplSavedStatus").textContent = `Error en partido #${row.match_no}`;
+      return showAlert(
+        `Error guardando partido #${row.match_no}: ${error.message}`,
+        "error"
+      );
+    }
   }
 
-  // ✅ Opcional: borrar sobrantes si antes había más partidos
+  // Borrar sobrantes si antes había más partidos
   const { error: cleanupError } = await supabaseClient
     .from("matches")
     .delete()
@@ -813,7 +821,6 @@ async function saveTemplateMatches() {
     .gt("match_no", n);
 
   if (cleanupError) {
-    // No bloquea el guardado principal
     console.warn("No se pudieron borrar partidos sobrantes:", cleanupError.message);
   }
 
