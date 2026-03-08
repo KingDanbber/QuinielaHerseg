@@ -792,28 +792,53 @@ async function saveTemplateMatches() {
   }
 
   showAlert(`Guardando ${rows.length} partidos...`, "ok");
-  $("tplSavedStatus").textContent = `Guardando ${rows.length} partidos...`;
+  $("tplSavedStatus").textContent = `Preparando guardado de ${rows.length} partidos...`;
 
-  // Guardar uno por uno
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-
     $("tplSavedStatus").textContent = `Guardando partido ${i + 1}/${rows.length}...`;
 
-    const { error } = await supabaseClient
+    // 1) Ver si ya existe ese partido en esa jornada
+    const { data: existing, error: findErr } = await supabaseClient
       .from("matches")
-      .upsert(row, { onConflict: "pool_id,match_no" });
+      .select("id")
+      .eq("pool_id", row.pool_id)
+      .eq("match_no", row.match_no)
+      .maybeSingle();
 
-    if (error) {
-      $("tplSavedStatus").textContent = `Error en partido #${row.match_no}`;
-      return showAlert(
-        `Error guardando partido #${row.match_no}: ${error.message}`,
-        "error"
-      );
+    if (findErr) {
+      $("tplSavedStatus").textContent = `Error buscando partido #${row.match_no}`;
+      return showAlert(`Error buscando partido #${row.match_no}: ${findErr.message}`, "error");
+    }
+
+    // 2) Si existe -> update
+    if (existing?.id) {
+      const { error: updErr } = await supabaseClient
+        .from("matches")
+        .update({
+          home_team: row.home_team,
+          away_team: row.away_team
+        })
+        .eq("id", existing.id);
+
+      if (updErr) {
+        $("tplSavedStatus").textContent = `Error actualizando partido #${row.match_no}`;
+        return showAlert(`Error actualizando partido #${row.match_no}: ${updErr.message}`, "error");
+      }
+    } else {
+      // 3) Si no existe -> insert
+      const { error: insErr } = await supabaseClient
+        .from("matches")
+        .insert(row);
+
+      if (insErr) {
+        $("tplSavedStatus").textContent = `Error insertando partido #${row.match_no}`;
+        return showAlert(`Error insertando partido #${row.match_no}: ${insErr.message}`, "error");
+      }
     }
   }
 
-  // Borrar sobrantes si antes había más partidos
+  // borrar partidos sobrantes si antes la jornada tenía más
   const { error: cleanupError } = await supabaseClient
     .from("matches")
     .delete()
