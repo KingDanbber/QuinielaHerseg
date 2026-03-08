@@ -791,46 +791,37 @@ async function saveTemplateMatches() {
     });
   }
 
-  console.log("POOL_ID:", pool_id);
-  console.log("ROWS:", rows);
-
-  $("tplSavedStatus").textContent = `Paso 1/3: validando ${rows.length} partidos...`;
+  $("tplSavedStatus").textContent = `Paso 1/2: guardando ${rows.length} partidos...`;
   showAlert(`Intentando guardar ${rows.length} partidos...`, "ok");
 
-  try {
-    $("tplSavedStatus").textContent = "Paso 2/3: borrando plantilla anterior...";
+  // ✅ Guardar sin borrar antes
+  const { data, error } = await supabaseClient
+    .from("matches")
+    .upsert(rows, { onConflict: "pool_id,match_no" })
+    .select();
 
-    const { error: delErr } = await supabaseClient
-      .from("matches")
-      .delete()
-      .eq("pool_id", pool_id);
-
-    if (delErr) {
-      $("tplSavedStatus").textContent = "Error borrando plantilla anterior.";
-      return showAlert("Error borrando plantilla anterior: " + delErr.message, "error");
-    }
-
-    $("tplSavedStatus").textContent = "Paso 3/3: guardando nueva plantilla...";
-
-    const { data, error } = await supabaseClient
-      .from("matches")
-      .insert(rows)
-      .select();
-
-    if (error) {
-      $("tplSavedStatus").textContent = "Error guardando plantilla.";
-      return showAlert("Error guardando plantilla: " + error.message, "error");
-    }
-
-    $("tplSavedStatus").textContent = `Plantilla guardada: ${data?.length || rows.length} partidos ✅`;
-    showAlert(`Plantilla guardada ✅ (${data?.length || rows.length} partidos)`, "ok");
-
-await loadTemplateIntoEditor();
-    await renderPreview();
-  } catch (err) {
-    $("tplSavedStatus").textContent = "Error inesperado al guardar.";
-    showAlert("Error inesperado: " + (err?.message || err), "error");
+  if (error) {
+    $("tplSavedStatus").textContent = "Error guardando plantilla.";
+    return showAlert("Error guardando plantilla: " + error.message, "error");
   }
+
+  // ✅ Opcional: borrar sobrantes si antes había más partidos
+  const { error: cleanupError } = await supabaseClient
+    .from("matches")
+    .delete()
+    .eq("pool_id", pool_id)
+    .gt("match_no", n);
+
+  if (cleanupError) {
+    // No bloquea el guardado principal
+    console.warn("No se pudieron borrar partidos sobrantes:", cleanupError.message);
+  }
+
+  $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
+  showAlert(`Plantilla guardada ✅ (${rows.length} partidos)`, "ok");
+
+  await loadTemplateIntoEditor();
+  await renderPreview();
 }
 
 async function getPoolInfo(pool_id){
