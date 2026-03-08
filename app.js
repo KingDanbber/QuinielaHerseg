@@ -843,6 +843,22 @@ async function getPoolInfo(pool_id){
   return data;
 }
 
+function clearTemplateEditor() {
+  const n = Number($("tplNumMatches").value || 9);
+
+  for (let i = 1; i <= n; i++) {
+    const homeInput = document.querySelector(`[data-home="${i}"]`);
+    const awayInput = document.querySelector(`[data-away="${i}"]`);
+
+    if (homeInput) homeInput.value = "";
+    if (awayInput) awayInput.value = "";
+  }
+
+  $("tplPreviewWrap").innerHTML = "";
+  $("tplSavedStatus").textContent = "Editor limpio.";
+  showAlert("Editor limpiado ✅", "ok");
+}
+
 async function getMatches(pool_id){
   const { data, error } = await supabaseClient
     .from("matches")
@@ -1446,6 +1462,9 @@ $("tplPool").addEventListener("change", async () => {
   await loadTemplateIntoEditor();
   await renderPreview();
 });
+
+//Limpiar Preview Plantillas
+$("btnClearTemplateEditor").addEventListener("click", clearTemplateEditor);
 
 //PDF, PNG
 $("btnExportPDF").addEventListener("click", exportAllToPDF);
