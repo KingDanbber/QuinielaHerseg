@@ -162,6 +162,44 @@ function formatMxHeader(date=new Date()) {
 // =====================
 // Supabase helpers
 // =====================
+async function testFrontInsertMatch() {
+  hideAlert();
+
+  const pool_id = $("tplPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
+
+  showAlert("Probando insert directo en matches...", "ok");
+  $("tplSavedStatus").textContent = "Probando insert directo en matches...";
+
+  try {
+    const payload = {
+      pool_id,
+      match_no: 99,
+      home_team: "PRUEBA_LOCAL",
+      away_team: "PRUEBA_VISITA"
+    };
+
+    console.log("TEST INSERT PAYLOAD:", payload);
+
+    const { data, error } = await supabaseClient
+      .from("matches")
+      .insert(payload)
+      .select();
+
+    if (error) {
+      $("tplSavedStatus").textContent = "Error en insert de prueba.";
+      return showAlert("Error test insert: " + error.message, "error");
+    }
+
+    $("tplSavedStatus").textContent = "Insert de prueba exitoso ✅";
+    showAlert("Insert de prueba exitoso ✅", "ok");
+    console.log("TEST INSERT RESULT:", data);
+  } catch (err) {
+    $("tplSavedStatus").textContent = "Error inesperado en insert de prueba.";
+    showAlert("Error inesperado test insert: " + (err?.message || err), "error");
+  }
+}
+
 async function isAdmin() {
   const { data, error } = await supabaseClient.rpc("is_admin");
   if (error) throw error;
@@ -1510,6 +1548,9 @@ $("btnDeniedSignOut").addEventListener("click", async () => {
   $("btnSignOut").classList.add("hidden");
   setView("viewLogin");
 });
+
+// Prueba Guardar plantilla
+$("btnTestInsertMatch").addEventListener("click", testFrontInsertMatch);
 
 // =====================
 // Init
