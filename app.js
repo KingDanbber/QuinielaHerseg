@@ -942,8 +942,6 @@ async function saveTemplateMatches() {
     $("tplSavedStatus").textContent = `Plantilla guardada: ${savedCount} partidos ✅`;
     showAlert(`Plantilla guardada ✅ (${savedCount} partidos)`, "ok");
 
-    // ✅ NO refrescar editor ni preview aquí
-    return;
   } catch (err) {
     $("tplSavedStatus").textContent = "Error inesperado al guardar.";
     showAlert("Error inesperado: " + (err?.message || err), "error");
