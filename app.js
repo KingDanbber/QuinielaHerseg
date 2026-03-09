@@ -1343,6 +1343,120 @@ async function exportCurrentTemplatePNG() {
   }
 }
 
+async function exportStoryTemplatePNG() {
+  hideAlert();
+
+  const pool_id = $("tplPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+
+  let pool, matches;
+
+  try {
+    pool = await getPoolInfo(pool_id);
+    matches = await getMatches(pool_id);
+  } catch (e) {
+    return showAlert(e.message, "error");
+  }
+
+  if (!matches || matches.length === 0) {
+    return showAlert("Esta jornada no tiene plantilla guardada.", "error");
+  }
+
+  const printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  // Lienzo vertical tipo historia
+  const story = document.createElement("div");
+  story.style.width = "1080px";
+  story.style.height = "1920px";
+  story.style.background = "#ffffff";
+  story.style.boxSizing = "border-box";
+  story.style.padding = "80px 60px";
+  story.style.display = "flex";
+  story.style.flexDirection = "column";
+  story.style.alignItems = "center";
+  story.style.justifyContent = "flex-start";
+  story.style.gap = "30px";
+
+  // Encabezado superior
+  const header = document.createElement("div");
+  header.style.textAlign = "center";
+  header.innerHTML = `
+    <div style="font-size:42px;font-weight:800;color:#111111;">Quiniela Herseg MX</div>
+    <div style="font-size:22px;color:#444444;margin-top:10px;">
+      "Pasión X Ganar" ⚽ ${pool?.season || ""}
+    </div>
+  `;
+
+  const subtitle = document.createElement("div");
+  subtitle.style.textAlign = "center";
+  subtitle.style.fontSize = "24px";
+  subtitle.style.fontWeight = "700";
+  subtitle.style.color = "#111111";
+  subtitle.innerHTML = `
+    ${pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada")}<br>
+    <span style="font-size:20px;font-weight:600;color:#444444;">
+      ${pool?.date_label || "FECHAS"} • $${Number(pool?.price || 20)}
+    </span>
+  `;
+
+  const card = makeTemplateCard({
+    title: "Quiniela Herseg MX",
+    subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
+    jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
+    dateText: (pool?.date_label || "FECHAS"),
+    priceText: Number(pool?.price || 20),
+    matches,
+    exportMode: true
+  });
+
+  // Ajuste especial para historia
+  card.style.width = "920px";
+  card.style.padding = "24px";
+  card.style.borderRadius = "20px";
+  card.style.boxShadow = "0 20px 60px rgba(0,0,0,.10)";
+
+  const footer = document.createElement("div");
+  footer.style.textAlign = "center";
+  footer.style.fontSize = "22px";
+  footer.style.color = "#222222";
+  footer.style.marginTop = "10px";
+  footer.innerHTML = `
+    Llena tu pronóstico y envíalo por WhatsApp 📲
+  `;
+
+  story.appendChild(header);
+  story.appendChild(subtitle);
+  story.appendChild(card);
+  story.appendChild(footer);
+
+  printArea.appendChild(story);
+
+  try {
+    const canvas = await html2canvas(story, {
+      scale: 2,
+      backgroundColor: "#ffffff"
+    });
+
+    const a = document.createElement("a");
+    const safeName = (pool?.name || "Plantilla-Historia")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-");
+
+    a.download = `${safeName}-story-9x16.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+
+    showAlert("Historia 9:16 generada ✅", "ok");
+  } catch (err) {
+    showAlert("Error generando historia: " + (err?.message || err), "error");
+  } finally {
+    printArea.innerHTML = "";
+    printArea.classList.add("hidden");
+  }
+}
+
 async function exportAllToPNGs() {
   hideAlert();
 
@@ -1745,7 +1859,7 @@ $("btnDeleteTemplate").addEventListener("click", deleteCurrentTemplate);
 // PDF PNG
 $("btnExportPDF").addEventListener("click", exportAllToPDF);
 $("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
-
+$("btnExportStoryPNG").addEventListener("click", exportStoryTemplatePNG);
 
 // Captura Pronósticos 1X2
 $("btnLoadEntryForPick").addEventListener("click", async () => {
