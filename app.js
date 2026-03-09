@@ -901,11 +901,8 @@ async function saveTemplateMatches() {
   const pool_id = $("tplPool").value;
   const n = Number($("tplNumMatches").value || 9);
 
-  $("tplSavedStatus").textContent = "V99: inicio";
-  showAlert("V99: inicio", "ok");
-
   if (!pool_id) {
-    $("tplSavedStatus").textContent = "V99: falta jornada";
+    $("tplSavedStatus").textContent = "Selecciona una jornada.";
     return showAlert("Selecciona una jornada.", "error");
   }
 
@@ -916,7 +913,7 @@ async function saveTemplateMatches() {
     const away = document.querySelector(`[data-away="${i}"]`)?.value?.trim();
 
     if (!home || !away) {
-      $("tplSavedStatus").textContent = `V99: falta partido #${i}`;
+      $("tplSavedStatus").textContent = `Falta capturar Local/Visita en partido #${i}`;
       return showAlert(`Falta Local/Visita en partido #${i}`, "error");
     }
 
@@ -928,8 +925,8 @@ async function saveTemplateMatches() {
     });
   }
 
-  $("tplSavedStatus").textContent = `V99: antes de insert (${rows.length})`;
-  showAlert(`V99: antes de insert (${rows.length})`, "ok");
+  $("tplSavedStatus").textContent = `Guardando plantilla (${rows.length} partidos)...`;
+  showAlert(`Guardando plantilla (${rows.length} partidos)...`, "ok");
 
   try {
     const { data, error } = await supabaseClient
@@ -937,22 +934,29 @@ async function saveTemplateMatches() {
       .insert(rows)
       .select();
 
-    $("tplSavedStatus").textContent = "V99: después de insert";
-
     if (error) {
-      $("tplSavedStatus").textContent = "V99: error insert";
-      return showAlert("V99 error insert: " + error.message, "error");
+      $("tplSavedStatus").textContent = "Error guardando plantilla.";
+      return showAlert("Error guardando plantilla: " + error.message, "error");
     }
 
     const savedCount = data?.length || rows.length;
 
-    $("tplSavedStatus").textContent = `V99: guardó ${savedCount} partidos ✅`;
-    showAlert(`V99: guardó ${savedCount} partidos ✅`, "ok");
+    $("tplSavedStatus").textContent = `Plantilla guardada: ${savedCount} partidos ✅`;
+    showAlert(`Plantilla guardada ✅ (${savedCount} partidos)`, "ok");
 
-    return;
+    // Recarga suave después de guardar
+    setTimeout(async () => {
+      try {
+        await loadTemplateIntoEditor();
+        await renderPreview();
+      } catch (e) {
+        console.warn("No se pudo refrescar plantilla automáticamente:", e);
+      }
+    }, 400);
+
   } catch (err) {
-    $("tplSavedStatus").textContent = "V99: catch";
-    showAlert("V99 catch: " + (err?.message || err), "error");
+    $("tplSavedStatus").textContent = "Error inesperado al guardar.";
+    showAlert("Error inesperado: " + (err?.message || err), "error");
   }
 }
 
