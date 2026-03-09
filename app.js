@@ -79,6 +79,20 @@ async function safeInit() {
   }
 }
 
+let bottomNavInitialized = false;
+
+function initBottomNav() {
+  if (bottomNavInitialized) return;
+  bottomNavInitialized = true;
+
+  document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const tabId = btn.getAttribute("data-tab");
+      await showAppTab(tabId);
+    });
+  });
+}
+
 function setBusy(btn, busy, textBusy="Procesando…") {
   if (!btn) return;
   if (!btn.dataset.text) btn.dataset.text = btn.textContent;
@@ -186,6 +200,119 @@ async function upsertProfile(userId, displayName) {
   if (error) throw error;
 }
 
+async function showAppTab(tabId) {
+  document.querySelectorAll(".app-tab").forEach(tab => {
+    tab.classList.add("hidden");
+  });
+
+  const target = document.getElementById(tabId);
+  if (target) target.classList.remove("hidden");
+
+  document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === tabId);
+  });
+
+  try {
+    if (tabId === "tab-dashboard") {
+      await loadDashboardSummary();
+    }
+
+    if (tabId === "tab-participants") {
+      await loadParticipants();
+    }
+
+    if (tabId === "tab-pools") {
+      await loadPools();
+    }
+
+    if (tabId === "tab-templates") {
+      await fillTplPools();
+      await loadTemplateIntoEditor();
+      await renderPreview();
+    }
+
+    if (tabId === "tab-payments") {
+      await fillEntryPoolsSelect();
+      await fillEntryParticipantsSelect();
+      await loadEntriesAndStats();
+    }
+
+    if (tabId === "tab-picks") {
+      await fillPickPoolsSelect();
+      await fillPickParticipantsSelect();
+    }
+  } catch (err) {
+    showAlert("Error cargando sección: " + (err?.message || err), "error");
+  }
+}
+
+function formatModeLabel(mode) {
+  switch (mode) {
+    case "SENCILLA":
+      return "Quiniela Sencilla";
+    case "ACUMULADA":
+      return "Quiniela Acumulada";
+    case "GOLEO":
+      return "Campeón de Goleo";
+    case "CAMPEON_CAMPEONES":
+      return "Campeón de Campeones";
+    default:
+      return mode || "—";
+  }
+}
+
+async function loadDashboardSummary() {
+  // jornada activa
+  const { data: activePool, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, name, mode_code, carryover_amount")
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (poolErr) {
+    showAlert(poolErr.message, "error");
+    return;
+  }
+
+  $("dashActivePool").textContent = activePool?.name || "Sin activa";
+  $("dashMode").textContent = formatModeLabel(activePool?.mode_code);
+  $("dashCarryover").textContent = money(activePool?.carryover_amount || 0);
+
+  // participantes activos
+  const { count: participantsCount, error: partErr } = await supabaseClient
+    .from("participants")
+    .select("*", { count: "exact", head: true })
+    .eq("is_active", true);
+
+  if (partErr) {
+    showAlert(partErr.message, "error");
+    return;
+  }
+
+  $("dashParticipants").textContent = participantsCount || 0;
+
+  // stats de la jornada activa
+  if (activePool?.id) {
+    const { data: stats, error: statsErr } = await supabaseClient
+      .from("pool_stats")
+      .select("paid_count, prize_pool")
+      .eq("pool_id", activePool.id)
+      .maybeSingle();
+
+    if (statsErr) {
+      showAlert(statsErr.message, "error");
+      return;
+    }
+
+    $("dashPaidEntries").textContent = stats?.paid_count || 0;
+    $("dashPrize").textContent = money(stats?.prize_pool || 0);
+  } else {
+    $("dashPaidEntries").textContent = "0";
+    $("dashPrize").textContent = "$0";
+  }
+}
 async function loadParticipants() {
   const q = supabaseClient
     .from("participants")
@@ -657,7 +784,9 @@ async function addEntry() {
   const participant_id = $("entryParticipant").value;
   const paid = $("entryPaid").checked;
 
-  if (!pool_id || !participant_id) return showAlert("Falta seleccionar pool/participante.", "error");
+  if (!pool_id || !participant_id) {
+    return showAlert("Falta seleccionar pool/participante.", "error");
+  }
 
   const payload = {
     pool_id,
@@ -671,9 +800,12 @@ async function addEntry() {
 
   showAlert("Boleto registrado ✅", "ok");
   $("entryPaid").checked = false;
-  await loadEntriesAndStats();
-}
 
+  await loadEntriesAndStats();
+  await fillPickPoolsSelect();
+  await fillPickParticipantsSelect();
+  await loadDashboardSummary();
+}
 async function loadEntriesAndStats() {
   const pool_id = $("entryPool").value;
   if (!pool_id) return;
@@ -1294,6 +1426,10 @@ function clearPicksUI() {
 // Eventos
 // =====================
 
+// =========================
+// LISTENERS GLOBALES
+// =========================
+
 // Ver / Ocultar contraseña
 $("btnTogglePassword").addEventListener("click", () => {
   const inp = $("loginPassword");
@@ -1308,7 +1444,6 @@ $("formLogin").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
 
- showAlert("Intentando login… " + location.href, "ok");
   showAlert("Intentando login…", "ok");
 
   const btn = $("btnLogin");
@@ -1320,7 +1455,9 @@ $("formLogin").addEventListener("submit", async (e) => {
   try {
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     setBusy(btn, false);
+
     if (error) return showAlert(error.message, "error");
+
     await safeInit();
   } catch (err) {
     setBusy(btn, false);
@@ -1335,6 +1472,7 @@ $("toggleSignup").addEventListener("change", (e) => {
 
 $("btnSignup").addEventListener("click", async () => {
   hideAlert();
+
   const btn = $("btnSignup");
   setBusy(btn, true, "Creando…");
 
@@ -1344,7 +1482,9 @@ $("btnSignup").addEventListener("click", async () => {
   try {
     const { error } = await supabaseClient.auth.signUp({ email, password });
     setBusy(btn, false);
+
     if (error) return showAlert(error.message, "error");
+
     showAlert("Cuenta creada. Ahora inicia sesión.", "ok");
   } catch (err) {
     setBusy(btn, false);
@@ -1399,67 +1539,105 @@ $("formParticipant").addEventListener("submit", async (e) => {
   $("pArea").value = "";
   $("pWhatsapp").value = "";
 
-  loadParticipants();
+  await loadParticipants();
+  await fillEntryParticipantsSelect();
+  await fillPickParticipantsSelect();
+  await loadDashboardSummary();
 });
 
-//Ver archivados
+// Ver archivados / activos
 $("btnToggleArchived").addEventListener("click", async () => {
   showArchivedParticipants = !showArchivedParticipants;
-  $("btnToggleArchived").textContent = showArchivedParticipants ? "👁️ Ver activos" : "👁️ Ver archivados";
+  $("btnToggleArchived").textContent = showArchivedParticipants
+    ? "👁️ Ver activos"
+    : "👁️ Ver archivados";
+
   await loadParticipants();
 });
 
-// Jornadas: insertar
+// Jornadas / Pools: insertar
 $("formPool").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
 
-const mode_code = $("poolMode").value;
-const carryover_enabled = (mode_code === "ACUMULADA" || mode_code === "GOLEO");
+  const mode_code = $("poolMode").value;
+  const carryover_enabled = (mode_code === "ACUMULADA" || mode_code === "GOLEO");
+
   const round = Number($("poolRound").value);
   const competition = $("poolCompetition").value.trim() || "Liga MX";
   const season = $("poolSeason").value.trim() || "Clausura 2026";
-const date_label = $("poolDates").value.trim() || null;
+  const date_label = $("poolDates").value.trim() || null;
   const price = Number($("poolPrice").value || 20);
   const commission_pct = Number($("poolCommission").value || 15);
 
   const name = `Jornada ${round} - ${competition} - ${season}`;
 
-  const { error } = await supabaseClient.from("pools").insert({
-    round, competition, season, name, price, commission_pct, status: "open", date_label
-  });
+  const { error } = await supabaseClient
+    .from("pools")
+    .insert({
+      round,
+      competition,
+      season,
+      name,
+      price,
+      commission_pct,
+      status: "open",
+      date_label,
+      mode_code,
+      carryover_enabled
+    });
 
   if (error) return showAlert(error.message, "error");
 
   showAlert("Jornada creada ✅", "ok");
+
   $("poolRound").value = "";
-  loadPools();
+  $("poolCompetition").value = "";
+  $("poolSeason").value = "";
+  $("poolDates").value = "";
+  $("poolPrice").value = "";
+  $("poolCommission").value = "";
+
+  await loadPools();
+  await fillTplPools();
+  await fillEntryPoolsSelect();
+  await fillPickPoolsSelect();
+  await loadDashboardSummary();
 });
 
-
-//Registrar Boletos Pagos
+// Pagos / Boletos
 $("btnAddEntry").addEventListener("click", addEntry);
 $("btnRefreshStats").addEventListener("click", loadEntriesAndStats);
-
 $("entryPool").addEventListener("change", loadEntriesAndStats);
 
 // Plantillas
-$("btnBuildRows").addEventListener("click", () => buildTplRowsUI(Number($("tplNumMatches").value || 9)));
+$("btnBuildRows").addEventListener("click", () => {
+  buildTplRowsUI(Number($("tplNumMatches").value || 9));
+});
+
 $("btnSaveTemplate").addEventListener("click", saveTemplateMatches);
+
 $("tplPool").addEventListener("change", async () => {
   await loadTemplateIntoEditor();
   await renderPreview();
 });
 
-//Limpiar Preview Plantillas
 $("btnClearTemplateEditor").addEventListener("click", clearTemplateEditor);
 
-//PDF, PNG
+// Exportación
 $("btnExportPDF").addEventListener("click", exportAllToPDF);
 $("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
 
-//Guardar Pronosticos
-$("btnLoadEntryForPick").addEventListener("click", loadEntryForPick);
+// Test insert directo
+$("btnTestInsertMatch").addEventListener("click", testFrontInsertMatch);
+
+// Captura Pronósticos 1X2
+$("btnLoadEntryForPick").addEventListener("click", async () => {
+  const poolId = $("pickPool").value;
+  const partId = $("pickParticipant").value;
+  await loadEntryForPick(poolId, partId);
+});
+
 $("btnSavePicks").addEventListener("click", savePicks);
 $("btnClearPicks").addEventListener("click", clearPicksSelection);
 
@@ -1495,7 +1673,6 @@ async function init() {
 
   $("btnSignOut").classList.remove("hidden");
 
-  // Admin
   let admin = false;
   try {
     admin = await isAdmin();
@@ -1510,7 +1687,6 @@ async function init() {
     return;
   }
 
-  // Profile display_name
   const userId = session.user.id;
   let profile = null;
 
@@ -1527,43 +1703,32 @@ async function init() {
     return;
   }
 
-  // ✅ YA TODO OK -> MOSTRAR DASH
   setView("viewDash");
 
-  // Saludo
   const now = new Date();
   const saludo = getGreetingByHour(getMonterreyHour(now));
   const fecha = formatMxHeader(now);
   $("greetingMain").textContent = `👋 ${saludo}, ${profile.display_name}`;
   $("greetingDate").textContent = fecha;
 
-  // Cargar listas base
-  await loadParticipants();
   await loadPools();
+  await loadParticipants();
 
-  // Selects de pagos
   await fillEntryPoolsSelect();
   await fillEntryParticipantsSelect();
   await loadEntriesAndStats();
-await fillPickPoolsSelect();
-await fillPickParticipantsSelect();
 
-  // Selects + preview de plantillas
   await fillTplPools();
-await loadTemplateIntoEditor();
-await renderPreview();
+  await loadTemplateIntoEditor();
+  await renderPreview();
 
-await fillPickSelectors();
+  await fillPickPoolsSelect();
+  await fillPickParticipantsSelect();
 
-$("btnLoadEntryForPick").addEventListener("click", async () => {
-  const poolId = $("pickPool").value;
-  const partId = $("pickParticipant").value;
-  await loadEntryForPick(poolId, partId);
-});
+  await loadDashboardSummary();
 
-$("btnSavePicks").addEventListener("click", savePicks);
-$("btnClearPicks").addEventListener("click", clearPicksUI);
-
+  initBottomNav();
+  await showAppTab("tab-dashboard");
 }
 
 // Arranque
