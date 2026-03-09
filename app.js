@@ -918,9 +918,10 @@ async function saveTemplateMatches() {
     }
 
     rows.push({
+      pool_id,
       match_no: i,
-      home_team: home,
-      away_team: away
+      home_team: home.toUpperCase(),
+      away_team: away.toUpperCase()
     });
   }
 
@@ -928,32 +929,24 @@ async function saveTemplateMatches() {
   showAlert(`Guardando plantilla (${rows.length} partidos)...`, "ok");
 
   try {
-    const rpcPromise = supabaseClient.rpc("save_template_matches", {
-      p_pool_id: pool_id,
-      p_matches: rows
-    });
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout RPC: tardó demasiado.")), 10000)
-    );
-
-    const result = await Promise.race([rpcPromise, timeoutPromise]);
-    const { data, error } = result;
+    const { data, error } = await supabaseClient
+      .from("matches")
+      .insert(rows)
+      .select();
 
     if (error) {
       $("tplSavedStatus").textContent = "Error guardando plantilla.";
       return showAlert("Error guardando plantilla: " + error.message, "error");
     }
 
-    const savedCount = data?.saved_count || rows.length;
+    $("tplSavedStatus").textContent = `Plantilla guardada: ${data?.length || rows.length} partidos ✅`;
+    showAlert(`Plantilla guardada ✅ (${data?.length || rows.length} partidos)`, "ok");
 
-    // ✅ NO recargar editor ni preview todavía
-    $("tplSavedStatus").textContent = `Plantilla guardada: ${savedCount} partidos ✅`;
-    showAlert(`Plantilla guardada ✅ (${savedCount} partidos)`, "ok");
-
+    await loadTemplateIntoEditor();
+    await renderPreview();
   } catch (err) {
-    $("tplSavedStatus").textContent = "Error o timeout al guardar.";
-    showAlert("Error/timeout: " + (err?.message || err), "error");
+    $("tplSavedStatus").textContent = "Error inesperado al guardar.";
+    showAlert("Error inesperado: " + (err?.message || err), "error");
   }
 }
 
