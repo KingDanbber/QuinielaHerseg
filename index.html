@@ -220,39 +220,75 @@
 
     <!-- TAB: PLANTILLAS -->
     <section id="tab-templates" class="app-tab hidden space-y-4">
-      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-        <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-          <h3 class="font-semibold">Plantillas</h3>
-          <div class="grid grid-cols-2 gap-2 w-full">
-            <button type="button" id="btnExportPDF" class="px-3 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">Exportar PDF</button>
-            <button type="button" id="btnExportCurrentPNG" class="px-3 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">Exportar imagen</button>
-          </div>
-        </div>
 
-        <div class="grid gap-2">
-          <select id="tplPool" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"></select>
-          <input id="tplNumMatches" type="number" min="1" value="9" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl" placeholder="# Partidos">
-          <button type="button" id="btnBuildRows" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">Armar filas</button>
-          <button type="button" id="btnSaveTemplate" class="w-full bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">Guardar plantilla</button>
-          <button type="button" id="btnClearTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">🧹 Limpiar editor</button><button type="button" id="btnLoadTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-  📥 Cargar plantilla guardada al editor
-</button>
-<button type="button" id="btnRefreshTemplatePreview" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-  👁️ Ver / actualizar preview
-</button><button type="button" id="btnDeleteTemplate" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-  🗑️ Borrar plantilla de esta jornada
-</button>
-        </div>
-
-        <div id="tplRows" class="mt-4 space-y-2"></div>
-        <div id="tplSavedStatus" class="text-xs text-zinc-400 mt-3"></div>
-
-        <div class="mt-5">
-          <div class="text-zinc-400 text-sm mb-2">Vista previa (formato Excel):</div>
-          <div id="tplPreviewWrap" class="overflow-auto p-2 bg-zinc-950 border border-zinc-800 rounded-xl"></div>
-        </div>
+  <!-- TARJETA 1: EDITOR -->
+  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+      <h3 class="font-semibold">Editor de Plantilla</h3>
+      <div class="text-xs text-zinc-400">
+        Captura y guarda los partidos de la jornada
       </div>
-    </section>
+    </div>
+
+    <div class="grid gap-2">
+      <select id="tplPool" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"></select>
+      <input id="tplNumMatches" type="number" min="1" value="9" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl" placeholder="# Partidos">
+
+      <button type="button" id="btnBuildRows" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        Armar filas
+      </button>
+
+      <button type="button" id="btnSaveTemplate" class="w-full bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
+        Guardar plantilla
+      </button>
+
+      <button type="button" id="btnClearTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        🧹 Limpiar editor
+      </button>
+
+      <button type="button" id="btnLoadTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        📥 Cargar plantilla guardada al editor
+      </button>
+
+      <button type="button" id="btnDeleteTemplate" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        🗑️ Borrar plantilla de esta jornada
+      </button>
+    </div>
+
+    <div id="tplRows" class="mt-4 space-y-2"></div>
+    <div id="tplSavedStatus" class="text-xs text-zinc-400 mt-3"></div>
+  </div>
+
+  <!-- TARJETA 2: PREVIEW Y EXPORTACIÓN -->
+  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+      <h3 class="font-semibold">Vista previa y exportación</h3>
+      <div class="text-xs text-zinc-400">
+        Genera imagen o PDF de la jornada seleccionada
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <button type="button" id="btnRefreshTemplatePreview" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        👁️ Ver / actualizar preview
+      </button>
+
+      <button type="button" id="btnExportCurrentPNG" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        Exportar imagen
+      </button>
+
+      <button type="button" id="btnExportPDF" class="col-span-2 w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        Exportar PDF
+      </button>
+    </div>
+
+    <div class="mt-5">
+      <div class="text-zinc-400 text-sm mb-2">Vista previa (formato Excel):</div>
+      <div id="tplPreviewWrap" class="overflow-auto p-2 bg-zinc-950 border border-zinc-800 rounded-xl"></div>
+    </div>
+  </div>
+
+</section>
 
     <!-- TAB: PAGOS -->
     <section id="tab-payments" class="app-tab hidden space-y-4">
