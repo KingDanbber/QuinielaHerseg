@@ -944,7 +944,6 @@ async function saveTemplateMatches() {
     $("tplSavedStatus").textContent = `Plantilla guardada: ${savedCount} partidos ✅`;
     showAlert(`Plantilla guardada ✅ (${savedCount} partidos)`, "ok");
 
-    // Recarga suave después de guardar
     setTimeout(async () => {
       try {
         await loadTemplateIntoEditor();
@@ -960,7 +959,55 @@ async function saveTemplateMatches() {
   }
 }
 
+async function deleteCurrentTemplate() {
+  hideAlert();
 
+  const pool_id = $("tplPool").value;
+  if (!pool_id) {
+    $("tplSavedStatus").textContent = "Selecciona una jornada.";
+    return showAlert("Selecciona una jornada.", "error");
+  }
+
+  const ok = confirm("¿Seguro que quieres borrar la plantilla de esta jornada?");
+  if (!ok) return;
+
+  $("tplSavedStatus").textContent = "Borrando plantilla...";
+  showAlert("Borrando plantilla...", "ok");
+
+  try {
+    const { error } = await supabaseClient
+      .from("matches")
+      .delete()
+      .eq("pool_id", pool_id);
+
+    if (error) {
+      $("tplSavedStatus").textContent = "Error borrando plantilla.";
+      return showAlert("Error borrando plantilla: " + error.message, "error");
+    }
+
+    $("tplSavedStatus").textContent = "Plantilla borrada ✅";
+    showAlert("Plantilla borrada ✅", "ok");
+
+    $("tplPreviewWrap").innerHTML = `
+      <div class="text-sm text-zinc-400 p-4">
+        No hay partidos guardados para esta jornada todavía.
+      </div>
+    `;
+
+    setTimeout(async () => {
+      try {
+        await loadTemplateIntoEditor();
+        await renderPreview();
+      } catch (e) {
+        console.warn("No se pudo refrescar después de borrar plantilla:", e);
+      }
+    }, 300);
+
+  } catch (err) {
+    $("tplSavedStatus").textContent = "Error inesperado al borrar.";
+    showAlert("Error inesperado: " + (err?.message || err), "error");
+  }
+}
 
 async function getPoolInfo(pool_id){
   const { data, error } = await supabaseClient
@@ -1204,6 +1251,7 @@ async function exportCurrentTemplatePNG() {
   if (!pool_id) return showAlert("Selecciona una jornada.", "error");
 
   let pool, matches;
+
   try {
     pool = await getPoolInfo(pool_id);
     matches = await getMatches(pool_id);
@@ -1230,21 +1278,28 @@ async function exportCurrentTemplatePNG() {
 
   printArea.appendChild(card);
 
-  const canvas = await html2canvas(card, {
-    scale: 2,
-    backgroundColor: "#0b0f14"
-  });
+  try {
+    const canvas = await html2canvas(card, {
+      scale: 2,
+      backgroundColor: "#0b0f14"
+    });
 
-  const a = document.createElement("a");
-  const safeName = (pool?.name || "Plantilla").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
-  a.download = `${safeName}.png`;
-  a.href = canvas.toDataURL("image/png");
-  a.click();
+    const a = document.createElement("a");
+    const safeName = (pool?.name || "Plantilla")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-");
 
-  printArea.innerHTML = "";
-  printArea.classList.add("hidden");
+    a.download = `${safeName}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
 
-  showAlert("Imagen generada ✅", "ok");
+    showAlert("Imagen generada ✅", "ok");
+  } catch (err) {
+    showAlert("Error generando imagen: " + (err?.message || err), "error");
+  } finally {
+    printArea.innerHTML = "";
+    printArea.classList.add("hidden");
+  }
 }
 
 async function exportAllToPNGs() {
@@ -1631,13 +1686,13 @@ $("tplPool").addEventListener("change", async () => {
   await renderPreview();
 });
 
+//Limpiar Plantilla y Borrar Plantilla
 $("btnClearTemplateEditor").addEventListener("click", clearTemplateEditor);
+$("btnDeleteTemplate").addEventListener("click", deleteCurrentTemplate);
 
-// Exportación
+// PDF PNG
 $("btnExportPDF").addEventListener("click", exportAllToPDF);
 $("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
-
-// Test insert directo
 
 
 // Captura Pronósticos 1X2
