@@ -183,3 +183,54 @@ select {
   border-color: rgba(16,185,129,.45);
   color:#34d399;
 }
+
+.app-tab {
+  display: block;
+}
+
+.app-tab.hidden {
+  display: none;
+}
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0;
+  background: rgba(10, 14, 19, 0.96);
+  border-top: 1px solid #27272a;
+  backdrop-filter: blur(14px);
+  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+}
+
+.bottom-nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #a1a1aa;
+  background: transparent;
+  border: 0;
+  padding: 8px 4px;
+  border-radius: 14px;
+  font-size: 12px;
+}
+
+.bottom-nav-btn span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.bottom-nav-btn small {
+  font-size: 10px;
+}
+
+.bottom-nav-btn.active {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+}
