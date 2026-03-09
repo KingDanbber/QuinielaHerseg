@@ -917,10 +917,9 @@ async function saveTemplateMatches() {
     }
 
     rows.push({
-      pool_id,
       match_no: i,
-      home_team: home.toUpperCase(),
-      away_team: away.toUpperCase()
+      home_team: home,
+      away_team: away
     });
   }
 
@@ -928,30 +927,20 @@ async function saveTemplateMatches() {
   showAlert(`Guardando plantilla (${rows.length} partidos)...`, "ok");
 
   try {
-    // 1) borrar plantilla previa
-    const { error: delErr } = await supabaseClient
-      .from("matches")
-      .delete()
-      .eq("pool_id", pool_id);
+    const { data, error } = await supabaseClient.rpc("save_template_matches", {
+      p_pool_id: pool_id,
+      p_matches: rows
+    });
 
-    if (delErr) {
-      $("tplSavedStatus").textContent = "Error borrando plantilla anterior.";
-      return showAlert("Error borrando plantilla anterior: " + delErr.message, "error");
-    }
-
-    // 2) insertar todos los partidos de una vez
-    const { data, error: insErr } = await supabaseClient
-      .from("matches")
-      .insert(rows)
-      .select();
-
-    if (insErr) {
+    if (error) {
       $("tplSavedStatus").textContent = "Error guardando plantilla.";
-      return showAlert("Error guardando plantilla: " + insErr.message, "error");
+      return showAlert("Error guardando plantilla: " + error.message, "error");
     }
 
-    $("tplSavedStatus").textContent = `Plantilla guardada: ${data?.length || rows.length} partidos ✅`;
-    showAlert(`Plantilla guardada ✅ (${data?.length || rows.length} partidos)`, "ok");
+    const savedCount = data?.saved_count || rows.length;
+
+    $("tplSavedStatus").textContent = `Plantilla guardada: ${savedCount} partidos ✅`;
+    showAlert(`Plantilla guardada ✅ (${savedCount} partidos)`, "ok");
 
     await loadTemplateIntoEditor();
     await renderPreview();
