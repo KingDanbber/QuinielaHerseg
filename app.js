@@ -1031,42 +1031,81 @@ async function getMatches(pool_id){
   return data || [];
 }
 
-function makeTemplateCard({title, subtitle, jornadaText, dateText, priceText, matches}) {
+function makeTemplateCard({
+  title,
+  subtitle,
+  jornadaText,
+  dateText,
+  priceText,
+  matches,
+  exportMode = false
+}) {
+  const bg = exportMode ? "#ffffff" : "#0b0f14";
+  const text = exportMode ? "#111111" : "#e5e7eb";
+  const sub = exportMode ? "#444444" : "#a1a1aa";
+  const border = exportMode ? "#222222" : "#1f2937";
+  const innerBg = exportMode ? "#ffffff" : "#0a0e13";
+  const line = exportMode ? "#111111" : "#cbd5e1";
+
   const card = document.createElement("div");
   card.className = "qh-card";
+  card.style.background = bg;
+  card.style.color = text;
+  card.style.border = `1px solid ${border}`;
+  card.style.borderRadius = "14px";
+  card.style.padding = "10px";
+  card.style.width = "360px";
+  card.style.maxWidth = "100%";
 
   card.innerHTML = `
-    <div class="qh-title">${title}</div>
-    <div class="qh-sub">${subtitle}</div>
-
-    <div class="qh-meta">
-      <div>${jornadaText}</div>
-      <div>${dateText}</div>
-      <div>${priceText}</div>
+    <div style="font-weight:800;text-align:center;font-size:16px;color:${text};">
+      ${title}
     </div>
 
-    <div class="qh-table"></div>
+    <div style="text-align:center;font-size:12px;color:${sub};margin-top:2px;">
+      ${subtitle}
+    </div>
 
-    <div class="qh-foot">
-      <div class="line">Nombre:______________________________________</div>
-      <div class="line">Área:________________________</div>
-      <div class="line">*WhatsApp:___________________________________</div>
-      <div class="line">*Registro 1vez para envío link Aplicación Resultados, Quinielas y Premio Acumulado</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 60px;gap:6px;margin-top:8px;font-size:12px;">
+      <div style="border:1px solid ${border};border-radius:10px;padding:6px;text-align:center;background:${innerBg};color:${text};">
+        ${jornadaText}
+      </div>
+      <div style="border:1px solid ${border};border-radius:10px;padding:6px;text-align:center;background:${innerBg};color:${text};">
+        ${dateText}
+      </div>
+      <div style="border:1px solid ${border};border-radius:10px;padding:6px;text-align:center;background:${innerBg};color:${text};">
+        $${Number(priceText || 0)}
+      </div>
+    </div>
+
+    <div class="qh-table" style="margin-top:10px;display:grid;gap:6px;"></div>
+
+    <div style="margin-top:10px;font-size:11px;color:${text};">
+      <div style="margin-top:4px;">Nombre:______________________________________</div>
+      <div style="margin-top:4px;">Área:________________________</div>
+      <div style="margin-top:4px;">*WhatsApp:___________________________________</div>
+      <div style="margin-top:4px;">*Registro 1 vez para envío link Aplicación Resultados, Quinielas y Premio Acumulado</div>
     </div>
   `;
 
   const table = card.querySelector(".qh-table");
+
   matches.forEach(m => {
-    const r = document.createElement("div");
-    r.className = "qh-match";
-    r.innerHTML = `
-      <div class="qh-box"></div>
-      <div class="qh-team">${m.home_team}</div>
-      <div class="qh-box"></div>
-      <div class="qh-team">${m.away_team}</div>
-      <div class="qh-box"></div>
+    const row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "36px 1fr 36px 1fr 36px";
+    row.style.alignItems = "center";
+    row.style.gap = "8px";
+
+    row.innerHTML = `
+      <div style="width:36px;height:26px;border:1.5px solid ${border};border-radius:6px;background:${innerBg};"></div>
+      <div style="text-align:center;font-weight:700;font-size:12px;color:${text};">${m.home_team}</div>
+      <div style="width:36px;height:26px;border:1.5px solid ${border};border-radius:6px;background:${innerBg};"></div>
+      <div style="text-align:center;font-weight:700;font-size:12px;color:${text};">${m.away_team}</div>
+      <div style="width:36px;height:26px;border:1.5px solid ${border};border-radius:6px;background:${innerBg};"></div>
     `;
-    table.appendChild(r);
+
+    table.appendChild(row);
   });
 
   return card;
@@ -1145,13 +1184,14 @@ async function renderPreview() {
   }
 
   const card = makeTemplateCard({
-    title: "Quiniela Herseg MX",
-    subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
-    jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
-    dateText: (pool?.date_label || "FECHAS"),
-    priceText: Number(pool?.price || 20),
-    matches
-  });
+  title: "Quiniela Herseg MX",
+  subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
+  jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
+  dateText: (pool?.date_label || "FECHAS"),
+  priceText: Number(pool?.price || 20),
+  matches,
+  exportMode: false
+});
 
   wrap.appendChild(card);
   $("tplSavedStatus").textContent = `Plantilla guardada: ${matches.length} partidos`;
@@ -1182,6 +1222,7 @@ async function exportAllToPDF() {
       dateText: (p.date_label || "FECHAS"),
       priceText: Number(p.price || 20),
       matches: ms
+exportMode: true
     }));
   }
 
@@ -1215,7 +1256,7 @@ async function exportAllToPDF() {
 
     printArea.appendChild(sheet);
 
-    const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: "#0b0f14" });
+    const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: "#ffffff" });
     const imgData = canvas.toDataURL("image/png");
 
     if (pageIndex > 0) pdf.addPage();
@@ -1259,7 +1300,8 @@ async function exportCurrentTemplatePNG() {
     jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
     dateText: (pool?.date_label || "FECHAS"),
     priceText: Number(pool?.price || 20),
-    matches
+    matches,
+    exportMode: true
   });
 
   printArea.appendChild(card);
@@ -1267,7 +1309,7 @@ async function exportCurrentTemplatePNG() {
   try {
     const canvas = await html2canvas(card, {
       scale: 2,
-      backgroundColor: "#0b0f14"
+      backgroundColor: "#ffffff"
     });
 
     const a = document.createElement("a");
