@@ -1661,7 +1661,7 @@ $("btnExportPDF").addEventListener("click", exportAllToPDF);
 $("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
 
 // Test insert directo
-$("btnTestInsertMatch").addEventListener("click", testFrontInsertMatch);
+
 
 // Captura Pronósticos 1X2
 $("btnLoadEntryForPick").addEventListener("click", async () => {
