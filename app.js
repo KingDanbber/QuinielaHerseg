@@ -930,7 +930,7 @@ async function saveTemplateMatches() {
   try {
     const rpcPromise = supabaseClient.rpc("save_template_matches", {
       p_pool_id: pool_id,
-      p_matches: JSON.stringify(rows)
+      p_matches: rows
     });
 
     const timeoutPromise = new Promise((_, reject) =>
