@@ -927,7 +927,7 @@ async function saveTemplateMatches() {
   showAlert(`Guardando plantilla (${rows.length} partidos)...`, "ok");
 
   try {
-    const { error } = await supabaseClient
+    const { data ,error } = await supabaseClient
       .from("matches")
       .insert(rows); // 👈 sin .select()
 
@@ -938,7 +938,7 @@ async function saveTemplateMatches() {
 
     $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
     showAlert(`Plantilla guardada ✅ (${rows.length} partidos)`, "ok");
-
+return;
   } catch (err) {
     $("tplSavedStatus").textContent = "Error inesperado al guardar.";
     showAlert("Error inesperado: " + (err?.message || err), "error");
