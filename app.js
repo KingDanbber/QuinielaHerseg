@@ -806,6 +806,7 @@ async function addEntry() {
   await fillPickParticipantsSelect();
   await loadDashboardSummary();
 }
+
 async function loadEntriesAndStats() {
   const pool_id = $("entryPool").value;
   if (!pool_id) return;
@@ -927,10 +928,17 @@ async function saveTemplateMatches() {
   showAlert(`Guardando plantilla (${rows.length} partidos)...`, "ok");
 
   try {
-    const { data, error } = await supabaseClient.rpc("save_template_matches", {
+    const rpcPromise = supabaseClient.rpc("save_template_matches", {
       p_pool_id: pool_id,
       p_matches: JSON.stringify(rows)
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout RPC: tardó demasiado.")), 10000)
+    );
+
+    const result = await Promise.race([rpcPromise, timeoutPromise]);
+    const { data, error } = result;
 
     if (error) {
       $("tplSavedStatus").textContent = "Error guardando plantilla.";
@@ -939,14 +947,13 @@ async function saveTemplateMatches() {
 
     const savedCount = data?.saved_count || rows.length;
 
+    // ✅ NO recargar editor ni preview todavía
     $("tplSavedStatus").textContent = `Plantilla guardada: ${savedCount} partidos ✅`;
     showAlert(`Plantilla guardada ✅ (${savedCount} partidos)`, "ok");
 
-    await loadTemplateIntoEditor();
-    await renderPreview();
   } catch (err) {
-    $("tplSavedStatus").textContent = "Error inesperado al guardar.";
-    showAlert("Error inesperado: " + (err?.message || err), "error");
+    $("tplSavedStatus").textContent = "Error o timeout al guardar.";
+    showAlert("Error/timeout: " + (err?.message || err), "error");
   }
 }
 
