@@ -953,6 +953,38 @@ async function saveTemplateMatches() {
   }
 }
 
+async function testFrontInsertMatch() {
+  hideAlert();
+
+  const pool_id = $("tplPool").value;
+
+  if (!pool_id) {
+    return showAlert("Selecciona una jornada.", "error");
+  }
+
+  try {
+
+    const { error } = await supabaseClient
+      .from("matches")
+      .insert({
+        pool_id: pool_id,
+        match_no: 999,
+        home_team: "PRUEBA_LOCAL",
+        away_team: "PRUEBA_VISITA"
+      });
+
+    if (error) {
+      showAlert("Error insertando: " + error.message, "error");
+      return;
+    }
+
+    showAlert("Insert de prueba exitoso ✅", "ok");
+
+  } catch (err) {
+    showAlert("Error JS: " + err.message, "error");
+  }
+}
+
 async function getPoolInfo(pool_id){
   const { data, error } = await supabaseClient
     .from("pools")
