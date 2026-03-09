@@ -226,10 +226,8 @@ async function showAppTab(tabId) {
     }
 
     if (tabId === "tab-templates") {
-      await fillTplPools();
-      await loadTemplateIntoEditor();
-      await renderPreview();
-    }
+  await fillTplPools();
+}
 
     if (tabId === "tab-payments") {
       await fillEntryPoolsSelect();
@@ -944,15 +942,8 @@ async function saveTemplateMatches() {
     $("tplSavedStatus").textContent = `Plantilla guardada: ${savedCount} partidos ✅`;
     showAlert(`Plantilla guardada ✅ (${savedCount} partidos)`, "ok");
 
-    setTimeout(async () => {
-      try {
-        await loadTemplateIntoEditor();
-        await renderPreview();
-      } catch (e) {
-        console.warn("No se pudo refrescar plantilla automáticamente:", e);
-      }
-    }, 400);
-
+    // ✅ NO refrescar editor ni preview aquí
+    return;
   } catch (err) {
     $("tplSavedStatus").textContent = "Error inesperado al guardar.";
     showAlert("Error inesperado: " + (err?.message || err), "error");
@@ -1682,8 +1673,19 @@ $("btnBuildRows").addEventListener("click", () => {
 $("btnSaveTemplate").addEventListener("click", saveTemplateMatches);
 
 $("tplPool").addEventListener("change", async () => {
+  $("tplSavedStatus").textContent = "Jornada seleccionada. Usa “Cargar plantilla guardada” o “Ver / actualizar preview”.";
+  $("tplPreviewWrap").innerHTML = "";
+});
+
+//Cargar y Preview Plantilla
+$("btnLoadTemplateEditor").addEventListener("click", async () => {
   await loadTemplateIntoEditor();
+  showAlert("Plantilla cargada al editor ✅", "ok");
+});
+
+$("btnRefreshTemplatePreview").addEventListener("click", async () => {
   await renderPreview();
+  showAlert("Preview actualizado ✅", "ok");
 });
 
 //Limpiar Plantilla y Borrar Plantilla
