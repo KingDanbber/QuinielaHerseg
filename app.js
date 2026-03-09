@@ -1031,15 +1031,15 @@ async function getMatches(pool_id){
   return data || [];
 }
 
-function makeTemplateCard({
-  title,
-  subtitle,
-  jornadaText,
-  dateText,
-  priceText,
-  matches,
-  exportMode = false
-}) {
+function makeTemplateCard(opts) {
+  const title = opts.title;
+  const subtitle = opts.subtitle;
+  const jornadaText = opts.jornadaText;
+  const dateText = opts.dateText;
+  const priceText = opts.priceText;
+  const matches = opts.matches || [];
+  const exportMode = opts.exportMode === true;
+
   const bg = exportMode ? "#ffffff" : "#0b0f14";
   const text = exportMode ? "#111111" : "#e5e7eb";
   const sub = exportMode ? "#444444" : "#a1a1aa";
@@ -1091,7 +1091,7 @@ function makeTemplateCard({
 
   const table = card.querySelector(".qh-table");
 
-  matches.forEach(m => {
+  matches.forEach(function (m) {
     const row = document.createElement("div");
     row.style.display = "grid";
     row.style.gridTemplateColumns = exportMode ? "44px 1fr 44px 1fr 44px" : "36px 1fr 36px 1fr 36px";
