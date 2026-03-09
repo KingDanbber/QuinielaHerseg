@@ -929,7 +929,7 @@ async function saveTemplateMatches() {
   try {
     const { data, error } = await supabaseClient.rpc("save_template_matches", {
       p_pool_id: pool_id,
-      p_matches: rows
+      p_matches: JSON.stringify(rows)
     });
 
     if (error) {
