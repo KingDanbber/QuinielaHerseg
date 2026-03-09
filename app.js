@@ -1195,7 +1195,7 @@ async function renderPreview() {
   dateText: (pool?.date_label || "FECHAS"),
   priceText: Number(pool?.price || 20),
   matches,
-  exportMode: false
+  exportMode: true
 });
 
   wrap.appendChild(card);
@@ -1484,7 +1484,8 @@ async function exportAllToPNGs() {
       jornadaText: p.round ? `Jornada ${p.round}` : p.name,
       dateText: (p.date_label || "FECHAS"),
       priceText: Number(p.price || 20),
-      matches: ms
+      matches: m,
+exportMode: true
     });
 
     printArea.appendChild(card);
