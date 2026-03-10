@@ -1032,25 +1032,25 @@ async function getMatches(pool_id){
 }
 
 function makeTemplateCard(opts) {
-  const title = opts.title;
-  const subtitle = opts.subtitle;
-  const jornadaText = opts.jornadaText;
-  const dateText = opts.dateText;
-  const priceText = opts.priceText;
-  const matches = opts.matches || [];
-  const exportMode = opts.exportMode === true;
+  var title = opts.title;
+  var subtitle = opts.subtitle;
+  var jornadaText = opts.jornadaText;
+  var dateText = opts.dateText;
+  var priceText = opts.priceText;
+  var matches = opts.matches || [];
+  var exportMode = opts.exportMode === true;
 
-  const bg = exportMode ? "#ffffff" : "#0b0f14";
-  const text = exportMode ? "#111111" : "#e5e7eb";
-  const sub = exportMode ? "#444444" : "#a1a1aa";
-  const border = exportMode ? "#222222" : "#1f2937";
-  const innerBg = exportMode ? "#ffffff" : "#0a0e13";
+  var bg = exportMode ? "#ffffff" : "#0b0f14";
+  var text = exportMode ? "#111111" : "#e5e7eb";
+  var sub = exportMode ? "#444444" : "#a1a1aa";
+  var border = exportMode ? "#222222" : "#1f2937";
+  var innerBg = exportMode ? "#ffffff" : "#0a0e13";
 
-  const card = document.createElement("div");
+  var card = document.createElement("div");
   card.className = "qh-card";
   card.style.background = bg;
   card.style.color = text;
-  card.style.border = `1.5px solid ${border}`;
+  card.style.border = "1.5px solid " + border;
   card.style.borderRadius = exportMode ? "10px" : "14px";
   card.style.padding = exportMode ? "18px" : "10px";
   card.style.width = exportMode ? "760px" : "360px";
@@ -1058,57 +1058,55 @@ function makeTemplateCard(opts) {
   card.style.boxSizing = "border-box";
   card.style.fontFamily = "Arial, sans-serif";
 
-  card.innerHTML = `
-    <div style="font-weight:800;text-align:center;font-size:${exportMode ? "24px" : "16px"};color:${text};letter-spacing:.3px;">
-      ${title}
-    </div>
+  card.innerHTML =
+    '<div style="font-weight:800;text-align:center;font-size:' + (exportMode ? "24px" : "16px") + ';color:' + text + ';letter-spacing:.3px;">' +
+      title +
+    '</div>' +
 
-    <div style="text-align:center;font-size:${exportMode ? "14px" : "12px"};color:${sub};margin-top:4px;">
-      ${subtitle}
-    </div>
+    '<div style="text-align:center;font-size:' + (exportMode ? "14px" : "12px") + ';color:' + sub + ';margin-top:4px;">' +
+      subtitle +
+    '</div>' +
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:8px;margin-top:14px;font-size:${exportMode ? "14px" : "12px"};">
-      <div style="border:1px solid ${border};border-radius:8px;padding:8px;text-align:center;background:${innerBg};color:${text};font-weight:700;">
-        ${jornadaText}
-      </div>
-      <div style="border:1px solid ${border};border-radius:8px;padding:8px;text-align:center;background:${innerBg};color:${text};font-weight:700;">
-        ${dateText}
-      </div>
-      <div style="border:1px solid ${border};border-radius:8px;padding:8px;text-align:center;background:${innerBg};color:${text};font-weight:700;">
-        $${Number(priceText || 0)}
-      </div>
-    </div>
+    '<div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:8px;margin-top:14px;font-size:' + (exportMode ? "14px" : "12px") + ';">' +
+      '<div style="border:1px solid ' + border + ';border-radius:8px;padding:8px;text-align:center;background:' + innerBg + ';color:' + text + ';font-weight:700;">' +
+        jornadaText +
+      '</div>' +
+      '<div style="border:1px solid ' + border + ';border-radius:8px;padding:8px;text-align:center;background:' + innerBg + ';color:' + text + ';font-weight:700;">' +
+        dateText +
+      '</div>' +
+      '<div style="border:1px solid ' + border + ';border-radius:8px;padding:8px;text-align:center;background:' + innerBg + ';color:' + text + ';font-weight:700;">$' +
+        Number(priceText || 0) +
+      '</div>' +
+    '</div>' +
 
-    <div class="qh-table" style="margin-top:16px;display:grid;gap:${exportMode ? "10px" : "6px"};"></div>
+    '<div class="qh-table" style="margin-top:16px;display:grid;gap:' + (exportMode ? "10px" : "6px") + ';"></div>' +
 
-    <div style="margin-top:18px;font-size:${exportMode ? "13px" : "11px"};color:${text};line-height:1.6;">
-      <div>Nombre:_______________________________________________</div>
-      <div>Área:______________________________</div>
-      <div>*WhatsApp:___________________________________________</div>
-      <div>*Registro 1 vez para envío link Aplicación Resultados, Quinielas y Premio Acumulado</div>
-    </div>
-  `;
+    '<div style="margin-top:18px;font-size:' + (exportMode ? "13px" : "11px") + ';color:' + text + ';line-height:1.6;">' +
+      '<div>Nombre:_______________________________________________</div>' +
+      '<div>Área:______________________________</div>' +
+      '<div>*WhatsApp:___________________________________________</div>' +
+      '<div>*Registro 1 vez para envío link Aplicación Resultados, Quinielas y Premio Acumulado</div>' +
+    '</div>';
 
-  const table = card.querySelector(".qh-table");
+  var table = card.querySelector(".qh-table");
 
   matches.forEach(function (m) {
-    const row = document.createElement("div");
+    var row = document.createElement("div");
     row.style.display = "grid";
     row.style.gridTemplateColumns = exportMode ? "44px 1fr 44px 1fr 44px" : "36px 1fr 36px 1fr 36px";
     row.style.alignItems = "center";
     row.style.gap = exportMode ? "12px" : "8px";
 
-    const boxW = exportMode ? 44 : 36;
-    const boxH = exportMode ? 30 : 26;
-    const teamFont = exportMode ? "15px" : "12px";
+    var boxW = exportMode ? 44 : 36;
+    var boxH = exportMode ? 30 : 26;
+    var teamFont = exportMode ? "15px" : "12px";
 
-    row.innerHTML = `
-      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:6px;background:${innerBg};"></div>
-      <div style="text-align:center;font-weight:700;font-size:${teamFont};color:${text};">${m.home_team}</div>
-      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:6px;background:${innerBg};"></div>
-      <div style="text-align:center;font-weight:700;font-size:${teamFont};color:${text};">${m.away_team}</div>
-      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:6px;background:${innerBg};"></div>
-    `;
+    row.innerHTML =
+      '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>' +
+      '<div style="text-align:center;font-weight:700;font-size:' + teamFont + ';color:' + text + ';">' + m.home_team + '</div>' +
+      '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>' +
+      '<div style="text-align:center;font-weight:700;font-size:' + teamFont + ';color:' + text + ';">' + m.away_team + '</div>' +
+      '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>';
 
     table.appendChild(row);
   });
