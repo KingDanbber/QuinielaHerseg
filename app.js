@@ -619,17 +619,20 @@ async function fillPickPoolsSelect() {
     .from("pools")
     .select("id, name, status, created_at")
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(50);
 
   if (error) return showAlert(error.message, "error");
 
   const sel = $("pickPool");
-  sel.innerHTML = (data || []).map(p => {
+  sel.innerHTML = (data || []).map(function(p) {
     const tag = p.status === "open" ? " (Activa)" : "";
     return `<option value="${p.id}">${p.name}${tag}</option>`;
   }).join("");
 
-  const active = (data || []).find(p => p.status === "open");
+  const active = (data || []).find(function(p) {
+    return p.status === "open";
+  });
+
   if (active) sel.value = active.id;
 }
 
@@ -644,41 +647,45 @@ async function fillPickParticipantsSelect() {
   if (error) return showAlert(error.message, "error");
 
   const sel = $("pickParticipant");
-  sel.innerHTML = (data || []).map(p => {
-    const area = p.area ? ` • ${p.area}` : "";
+  sel.innerHTML = (data || []).map(function(p) {
+    const area = p.area ? " • " + p.area : "";
     return `<option value="${p.id}">${p.name}${area}</option>`;
   }).join("");
 }
 
-function renderPickRow(match, selectedPick = null) {
+
+function renderPickRow(match, selectedPick) {
+  const isH = selectedPick === "H";
+  const isD = selectedPick === "D";
+  const isA = selectedPick === "A";
+
   return `
     <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
-      <div class="flex items-center justify-between gap-2 mb-3">
-        <div class="text-xs text-zinc-400">Partido #${match.match_no}</div>
-        <div class="text-sm font-semibold text-center flex-1">
-          ${match.home_team} vs ${match.away_team}
-        </div>
+      <div class="text-xs text-zinc-400 mb-2">Partido #${match.match_no}</div>
+
+      <div class="text-sm font-semibold mb-3 text-center">
+        ${match.home_team} vs ${match.away_team}
       </div>
 
       <div class="grid grid-cols-3 gap-2">
         <button type="button"
           data-match-id="${match.id}"
           data-pick="H"
-          class="pick-btn px-3 py-3 rounded-lg border ${selectedPick === "H" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-zinc-900 border-zinc-700"}">
+          class="pick-btn py-3 rounded-xl border font-bold ${isH ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-zinc-900 border-zinc-700 text-zinc-200'}">
           L
         </button>
 
         <button type="button"
           data-match-id="${match.id}"
           data-pick="D"
-          class="pick-btn px-3 py-3 rounded-lg border ${selectedPick === "D" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-zinc-900 border-zinc-700"}">
+          class="pick-btn py-3 rounded-xl border font-bold ${isD ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-zinc-900 border-zinc-700 text-zinc-200'}">
           E
         </button>
 
         <button type="button"
           data-match-id="${match.id}"
           data-pick="A"
-          class="pick-btn px-3 py-3 rounded-lg border ${selectedPick === "A" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-zinc-900 border-zinc-700"}">
+          class="pick-btn py-3 rounded-xl border font-bold ${isA ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-zinc-900 border-zinc-700 text-zinc-200'}">
           V
         </button>
       </div>
@@ -686,17 +693,16 @@ function renderPickRow(match, selectedPick = null) {
   `;
 }
 
-async function loadEntryForPick() {
+async function loadEntryForPick(poolId, partId) {
   hideAlert();
 
-  const pool_id = $("pickPool").value;
-  const participant_id = $("pickParticipant").value;
+  const pool_id = poolId || $("pickPool").value;
+  const participant_id = partId || $("pickParticipant").value;
 
   if (!pool_id || !participant_id) {
     return showAlert("Selecciona jornada y participante.", "error");
   }
 
-  // Buscar boleto del participante en esa jornada
   const { data: entry, error: entryError } = await supabaseClient
     .from("entries")
     .select("id, paid, created_at")
@@ -721,7 +727,6 @@ async function loadEntryForPick() {
 
   $("pickEntryLabel").textContent = entry.paid ? "Pagado ✅" : "Pendiente";
 
-  // Cargar partidos de la plantilla
   const { data: matches, error: matchError } = await supabaseClient
     .from("matches")
     .select("id, match_no, home_team, away_team")
@@ -730,7 +735,6 @@ async function loadEntryForPick() {
 
   if (matchError) return showAlert(matchError.message, "error");
 
-  // Cargar picks ya guardados
   const { data: existingPicks, error: picksError } = await supabaseClient
     .from("predictions_1x2")
     .select("match_id, pick")
@@ -738,28 +742,31 @@ async function loadEntryForPick() {
 
   if (picksError) return showAlert(picksError.message, "error");
 
-  const picksMap = new Map((existingPicks || []).map(p => [p.match_id, p.pick]));
+  const picksMap = new Map(
+    (existingPicks || []).map(function(p) {
+      return [p.match_id, p.pick];
+    })
+  );
 
-  $("pickMatches").innerHTML = (matches || [])
-    .map(match => renderPickRow(match, picksMap.get(match.id) || null))
-    .join("");
+  $("pickMatches").innerHTML = (matches || []).map(function(match) {
+    return renderPickRow(match, picksMap.get(match.id) || null);
+  }).join("");
 
   attachPickButtonsEvents();
 }
 
 function attachPickButtonsEvents() {
-  document.querySelectorAll(".pick-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
+  document.querySelectorAll(".pick-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
       const matchId = btn.getAttribute("data-match-id");
-      const pick = btn.getAttribute("data-pick");
 
-      // Limpiar solo los del mismo partido
-      document.querySelectorAll(`.pick-btn[data-match-id="${matchId}"]`).forEach(b => {
+      document.querySelectorAll(`.pick-btn[data-match-id="${matchId}"]`).forEach(function(b) {
         b.classList.remove("bg-emerald-600", "border-emerald-500", "text-white");
-        b.classList.add("bg-zinc-900", "border-zinc-700");
+        b.classList.add("bg-zinc-900", "border-zinc-700", "text-zinc-200");
+        b.dataset.selected = "";
       });
 
-      btn.classList.remove("bg-zinc-900", "border-zinc-700");
+      btn.classList.remove("bg-zinc-900", "border-zinc-700", "text-zinc-200");
       btn.classList.add("bg-emerald-600", "border-emerald-500", "text-white");
       btn.dataset.selected = "1";
     });
@@ -774,19 +781,22 @@ async function savePicks() {
   }
 
   const selected = {};
-  document.querySelectorAll(".pick-btn[data-selected='1'], .pick-btn.bg-emerald-600").forEach(btn => {
+
+  document.querySelectorAll(".pick-btn[data-selected='1'], .pick-btn.bg-emerald-600").forEach(function(btn) {
     const matchId = btn.getAttribute("data-match-id");
     const pick = btn.getAttribute("data-pick");
     selected[matchId] = pick;
   });
 
-  const rows = Object.entries(selected).map(([match_id, pick]) => ({
-    entry_id: currentPickEntryId,
-    match_id,
-    pick
-  }));
+  const rows = Object.keys(selected).map(function(match_id) {
+    return {
+      entry_id: currentPickEntryId,
+      match_id: match_id,
+      pick: selected[match_id]
+    };
+  });
 
-  if (rows.length === 0) {
+  if (!rows.length) {
     return showAlert("No seleccionaste pronósticos.", "error");
   }
 
@@ -799,10 +809,11 @@ async function savePicks() {
   showAlert("Pronósticos guardados ✅", "ok");
 }
 
+
 function clearPicksSelection() {
-  document.querySelectorAll(".pick-btn").forEach(btn => {
+  document.querySelectorAll(".pick-btn").forEach(function(btn) {
     btn.classList.remove("bg-emerald-600", "border-emerald-500", "text-white");
-    btn.classList.add("bg-zinc-900", "border-zinc-700");
+    btn.classList.add("bg-zinc-900", "border-zinc-700", "text-zinc-200");
     btn.dataset.selected = "";
   });
 }
@@ -1629,116 +1640,6 @@ async function fillPickSelectors() {
   $("pickParticipant").innerHTML = (partsRes.data || []).map(p =>
     `<option value="${p.id}">${p.name}${p.area ? " • " + p.area : ""}</option>`
   ).join("");
-}
-
-async function loadEntryForPick(poolId, participantId) {
-  // 1) buscar el entry (boleto) más reciente de ese participante en ese pool
-  const { data: entry, error: eErr } = await supabaseClient
-    .from("entries")
-    .select("id, paid, created_at")
-    .eq("pool_id", poolId)
-    .eq("participant_id", participantId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (eErr) return showAlert(eErr.message, "error");
-  if (!entry) {
-    currentPickEntryId = null;
-    $("pickEntryLabel").textContent = "No hay boleto";
-    $("pickMatches").innerHTML = "";
-    return showAlert("Ese participante no tiene boleto registrado en esta jornada.", "error");
-  }
-
-  currentPickEntryId = entry.id;
-  currentPickPoolId = poolId;
-  currentPickParticipantId = participantId;
-  $("pickEntryLabel").textContent = entry.paid ? "Pagado ✅" : "No pagado";
-
-  // 2) cargar matches de la plantilla
-  const { data: matches, error: mErr } = await supabaseClient
-    .from("matches")
-    .select("id, match_no, home_team, away_team")
-    .eq("pool_id", poolId)
-    .order("match_no", { ascending: true });
-
-  if (mErr) return showAlert(mErr.message, "error");
-
-  // 3) cargar picks existentes
-  const { data: picks, error: pErr } = await supabaseClient
-    .from("predictions_1x2")
-    .select("match_id, pick")
-    .eq("entry_id", entry.id);
-
-  if (pErr) return showAlert(pErr.message, "error");
-
-  const pickMap = new Map((picks || []).map(x => [x.match_id, x.pick]));
-
-  // 4) render UI
-  $("pickMatches").innerHTML = (matches || []).map(m =>
-    renderPickRow({
-      match_no: m.match_no,
-      home_team: m.home_team,
-      away_team: m.away_team,
-      match_id: m.id,
-      selected: pickMap.get(m.id) || null
-    })
-  ).join("");
-
-  // 5) listeners botones
-  wirePickButtons();
-}
-
-function wirePickButtons() {
-  document.querySelectorAll("[data-pickbtn]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const mid = btn.getAttribute("data-mid");
-      const pick = btn.getAttribute("data-pickbtn");
-
-      // apaga los 3 del mismo partido
-      document.querySelectorAll(`[data-mid="${mid}"]`).forEach(b => b.classList.remove("pickbtn-on"));
-      // enciende seleccionado
-      btn.classList.add("pickbtn-on");
-      btn.setAttribute("data-selected", "1");
-    });
-  });
-}
-
-async function savePicks() {
-  if (!currentPickEntryId) return showAlert("Primero carga un boleto.", "error");
-
-  // construir lista de picks desde UI
-  const rows = [];
-  const groups = new Map(); // match_id => pick
-
-  document.querySelectorAll("[data-pickbtn].pickbtn-on").forEach(btn => {
-    const mid = btn.getAttribute("data-mid");
-    const pick = btn.getAttribute("data-pickbtn");
-    groups.set(mid, pick);
-  });
-
-  if (groups.size === 0) return showAlert("No seleccionaste ningún pronóstico.", "error");
-
-  groups.forEach((pick, match_id) => {
-    rows.push({
-      entry_id: currentPickEntryId,
-      match_id,
-      pick
-    });
-  });
-
-  // Upsert: requiere UNIQUE(entry_id, match_id) en predictions_1x2
-  const { error } = await supabaseClient
-    .from("predictions_1x2")
-    .upsert(rows, { onConflict: "entry_id,match_id" });
-
-  if (error) return showAlert(error.message, "error");
-
-  showAlert("Pronósticos guardados ✅", "ok");
-}
-
-function clearPicksUI() {
-  document.querySelectorAll("[data-pickbtn]").forEach(b => b.classList.remove("pickbtn-on"));
 }
 
 // =====================
