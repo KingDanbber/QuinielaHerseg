@@ -36,22 +36,22 @@ let currentPickPoolId = null;
 let currentPickParticipantId = null;
 
 const TEAM_LOGOS = {
-  "AMERICA": "./assets/logos/america.png",
+  "AMÉRICA": "./assets/logos/america.png",
   "CHIVAS": "./assets/logos/chivas.png",
   "CRUZ AZUL": "./assets/logos/cruz-azul.png",
   "PUMAS": "./assets/logos/pumas.png",
   "TIGRES": "./assets/logos/tigres.png",
   "MONTERREY": "./assets/logos/monterrey.png",
   "TOLUCA": "./assets/logos/toluca.png",
-  "LEON": "./assets/logos/leon.png",
+  "LEÓN": "./assets/logos/leon.png",
   "SANTOS": "./assets/logos/santos.png",
-  "MAZATLAN": "./assets/logos/mazatlan.png",
+  "MAZATLÁN": "./assets/logos/mazatlan.png",
   "NECAXA": "./assets/logos/necaxa.png",
   "PACHUCA": "./assets/logos/pachuca.png",
   "PUEBLA": "./assets/logos/puebla.png",
-  "QUERETARO": "./assets/logos/queretaro.png",
+  "QUERÉTARO": "./assets/logos/queretaro.png",
   "ATLAS": "./assets/logos/atlas.png",
-  "JUAREZ": "./assets/logos/juarez.png",
+  "JUÁREZ": "./assets/logos/juarez.png",
   "TIJUANA": "./assets/logos/tijuana.png",
   "SAN LUIS": "./assets/logos/san-luis.png"
 };
