@@ -1077,21 +1077,22 @@ function makeTemplateCard(opts) {
   var sub = exportMode ? "#555555" : "#a1a1aa";
   var border = exportMode ? "#222222" : "#1f2937";
   var innerBg = exportMode ? "#ffffff" : "#0a0e13";
+  var soft = exportMode ? "#f4f4f5" : "#111827";
 
   var card = document.createElement("div");
   card.className = "qh-card";
   card.style.background = bg;
   card.style.color = text;
   card.style.border = "1.5px solid " + border;
-  card.style.borderRadius = exportMode ? "14px" : "16px";
-  card.style.padding = exportMode ? "20px" : "12px";
+  card.style.borderRadius = exportMode ? "16px" : "16px";
+  card.style.padding = exportMode ? "22px" : "12px";
   card.style.width = exportMode ? "760px" : "360px";
   card.style.maxWidth = "100%";
   card.style.boxSizing = "border-box";
   card.style.fontFamily = "Arial, sans-serif";
 
   card.innerHTML =
-    '<div style="font-weight:800;text-align:center;font-size:' + (exportMode ? "26px" : "18px") + ';color:' + text + ';letter-spacing:.3px;">' +
+    '<div style="font-weight:800;text-align:center;font-size:' + (exportMode ? "28px" : "18px") + ';color:' + text + ';letter-spacing:.3px;">' +
       title +
     '</div>' +
 
@@ -1099,35 +1100,42 @@ function makeTemplateCard(opts) {
       subtitle +
     '</div>' +
 
-    '<div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:10px;margin-top:16px;font-size:' + (exportMode ? "14px" : "12px") + ';">' +
-      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:9px;text-align:center;background:' + innerBg + ';color:' + text + ';font-weight:700;">' +
-        jornadaText +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 100px;gap:10px;margin-top:16px;font-size:' + (exportMode ? "14px" : "12px") + ';">' +
+      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:10px;text-align:center;background:' + innerBg + ';color:' + text + ';">' +
+        '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';text-transform:uppercase;letter-spacing:.5px;">Jornada</div>' +
+        '<div style="font-weight:800;margin-top:3px;">' + jornadaText + '</div>' +
       '</div>' +
-      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:9px;text-align:center;background:' + innerBg + ';color:' + text + ';font-weight:700;">' +
-        dateText +
-      '</div>' +
-      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:9px;text-align:center;background:' + innerBg + ';color:' + text + ';font-weight:800;">$' +
-        Number(priceText || 0) +
-      '</div>' +
-    '</div>' + '<div style="text-align:center;font-size:11px;color:' + sub + ';margin-top:10px;margin-bottom:4px;">Marca una sola opción por partido</div>' +
 
-    '<div style="display:grid;grid-template-columns:' + (exportMode ? "70px 48px 1fr 70px 48px 1fr 70px" : "58px 34px 1fr 58px 34px 1fr 58px") + ';gap:' + (exportMode ? "10px" : "8px") + ';align-items:end;margin-top:18px;margin-bottom:8px;font-size:' + (exportMode ? "12px" : "10px") + ';font-weight:700;color:' + sub + ';text-transform:uppercase;letter-spacing:.4px;">' +
-      '<div style="text-align:center;">Local</div>' +
+      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:10px;text-align:center;background:' + innerBg + ';color:' + text + ';">' +
+        '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';text-transform:uppercase;letter-spacing:.5px;">Fechas</div>' +
+        '<div style="font-weight:800;margin-top:3px;">' + dateText + '</div>' +
+      '</div>' +
+
+      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:10px;text-align:center;background:' + innerBg + ';color:' + text + ';">' +
+        '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';text-transform:uppercase;letter-spacing:.5px;">Costo</div>' +
+        '<div style="font-weight:900;margin-top:3px;">$' + Number(priceText || 0) + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div style="text-align:center;font-size:' + (exportMode ? "12px" : "10px") + ';color:' + sub + ';margin-top:10px;margin-bottom:8px;">Marca una sola opción por partido</div>' +
+
+    '<div style="display:grid;grid-template-columns:' + (exportMode ? "70px 48px 1fr 70px 48px 1fr 70px" : "58px 34px 1fr 58px 34px 1fr 58px") + ';gap:' + (exportMode ? "10px" : "8px") + ';align-items:end;margin-top:6px;margin-bottom:8px;font-size:' + (exportMode ? "12px" : "10px") + ';font-weight:700;color:' + sub + ';text-transform:uppercase;letter-spacing:.4px;">' +
+      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:' + soft + ';">Local</div>' +
       '<div></div>' +
       '<div></div>' +
-      '<div style="text-align:center;">Empate</div>' +
+      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:' + soft + ';">Empate</div>' +
       '<div></div>' +
       '<div></div>' +
-      '<div style="text-align:center;">Visita</div>' +
+      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:' + soft + ';">Visita</div>' +
     '</div>' +
 
     '<div class="qh-table" style="margin-top:6px;display:grid;gap:' + (exportMode ? "10px" : "8px") + ';"></div>' +
 
-    '<div style="margin-top:20px;font-size:' + (exportMode ? "13px" : "11px") + ';color:' + text + ';line-height:1.7;">' +
+    '<div style="margin-top:22px;font-size:' + (exportMode ? "13px" : "11px") + ';color:' + text + ';line-height:1.7;">' +
       '<div>Nombre:_______________________________________________</div>' +
       '<div>Área:______________________________</div>' +
-      '<div>*WhatsApp:___________________________________________</div>' +
-      '<div>*Registro 1 vez para envío link Aplicación Resultados, Quinielas y Premio Acumulado</div>' +
+      '<div>WhatsApp:____________________________________________</div>' +
+      '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';margin-top:6px;">Registro único para recibir resultados, quinielas y premio acumulado.</div>' +
     '</div>';
 
   var table = card.querySelector(".qh-table");
@@ -1154,13 +1162,13 @@ function makeTemplateCard(opts) {
         '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:7px;background:' + innerBg + ';"></div>' +
       '</div>' +
 
-      '<div style="display:flex;align-items:center;justify-content:center;padding-left:4px;padding-right:4px;">' +
+      '<div style="display:flex;align-items:center;justify-content:center;padding-left:6px;padding-right:6px;">' +
         (homeLogo
           ? '<img src="' + homeLogo + '" style="width:' + logoSize + 'px;height:' + logoSize + 'px;object-fit:contain;" crossorigin="anonymous">'
           : '') +
       '</div>' +
 
-      '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';padding-left:2px;">' +
+      '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';padding-left:4px;">' +
         m.home_team +
       '</div>' +
 
@@ -1168,13 +1176,13 @@ function makeTemplateCard(opts) {
         '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:7px;background:' + innerBg + ';"></div>' +
       '</div>' +
 
-      '<div style="display:flex;align-items:center;justify-content:center;padding-left:4px;padding-right:4px;">' +
+      '<div style="display:flex;align-items:center;justify-content:center;padding-left:6px;padding-right:6px;">' +
         (awayLogo
           ? '<img src="' + awayLogo + '" style="width:' + logoSize + 'px;height:' + logoSize + 'px;object-fit:contain;" crossorigin="anonymous">'
           : '') +
       '</div>' +
 
-      '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';padding-left:2px;">' +
+      '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';padding-left:4px;">' +
         m.away_team +
       '</div>' +
 
@@ -1443,40 +1451,52 @@ async function exportStoryTemplatePNG() {
   printArea.classList.remove("hidden");
   printArea.innerHTML = "";
 
-  // Lienzo vertical tipo historia
   const story = document.createElement("div");
   story.style.width = "1080px";
   story.style.height = "1920px";
-  story.style.background = "#ffffff";
+  story.style.background = "linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%)";
   story.style.boxSizing = "border-box";
-  story.style.padding = "80px 60px";
+  story.style.padding = "70px 60px";
   story.style.display = "flex";
   story.style.flexDirection = "column";
   story.style.alignItems = "center";
   story.style.justifyContent = "flex-start";
-  story.style.gap = "30px";
+  story.style.gap = "26px";
+  story.style.fontFamily = "Arial, sans-serif";
 
-  // Encabezado superior
+  const topBadge = document.createElement("div");
+  topBadge.style.display = "inline-flex";
+  topBadge.style.alignItems = "center";
+  topBadge.style.gap = "10px";
+  topBadge.style.padding = "12px 22px";
+  topBadge.style.borderRadius = "999px";
+  topBadge.style.background = "#111111";
+  topBadge.style.color = "#ffffff";
+  topBadge.style.fontSize = "22px";
+  topBadge.style.fontWeight = "700";
+  topBadge.innerHTML = "⚽ Quiniela Herseg MX";
+
   const header = document.createElement("div");
   header.style.textAlign = "center";
-  header.innerHTML = `
-    <div style="font-size:42px;font-weight:800;color:#111111;">Quiniela Herseg MX</div>
-    <div style="font-size:22px;color:#444444;margin-top:10px;">
-      "Pasión X Ganar" ⚽ ${pool?.season || ""}
-    </div>
-  `;
+  header.innerHTML =
+    '<div style="font-size:52px;font-weight:900;color:#111111;line-height:1.05;">Participa en la Jornada</div>' +
+    '<div style="font-size:28px;color:#444444;margin-top:12px;">Llena tu boleta y envíala por WhatsApp</div>';
 
-  const subtitle = document.createElement("div");
-  subtitle.style.textAlign = "center";
-  subtitle.style.fontSize = "24px";
-  subtitle.style.fontWeight = "700";
-  subtitle.style.color = "#111111";
-  subtitle.innerHTML = `
-    ${pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada")}<br>
-    <span style="font-size:20px;font-weight:600;color:#444444;">
-      ${pool?.date_label || "FECHAS"} • $${Number(pool?.price || 20)}
-    </span>
-  `;
+  const chips = document.createElement("div");
+  chips.style.display = "flex";
+  chips.style.gap = "14px";
+  chips.style.flexWrap = "wrap";
+  chips.style.justifyContent = "center";
+  chips.innerHTML =
+    '<div style="padding:12px 18px;border-radius:999px;background:#ffffff;border:1px solid #d4d4d8;font-size:22px;font-weight:800;color:#111111;">' +
+      (pool?.round ? 'Jornada ' + pool.round : (pool?.name || 'Jornada')) +
+    '</div>' +
+    '<div style="padding:12px 18px;border-radius:999px;background:#ffffff;border:1px solid #d4d4d8;font-size:22px;font-weight:800;color:#111111;">' +
+      (pool?.date_label || 'FECHAS') +
+    '</div>' +
+    '<div style="padding:12px 18px;border-radius:999px;background:#111111;border:1px solid #111111;font-size:22px;font-weight:900;color:#ffffff;">$' +
+      Number(pool?.price || 20) +
+    '</div>';
 
   const card = makeTemplateCard({
     title: "Quiniela Herseg MX",
@@ -1488,23 +1508,24 @@ async function exportStoryTemplatePNG() {
     exportMode: true
   });
 
-  // Ajuste especial para historia
-  card.style.width = "920px";
+  card.style.width = "930px";
   card.style.padding = "24px";
-  card.style.borderRadius = "20px";
-  card.style.boxShadow = "0 20px 60px rgba(0,0,0,.10)";
+  card.style.borderRadius = "24px";
+  card.style.boxShadow = "0 18px 60px rgba(0,0,0,.10)";
 
   const footer = document.createElement("div");
   footer.style.textAlign = "center";
-  footer.style.fontSize = "22px";
+  footer.style.fontSize = "24px";
   footer.style.color = "#222222";
-  footer.style.marginTop = "10px";
-  footer.innerHTML = `
-    Llena tu pronóstico y envíalo por WhatsApp 📲
-  `;
+  footer.style.marginTop = "8px";
+  footer.style.lineHeight = "1.5";
+  footer.innerHTML =
+    '<div style="font-weight:800;">Marca Local, Empate o Visita</div>' +
+    '<div style="margin-top:6px;">Envía tu pronóstico antes del cierre 📲</div>';
 
+  story.appendChild(topBadge);
   story.appendChild(header);
-  story.appendChild(subtitle);
+  story.appendChild(chips);
   story.appendChild(card);
   story.appendChild(footer);
 
@@ -1512,21 +1533,21 @@ async function exportStoryTemplatePNG() {
 
   try {
     const canvas = await html2canvas(story, {
-  scale: 2,
-  backgroundColor: "#ffffff",
-  useCORS: true
-});
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true
+    });
 
     const a = document.createElement("a");
     const safeName = (pool?.name || "Plantilla-Historia")
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-");
 
-    a.download = `${safeName}-story-9x16.png`;
+    a.download = `${safeName}-story-premium-9x16.png`;
     a.href = canvas.toDataURL("image/png");
     a.click();
 
-    showAlert("Historia 9:16 generada ✅", "ok");
+    showAlert("Historia premium 9:16 generada ✅", "ok");
   } catch (err) {
     showAlert("Error generando historia: " + (err?.message || err), "error");
   } finally {
