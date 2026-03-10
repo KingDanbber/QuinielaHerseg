@@ -35,6 +35,38 @@ let currentPickEntryId = null;
 let currentPickPoolId = null;
 let currentPickParticipantId = null;
 
+const TEAM_LOGOS = {
+  "AMERICA": "./assets/logos/america.png",
+  "CHIVAS": "./assets/logos/chivas.png",
+  "CRUZ AZUL": "./assets/logos/cruz-azul.png",
+  "PUMAS": "./assets/logos/pumas.png",
+  "TIGRES": "./assets/logos/tigres.png",
+  "MONTERREY": "./assets/logos/monterrey.png",
+  "TOLUCA": "./assets/logos/toluca.png",
+  "LEON": "./assets/logos/leon.png",
+  "SANTOS": "./assets/logos/santos.png",
+  "MAZATLAN": "./assets/logos/mazatlan.png",
+  "NECAXA": "./assets/logos/necaxa.png",
+  "PACHUCA": "./assets/logos/pachuca.png",
+  "PUEBLA": "./assets/logos/puebla.png",
+  "QUERETARO": "./assets/logos/queretaro.png",
+  "ATLAS": "./assets/logos/atlas.png",
+  "JUAREZ": "./assets/logos/juarez.png",
+  "TIJUANA": "./assets/logos/tijuana.png",
+  "SAN LUIS": "./assets/logos/san-luis.png"
+};
+
+function normalizeTeamName(name) {
+  return String(name || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+function getTeamLogo(teamName) {
+  return TEAM_LOGOS[normalizeTeamName(teamName)] || "";
+}
+
 // =====================
 // UI Helpers
 // =====================
@@ -1091,25 +1123,51 @@ function makeTemplateCard(opts) {
   var table = card.querySelector(".qh-table");
 
   matches.forEach(function (m) {
-    var row = document.createElement("div");
-    row.style.display = "grid";
-    row.style.gridTemplateColumns = exportMode ? "44px 1fr 44px 1fr 44px" : "36px 1fr 36px 1fr 36px";
-    row.style.alignItems = "center";
-    row.style.gap = exportMode ? "12px" : "8px";
+  var row = document.createElement("div");
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = exportMode
+    ? "44px 34px 1fr 44px 34px 1fr 44px"
+    : "36px 28px 1fr 36px 28px 1fr 36px";
+  row.style.alignItems = "center";
+  row.style.gap = exportMode ? "10px" : "8px";
 
-    var boxW = exportMode ? 44 : 36;
-    var boxH = exportMode ? 30 : 26;
-    var teamFont = exportMode ? "15px" : "12px";
+  var boxW = exportMode ? 44 : 36;
+  var boxH = exportMode ? 30 : 26;
+  var teamFont = exportMode ? "15px" : "12px";
+  var logoSize = exportMode ? 28 : 22;
 
-    row.innerHTML =
-      '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>' +
-      '<div style="text-align:center;font-weight:700;font-size:' + teamFont + ';color:' + text + ';">' + m.home_team + '</div>' +
-      '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>' +
-      '<div style="text-align:center;font-weight:700;font-size:' + teamFont + ';color:' + text + ';">' + m.away_team + '</div>' +
-      '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>';
+  var homeLogo = getTeamLogo(m.home_team);
+  var awayLogo = getTeamLogo(m.away_team);
 
-    table.appendChild(row);
-  });
+  row.innerHTML =
+    '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>' +
+
+    '<div style="display:flex;align-items:center;justify-content:center;">' +
+      (homeLogo
+        ? '<img src="' + homeLogo + '" style="width:' + logoSize + 'px;height:' + logoSize + 'px;object-fit:contain;" crossorigin="anonymous">'
+        : '') +
+    '</div>' +
+
+    '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';">' +
+      m.home_team +
+    '</div>' +
+
+    '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>' +
+
+    '<div style="display:flex;align-items:center;justify-content:center;">' +
+      (awayLogo
+        ? '<img src="' + awayLogo + '" style="width:' + logoSize + 'px;height:' + logoSize + 'px;object-fit:contain;" crossorigin="anonymous">'
+        : '') +
+    '</div>' +
+
+    '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';">' +
+      m.away_team +
+    '</div>' +
+
+    '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:6px;background:' + innerBg + ';"></div>';
+
+  table.appendChild(row);
+});
 
   return card;
 }
@@ -1259,7 +1317,11 @@ exportMode: true
 
     printArea.appendChild(sheet);
 
-    const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: "#ffffff" });
+    const canvas = await html2canvas(sheet, {
+  scale: 2,
+  backgroundColor: "#ffffff",
+  useCORS: true
+});
     const imgData = canvas.toDataURL("image/png");
 
     if (pageIndex > 0) pdf.addPage();
@@ -1319,9 +1381,10 @@ async function exportCurrentTemplatePNG() {
 
   try {
     const canvas = await html2canvas(sheet, {
-      scale: 2,
-      backgroundColor: "#ffffff"
-    });
+  scale: 2,
+  backgroundColor: "#ffffff",
+  useCORS: true
+});
 
     const a = document.createElement("a");
     const safeName = (pool?.name || "Plantilla")
@@ -1433,9 +1496,10 @@ async function exportStoryTemplatePNG() {
 
   try {
     const canvas = await html2canvas(story, {
-      scale: 2,
-      backgroundColor: "#ffffff"
-    });
+  scale: 2,
+  backgroundColor: "#ffffff",
+  useCORS: true
+});
 
     const a = document.createElement("a");
     const safeName = (pool?.name || "Plantilla-Historia")
