@@ -268,9 +268,9 @@ async function showAppTab(tabId) {
     }
 
     if (tabId === "tab-picks") {
-      await fillPickPoolsSelect();
-      await fillPickParticipantsSelect();
-    }
+  await fillPickPoolsSelect();
+  await fillPickParticipantsSelect();
+  await loadPickStatusList();
   } catch (err) {
     showAlert("Error cargando sección: " + (err?.message || err), "error");
   }
@@ -807,6 +807,7 @@ async function savePicks() {
   if (error) return showAlert(error.message, "error");
 
   showAlert("Pronósticos guardados ✅", "ok");
+await loadPickStatusList();
 }
 
 
@@ -815,6 +816,123 @@ function clearPicksSelection() {
     btn.classList.remove("bg-emerald-600", "border-emerald-500", "text-white");
     btn.classList.add("bg-zinc-900", "border-zinc-700", "text-zinc-200");
     btn.dataset.selected = "";
+  });
+}
+
+async function loadPickStatusList() {
+  hideAlert();
+
+  const pool_id = $("pickPool").value;
+  if (!pool_id) {
+    $("pickStatusList").innerHTML = "";
+    return;
+  }
+
+  // Participantes activos
+  const { data: participants, error: pErr } = await supabaseClient
+    .from("participants")
+    .select("id, name, area")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (pErr) return showAlert(pErr.message, "error");
+
+  // Boletos de esa jornada
+  const { data: entries, error: eErr } = await supabaseClient
+    .from("entries")
+    .select("id, participant_id, paid")
+    .eq("pool_id", pool_id);
+
+  if (eErr) return showAlert(eErr.message, "error");
+
+  const entryByParticipant = new Map();
+  (entries || []).forEach(function(entry) {
+    entryByParticipant.set(entry.participant_id, entry);
+  });
+
+  // Picks existentes para esos boletos
+  const entryIds = (entries || []).map(function(e) { return e.id; });
+
+  let picks = [];
+  if (entryIds.length) {
+    const { data: picksData, error: picksErr } = await supabaseClient
+      .from("predictions_1x2")
+      .select("entry_id");
+
+    if (picksErr) return showAlert(picksErr.message, "error");
+
+    picks = (picksData || []).filter(function(p) {
+      return entryIds.indexOf(p.entry_id) !== -1;
+    });
+  }
+
+  const picksCountByEntry = new Map();
+  picks.forEach(function(p) {
+    picksCountByEntry.set(p.entry_id, (picksCountByEntry.get(p.entry_id) || 0) + 1);
+  });
+
+  const rowsHtml = (participants || []).map(function(participant) {
+    const entry = entryByParticipant.get(participant.id);
+    const area = participant.area ? " • " + participant.area : "";
+
+    let statusText = "Sin boleto";
+    let statusClasses = "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
+    let actionBtn = "";
+
+    if (entry) {
+      const pickCount = picksCountByEntry.get(entry.id) || 0;
+
+      if (pickCount > 0) {
+        statusText = "Capturado ✅";
+        statusClasses = "bg-emerald-500/10 border-emerald-500/20 text-emerald-300";
+      } else {
+        statusText = "Pendiente";
+        statusClasses = "bg-amber-500/10 border-amber-500/20 text-amber-300";
+      }
+
+      actionBtn = `
+        <button
+          type="button"
+          class="pick-status-open px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+          data-participant-id="${participant.id}">
+          Abrir
+        </button>
+      `;
+    }
+
+    return `
+      <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="font-semibold truncate">${participant.name}</div>
+          <div class="text-xs text-zinc-400 truncate">${area || "Sin área"}</div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="text-xs px-2 py-1 rounded-full border ${statusClasses}">
+            ${statusText}
+          </span>
+          ${actionBtn}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  $("pickStatusList").innerHTML = rowsHtml || `
+    <div class="text-sm text-zinc-400 p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+      No hay participantes activos.
+    </div>
+  `;
+
+  attachPickStatusOpenEvents();
+}
+
+function attachPickStatusOpenEvents() {
+  document.querySelectorAll(".pick-status-open").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const participantId = btn.getAttribute("data-participant-id");
+      $("pickParticipant").value = participantId;
+      await loadEntryForPick($("pickPool").value, participantId);
+    });
   });
 }
 
@@ -1871,6 +1989,20 @@ $("btnLoadEntryForPick").addEventListener("click", async () => {
 
 $("btnSavePicks").addEventListener("click", savePicks);
 $("btnClearPicks").addEventListener("click", clearPicksSelection);
+
+$("btnRefreshPickStatus").addEventListener("click", loadPickStatusList);
+
+$("pickPool").addEventListener("change", async () => {
+  await fillPickParticipantsSelect();
+  await loadPickStatusList();
+  $("pickMatches").innerHTML = "";
+  $("pickEntryLabel").textContent = "—";
+});
+
+$("pickParticipant").addEventListener("change", () => {
+  $("pickMatches").innerHTML = "";
+  $("pickEntryLabel").textContent = "—";
+});
 
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
