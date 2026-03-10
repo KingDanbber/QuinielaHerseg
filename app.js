@@ -270,7 +270,8 @@ async function showAppTab(tabId) {
     if (tabId === "tab-picks") {
   await fillPickPoolsSelect();
   await fillPickParticipantsSelect();
-  await loadPickStatusList();
+  await loadPickStatusList(); }
+
   } catch (err) {
     showAlert("Error cargando sección: " + (err?.message || err), "error");
   }
