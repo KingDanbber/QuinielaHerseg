@@ -892,13 +892,22 @@ async function loadPickStatusList() {
       }
 
       actionBtn = `
-        <button
-          type="button"
-          class="pick-status-open px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
-          data-participant-id="${participant.id}">
-          Abrir
-        </button>
-      `;
+  <div class="flex items-center gap-2">
+    <button
+      type="button"
+      class="pick-status-open px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+      data-participant-id="${participant.id}">
+      Abrir
+    </button>
+
+    <button
+      type="button"
+      class="pick-status-export px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+      data-participant-id="${participant.id}">
+      Imagen
+    </button>
+  </div>
+`;
     }
 
     return `
@@ -925,6 +934,7 @@ async function loadPickStatusList() {
   `;
 
   attachPickStatusOpenEvents();
+attachPickStatusExportEvents();
 }
 
 function attachPickStatusOpenEvents() {
@@ -935,6 +945,219 @@ function attachPickStatusOpenEvents() {
       await loadEntryForPick($("pickPool").value, participantId);
     });
   });
+}
+
+function attachPickStatusExportEvents() {
+  document.querySelectorAll(".pick-status-export").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const participantId = btn.getAttribute("data-participant-id");
+      await exportParticipantPickImage($("pickPool").value, participantId);
+    });
+  });
+}
+
+async function exportParticipantPickImage(poolId, participantId) {
+  hideAlert();
+
+  if (!poolId || !participantId) {
+    return showAlert("Falta jornada o participante.", "error");
+  }
+
+  try {
+    // pool
+    const pool = await getPoolInfo(poolId);
+
+    // participante
+    const { data: participant, error: pErr } = await supabaseClient
+      .from("participants")
+      .select("id, name, area, whatsapp")
+      .eq("id", participantId)
+      .maybeSingle();
+
+    if (pErr) return showAlert(pErr.message, "error");
+    if (!participant) return showAlert("Participante no encontrado.", "error");
+
+    // boleto
+    const { data: entry, error: eErr } = await supabaseClient
+      .from("entries")
+      .select("id, participant_id, pool_id")
+      .eq("pool_id", poolId)
+      .eq("participant_id", participantId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (eErr) return showAlert(eErr.message, "error");
+    if (!entry) return showAlert("Ese participante no tiene boleto en esta jornada.", "error");
+
+    // partidos
+    const { data: matches, error: mErr } = await supabaseClient
+      .from("matches")
+      .select("id, match_no, home_team, away_team")
+      .eq("pool_id", poolId)
+      .order("match_no", { ascending: true });
+
+    if (mErr) return showAlert(mErr.message, "error");
+
+    // picks
+    const { data: picks, error: pkErr } = await supabaseClient
+      .from("predictions_1x2")
+      .select("match_id, pick")
+      .eq("entry_id", entry.id);
+
+    if (pkErr) return showAlert(pkErr.message, "error");
+
+    const pickMap = new Map(
+      (picks || []).map(function(p) {
+        return [p.match_id, p.pick];
+      })
+    );
+
+    const printArea = $("printArea");
+    printArea.classList.remove("hidden");
+    printArea.innerHTML = "";
+
+    const card = makePickedTicketCard({
+      pool: pool,
+      participant: participant,
+      matches: matches || [],
+      pickMap: pickMap
+    });
+
+    printArea.appendChild(card);
+
+    const canvas = await html2canvas(card, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true
+    });
+
+    const a = document.createElement("a");
+    const safeName = (participant.name || "boleto")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-");
+
+    a.download = `Boleto-${safeName}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+
+    printArea.innerHTML = "";
+    printArea.classList.add("hidden");
+
+    showAlert("Imagen del boleto generada ✅", "ok");
+  } catch (err) {
+    showAlert("Error generando boleto: " + (err?.message || err), "error");
+  }
+}
+
+function makePickedTicketCard(opts) {
+  var pool = opts.pool;
+  var participant = opts.participant;
+  var matches = opts.matches || [];
+  var pickMap = opts.pickMap || new Map();
+
+  var card = document.createElement("div");
+  card.style.width = "820px";
+  card.style.background = "#ffffff";
+  card.style.color = "#111111";
+  card.style.border = "1.5px solid #222222";
+  card.style.borderRadius = "16px";
+  card.style.padding = "22px";
+  card.style.boxSizing = "border-box";
+  card.style.fontFamily = "Arial, sans-serif";
+
+  card.innerHTML =
+    '<div style="font-size:30px;font-weight:900;text-align:center;">Quiniela Herseg MX</div>' +
+    '<div style="font-size:16px;color:#555;text-align:center;margin-top:4px;">"Pasión X Ganar" ⚽ ' + (pool?.season || "") + '</div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 110px;gap:10px;margin-top:16px;">' +
+      '<div style="border:1px solid #222;border-radius:10px;padding:10px;text-align:center;">' +
+        '<div style="font-size:11px;color:#666;text-transform:uppercase;">Jornada</div>' +
+        '<div style="font-size:18px;font-weight:800;margin-top:2px;">' + (pool?.round ? ('Jornada ' + pool.round) : (pool?.name || 'Jornada')) + '</div>' +
+      '</div>' +
+      '<div style="border:1px solid #222;border-radius:10px;padding:10px;text-align:center;">' +
+        '<div style="font-size:11px;color:#666;text-transform:uppercase;">Fechas</div>' +
+        '<div style="font-size:18px;font-weight:800;margin-top:2px;">' + (pool?.date_label || 'FECHAS') + '</div>' +
+      '</div>' +
+      '<div style="border:1px solid #222;border-radius:10px;padding:10px;text-align:center;">' +
+        '<div style="font-size:11px;color:#666;text-transform:uppercase;">Costo</div>' +
+        '<div style="font-size:18px;font-weight:900;margin-top:2px;">$' + Number(pool?.price || 20) + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div style="margin-top:16px;padding:12px 14px;border-radius:12px;background:#f4f4f5;border:1px solid #d4d4d8;">' +
+      '<div style="font-size:18px;font-weight:800;">' + (participant?.name || "") + '</div>' +
+      '<div style="font-size:14px;color:#555;margin-top:2px;">' + (participant?.area || "Sin área") + '</div>' +
+      '<div style="font-size:13px;color:#0f766e;font-weight:700;margin-top:8px;">Boleto Registrado ✅</div>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:70px 48px 1fr 70px 48px 1fr 70px;gap:10px;align-items:end;margin-top:18px;margin-bottom:8px;font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.4px;">' +
+      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:#f4f4f5;">Local</div>' +
+      '<div></div>' +
+      '<div></div>' +
+      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:#f4f4f5;">Empate</div>' +
+      '<div></div>' +
+      '<div></div>' +
+      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:#f4f4f5;">Visita</div>' +
+    '</div>';
+
+  var table = document.createElement("div");
+  table.style.display = "grid";
+  table.style.gap = "10px";
+  table.style.marginTop = "8px";
+
+  matches.forEach(function(m) {
+    var pick = pickMap.get(m.id) || "";
+    var homeLogo = getTeamLogo(m.home_team);
+    var awayLogo = getTeamLogo(m.away_team);
+
+    function box(selected) {
+      return '<div style="width:70px;height:32px;border:1.5px solid #222;border-radius:7px;background:' + (selected ? '#111111' : '#ffffff') + ';color:' + (selected ? '#ffffff' : '#111111') + ';display:flex;align-items:center;justify-content:center;font-weight:900;">' +
+        (selected ? '✓' : '') +
+      '</div>';
+    }
+
+    var row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "70px 48px 1fr 70px 48px 1fr 70px";
+    row.style.alignItems = "center";
+    row.style.gap = "10px";
+
+    row.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;">' + box(pick === "H") + '</div>' +
+
+      '<div style="display:flex;align-items:center;justify-content:center;padding-left:6px;padding-right:6px;">' +
+        (homeLogo ? '<img src="' + homeLogo + '" style="width:30px;height:30px;object-fit:contain;" crossorigin="anonymous">' : '') +
+      '</div>' +
+
+      '<div style="text-align:left;font-weight:700;font-size:15px;color:#111;padding-left:4px;">' + m.home_team + '</div>' +
+
+      '<div style="display:flex;align-items:center;justify-content:center;">' + box(pick === "D") + '</div>' +
+
+      '<div style="display:flex;align-items:center;justify-content:center;padding-left:6px;padding-right:6px;">' +
+        (awayLogo ? '<img src="' + awayLogo + '" style="width:30px;height:30px;object-fit:contain;" crossorigin="anonymous">' : '') +
+      '</div>' +
+
+      '<div style="text-align:left;font-weight:700;font-size:15px;color:#111;padding-left:4px;">' + m.away_team + '</div>' +
+
+      '<div style="display:flex;align-items:center;justify-content:center;">' + box(pick === "A") + '</div>';
+
+    table.appendChild(row);
+  });
+
+  card.appendChild(table);
+
+  var footer = document.createElement("div");
+  footer.style.marginTop = "22px";
+  footer.style.textAlign = "center";
+  footer.style.lineHeight = "1.8";
+  footer.innerHTML =
+    '<div style="font-size:20px;font-weight:800;color:#111;">Gracias por Participar</div>' +
+    '<div style="font-size:16px;color:#444;">Que la Fuerza te acompañe ✋🏻</div>';
+
+  card.appendChild(footer);
+
+  return card;
 }
 
 async function addEntry() {
