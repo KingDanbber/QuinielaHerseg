@@ -70,6 +70,7 @@ function getTeamLogo(teamName) {
 // =====================
 // UI Helpers
 // =====================
+
 function showAlert(msg, type="info") {
   const el = $("alert");
   el.classList.remove("hidden");
@@ -271,6 +272,10 @@ async function showAppTab(tabId) {
   await fillPickPoolsSelect();
   await fillPickParticipantsSelect();
   await loadPickStatusList(); }
+
+if (tabId === "tab-results") {
+  await fillResultsPoolsSelect();
+}
 
   } catch (err) {
     showAlert("Error cargando sección: " + (err?.message || err), "error");
@@ -1985,6 +1990,209 @@ async function fillPickSelectors() {
 }
 
 // =====================
+// Funciones Resultados 
+// =====================
+
+// Selector de Jornadas por Plantillas
+async function fillResultsPoolsSelect() {
+  const { data, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) return showAlert(error.message, "error");
+
+  const sel = $("resultsPool");
+  sel.innerHTML = (data || []).map(function(p) {
+    const tag = p.status === "open" ? " (Activa)" : "";
+    return `<option value="${p.id}">${p.name}${tag}</option>`;
+  }).join("");
+}
+
+// Renders de Partidos
+function renderResultRow(match) {
+  const hg = match.home_goals ?? "";
+  const ag = match.away_goals ?? "";
+
+  let outcome = "Pendiente";
+  let totalGoals = 0;
+
+  if (hg !== "" && ag !== "") {
+    const homeGoals = Number(hg);
+    const awayGoals = Number(ag);
+    totalGoals = homeGoals + awayGoals;
+
+    if (homeGoals > awayGoals) outcome = "Local";
+    else if (homeGoals === awayGoals) outcome = "Empate";
+    else outcome = "Visita";
+  }
+
+  return `
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+      <div class="text-xs text-zinc-400 mb-2">Partido #${match.match_no}</div>
+
+      <div class="grid grid-cols-[1fr_70px_40px_70px_1fr] gap-2 items-center">
+        <div class="text-sm font-semibold text-right">${match.home_team}</div>
+
+        <input
+          type="number"
+          min="0"
+          inputmode="numeric"
+          data-result-home="${match.id}"
+          value="${hg}"
+          class="p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center font-bold" />
+
+        <div class="text-center text-zinc-400 font-bold">vs</div>
+
+        <input
+          type="number"
+          min="0"
+          inputmode="numeric"
+          data-result-away="${match.id}"
+          value="${ag}"
+          class="p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center font-bold" />
+
+        <div class="text-sm font-semibold text-left">${match.away_team}</div>
+      </div>
+
+      <div class="mt-3 flex items-center justify-between text-xs">
+        <div class="text-zinc-400">
+          Resultado: <span data-result-outcome="${match.id}" class="font-semibold text-zinc-200">${outcome}</span>
+        </div>
+        <div class="text-zinc-400">
+          Total goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Cargar partidos Jornada con Goles Actuales
+async function loadResultsMatches() {
+  hideAlert();
+
+  const pool_id = $("resultsPool").value;
+  if (!pool_id) {
+    $("resultsMatchesList").innerHTML = "";
+    $("resultsGoalsTotal").textContent = "0";
+    return showAlert("Selecciona una jornada.", "error");
+  }
+
+  const { data: matches, error } = await supabaseClient
+    .from("matches")
+    .select("id, match_no, home_team, away_team, home_goals, away_goals")
+    .eq("pool_id", pool_id)
+    .order("match_no", { ascending: true });
+
+  if (error) return showAlert(error.message, "error");
+
+  const rows = matches || [];
+
+  if (!rows.length) {
+    $("resultsMatchesList").innerHTML = `
+      <div class="text-sm text-zinc-400 p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
+        Esta jornada no tiene plantilla guardada todavía.
+      </div>
+    `;
+    $("resultsGoalsTotal").textContent = "0";
+    return;
+  }
+
+  $("resultsMatchesList").innerHTML = rows.map(renderResultRow).join("");
+
+  attachResultsInputsEvents();
+  updateResultsGoalsSummary();
+}
+
+// Actualizar Cálculo Visual Automático
+function attachResultsInputsEvents() {
+  document.querySelectorAll("[data-result-home], [data-result-away]").forEach(function(inp) {
+    inp.addEventListener("input", function() {
+      const matchId = inp.hasAttribute("data-result-home")
+        ? inp.getAttribute("data-result-home")
+        : inp.getAttribute("data-result-away");
+
+      const homeVal = document.querySelector(`[data-result-home="${matchId}"]`)?.value;
+      const awayVal = document.querySelector(`[data-result-away="${matchId}"]`)?.value;
+
+      let outcome = "Pendiente";
+      let totalGoals = 0;
+
+      if (homeVal !== "" && awayVal !== "") {
+        const hg = Number(homeVal);
+        const ag = Number(awayVal);
+        totalGoals = hg + ag;
+
+        if (hg > ag) outcome = "Local";
+        else if (hg === ag) outcome = "Empate";
+        else outcome = "Visita";
+      }
+
+      const outEl = document.querySelector(`[data-result-outcome="${matchId}"]`);
+      const totalEl = document.querySelector(`[data-result-total="${matchId}"]`);
+
+      if (outEl) outEl.textContent = outcome;
+      if (totalEl) totalEl.textContent = totalGoals;
+
+      updateResultsGoalsSummary();
+    });
+  });
+}
+
+function updateResultsGoalsSummary() {
+  let total = 0;
+
+  document.querySelectorAll("[data-result-total]").forEach(function(el) {
+    total += Number(el.textContent || 0);
+  });
+
+  $("resultsGoalsTotal").textContent = String(total);
+}
+
+// Guardar Resultados
+async function saveResultsMatches() {
+  hideAlert();
+
+  const pool_id = $("resultsPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+
+  const { data: matches, error: loadErr } = await supabaseClient
+    .from("matches")
+    .select("id")
+    .eq("pool_id", pool_id)
+    .order("match_no", { ascending: true });
+
+  if (loadErr) return showAlert(loadErr.message, "error");
+
+  const rows = matches || [];
+
+  if (!rows.length) {
+    return showAlert("Esta jornada no tiene partidos cargados.", "error");
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const matchId = rows[i].id;
+    const homeVal = document.querySelector(`[data-result-home="${matchId}"]`)?.value;
+    const awayVal = document.querySelector(`[data-result-away="${matchId}"]`)?.value;
+
+    const home_goals = homeVal === "" ? null : Number(homeVal);
+    const away_goals = awayVal === "" ? null : Number(awayVal);
+
+    const { error } = await supabaseClient
+      .from("matches")
+      .update({ home_goals, away_goals })
+      .eq("id", matchId);
+
+    if (error) {
+      return showAlert("Error guardando partido: " + error.message, "error");
+    }
+  }
+
+  showAlert("Resultados guardados ✅", "ok");
+}
+
+// =====================
 // Eventos
 // =====================
 
@@ -2227,6 +2435,10 @@ $("pickParticipant").addEventListener("change", () => {
   $("pickMatches").innerHTML = "";
   $("pickEntryLabel").textContent = "—";
 });
+
+// Resultados
+$("btnLoadResultsMatches").addEventListener("click", loadResultsMatches);
+$("btnSaveResults").addEventListener("click", saveResultsMatches);
 
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
