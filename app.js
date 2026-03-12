@@ -2312,6 +2312,196 @@ async function loadStandings() {
     `;
 }
 
+//Construcción Imagen Ranking
+function makeStandingsCard(opts) {
+  var poolName = opts.poolName || "Jornada";
+  var totalGoals = opts.totalGoals || 0;
+  var rows = opts.rows || [];
+
+  var card = document.createElement("div");
+  card.style.width = "900px";
+  card.style.background = "#ffffff";
+  card.style.color = "#111111";
+  card.style.border = "1.5px solid #222222";
+  card.style.borderRadius = "20px";
+  card.style.padding = "26px";
+  card.style.boxSizing = "border-box";
+  card.style.fontFamily = "Arial, sans-serif";
+
+  card.innerHTML =
+    '<div style="text-align:center;">' +
+      '<div style="font-size:34px;font-weight:900;">Tabla de Aciertos</div>' +
+      '<div style="font-size:18px;color:#555;margin-top:6px;">' + poolName + '</div>' +
+    '</div>' +
+
+    '<div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:18px;">' +
+      '<div style="padding:10px 18px;border-radius:999px;background:#111111;color:#ffffff;font-size:18px;font-weight:800;">🏆 Quiniela Herseg MX</div>' +
+      '<div style="padding:10px 18px;border-radius:999px;background:#f4f4f5;border:1px solid #d4d4d8;font-size:18px;font-weight:800;color:#111111;">Goles jornada: ' + totalGoals + '</div>' +
+    '</div>';
+
+  var list = document.createElement("div");
+  list.style.display = "grid";
+  list.style.gap = "10px";
+  list.style.marginTop = "24px";
+
+  rows.forEach(function(r, index) {
+    var pos = index + 1;
+    var badgeBg = "#f4f4f5";
+    var badgeColor = "#111111";
+
+    if (pos === 1) {
+      badgeBg = "#111111";
+      badgeColor = "#ffffff";
+    }
+
+    var item = document.createElement("div");
+    item.style.display = "flex";
+    item.style.alignItems = "center";
+    item.style.justifyContent = "space-between";
+    item.style.gap = "16px";
+    item.style.padding = "14px 16px";
+    item.style.border = "1px solid #d4d4d8";
+    item.style.borderRadius = "14px";
+    item.style.background = "#ffffff";
+
+    item.innerHTML =
+      '<div style="display:flex;align-items:center;gap:14px;min-width:0;">' +
+        '<div style="width:42px;height:42px;border-radius:999px;background:' + badgeBg + ';color:' + badgeColor + ';display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;">' +
+          pos +
+        '</div>' +
+        '<div style="min-width:0;">' +
+          '<div style="font-size:20px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.name + '</div>' +
+          '<div style="font-size:14px;color:#666;">' + (r.area || "Sin área") + ' • Picks: ' + r.captured_picks + ' • Jugados: ' + r.played_matches + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="text-align:right;flex-shrink:0;">' +
+        '<div style="font-size:26px;font-weight:900;color:#111111;">' + r.points + '</div>' +
+        '<div style="font-size:13px;color:#666;">aciertos</div>' +
+      '</div>';
+
+    list.appendChild(item);
+  });
+
+  card.appendChild(list);
+
+  var footer = document.createElement("div");
+  footer.style.marginTop = "24px";
+  footer.style.textAlign = "center";
+  footer.style.fontSize = "16px";
+  footer.style.color = "#444444";
+  footer.innerHTML =
+    '<div style="font-weight:800;color:#111111;">Gracias por Participar</div>' +
+    '<div style="margin-top:4px;">Que la Fuerza te acompañe ✋🏻</div>';
+
+  card.appendChild(footer);
+
+  return card;
+}
+
+// Funcion Exportar Imagen
+async function exportStandingsImage() {
+  hideAlert();
+
+  const pool_id = $("standingsPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+
+  // pool
+  const { data: pool, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, name")
+    .eq("id", pool_id)
+    .maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+
+  // puntos
+  const { data: pointsRows, error: pointsErr } = await supabaseClient
+    .from("entry_points")
+    .select("entry_id, pool_id, participant_id, points, played_matches, captured_picks")
+    .eq("pool_id", pool_id);
+
+  if (pointsErr) return showAlert(pointsErr.message, "error");
+
+  // participantes
+  const { data: participants, error: partErr } = await supabaseClient
+    .from("participants")
+    .select("id, name, area");
+
+  if (partErr) return showAlert(partErr.message, "error");
+
+  const partMap = new Map(
+    (participants || []).map(function(p) {
+      return [p.id, p];
+    })
+  );
+
+  // goles jornada
+  const { data: goalsData, error: goalsErr } = await supabaseClient
+    .from("pool_goals_total")
+    .select("total_goals")
+    .eq("pool_id", pool_id)
+    .maybeSingle();
+
+  if (goalsErr) return showAlert(goalsErr.message, "error");
+
+  const rows = (pointsRows || []).map(function(r) {
+    const p = partMap.get(r.participant_id) || {};
+    return {
+      name: p.name || "Sin nombre",
+      area: p.area || "",
+      points: r.points || 0,
+      played_matches: r.played_matches || 0,
+      captured_picks: r.captured_picks || 0
+    };
+  });
+
+  rows.sort(function(a, b) {
+    if (b.points !== a.points) return b.points - a.points;
+    return a.name.localeCompare(b.name);
+  });
+
+  if (!rows.length) {
+    return showAlert("No hay datos de aciertos para exportar.", "error");
+  }
+
+  const printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  const card = makeStandingsCard({
+    poolName: pool?.name || "Jornada",
+    totalGoals: goalsData?.total_goals || 0,
+    rows: rows
+  });
+
+  printArea.appendChild(card);
+
+  try {
+    const canvas = await html2canvas(card, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true
+    });
+
+    const a = document.createElement("a");
+    const safeName = (pool?.name || "tabla-aciertos")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-");
+
+    a.download = safeName + "-aciertos.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+
+    showAlert("Imagen de tabla generada ✅", "ok");
+  } catch (err) {
+    showAlert("Error generando imagen: " + (err?.message || err), "error");
+  } finally {
+    printArea.innerHTML = "";
+    printArea.classList.add("hidden");
+  }
+}
+
 // =====================
 // Eventos
 // =====================
@@ -2562,6 +2752,7 @@ $("btnSaveResults").addEventListener("click", saveResultsMatches);
 
 // Aciertos
 $("btnLoadStandings").addEventListener("click", loadStandings);
+$("btnExportStandingsImage").addEventListener("click", exportStandingsImage);
 
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
