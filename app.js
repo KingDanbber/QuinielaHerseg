@@ -277,6 +277,10 @@ if (tabId === "tab-results") {
   await fillResultsPoolsSelect();
 }
 
+if (tabId === "tab-standings") {
+  await fillStandingsPoolsSelect();
+}
+
   } catch (err) {
     showAlert("Error cargando sección: " + (err?.message || err), "error");
   }
@@ -349,6 +353,7 @@ async function loadDashboardSummary() {
     $("dashPrize").textContent = "$0";
   }
 }
+
 async function loadParticipants() {
   const q = supabaseClient
     .from("participants")
@@ -2193,6 +2198,121 @@ async function saveResultsMatches() {
 }
 
 // =====================
+// Funciones Aciertos
+// =====================
+
+// Selector Jornadas para Aciertos
+async function fillStandingsPoolsSelect() {
+  const { data, error } = await supabaseClient
+    .from("pools")
+    .select("id, name, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) return showAlert(error.message, "error");
+
+  const sel = $("standingsPool");
+  sel.innerHTML = (data || []).map(function(p) {
+    const tag = p.status === "open" ? " (Activa)" : "";
+    return `<option value="${p.id}">${p.name}${tag}</option>`;
+  }).join("");
+
+  const active = (data || []).find(function(p) {
+    return p.status === "open";
+  });
+
+  if (active) sel.value = active.id;
+}
+
+// Cargar Tabla Aciertos
+async function loadStandings() {
+  hideAlert();
+
+  const pool_id = $("standingsPool").value;
+  if (!pool_id) {
+    $("standingsList").innerHTML = "";
+    $("standingsGoalsTotal").textContent = "0";
+    return showAlert("Selecciona una jornada.", "error");
+  }
+
+  // puntos por boleto
+  const { data: pointsRows, error: pointsErr } = await supabaseClient
+    .from("entry_points")
+    .select("entry_id, pool_id, participant_id, points, played_matches, captured_picks")
+    .eq("pool_id", pool_id);
+
+  if (pointsErr) return showAlert(pointsErr.message, "error");
+
+  // participantes
+  const { data: participants, error: partErr } = await supabaseClient
+    .from("participants")
+    .select("id, name, area");
+
+  if (partErr) return showAlert(partErr.message, "error");
+
+  const partMap = new Map(
+    (participants || []).map(function(p) {
+      return [p.id, p];
+    })
+  );
+
+  // total de goles jornada
+  const { data: goalsData, error: goalsErr } = await supabaseClient
+    .from("pool_goals_total")
+    .select("total_goals")
+    .eq("pool_id", pool_id)
+    .maybeSingle();
+
+  if (goalsErr) return showAlert(goalsErr.message, "error");
+
+  $("standingsGoalsTotal").textContent = String(goalsData?.total_goals || 0);
+
+  const rows = (pointsRows || []).map(function(r) {
+    const p = partMap.get(r.participant_id) || {};
+    return {
+      participant_id: r.participant_id,
+      name: p.name || "Sin nombre",
+      area: p.area || "",
+      points: r.points || 0,
+      played_matches: r.played_matches || 0,
+      captured_picks: r.captured_picks || 0
+    };
+  });
+
+  rows.sort(function(a, b) {
+    if (b.points !== a.points) return b.points - a.points;
+    return a.name.localeCompare(b.name);
+  });
+
+  $("standingsList").innerHTML = rows.length
+    ? rows.map(function(r, index) {
+        const pos = index + 1;
+        const area = r.area ? " • " + r.area : "";
+
+        return `
+          <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-semibold truncate">${pos}. ${r.name}</div>
+              <div class="text-xs text-zinc-400 truncate">
+                ${area} • Picks: ${r.captured_picks} • Partidos jugados: ${r.played_matches}
+              </div>
+            </div>
+
+            <div class="shrink-0 text-right">
+              <div class="text-lg font-extrabold text-emerald-300">${r.points}</div>
+              <div class="text-xs text-zinc-400">aciertos</div>
+            </div>
+          </div>
+        `;
+      }).join("")
+    : `
+      <div class="text-sm text-zinc-400 p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
+        No hay boletos o pronósticos para esta jornada todavía.
+      </div>
+    `;
+}
+
+// =====================
 // Eventos
 // =====================
 
@@ -2439,6 +2559,9 @@ $("pickParticipant").addEventListener("change", () => {
 // Resultados
 $("btnLoadResultsMatches").addEventListener("click", loadResultsMatches);
 $("btnSaveResults").addEventListener("click", saveResultsMatches);
+
+// Aciertos
+$("btnLoadStandings").addEventListener("click", loadStandings);
 
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
