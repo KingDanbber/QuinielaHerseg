@@ -427,6 +427,32 @@
   </div>
 </section>
 
+<!-- Tab: Aciertos -->
+<section id="tab-standings" class="app-tab hidden space-y-4">
+  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <h3 class="font-semibold">Tabla de Aciertos</h3>
+      <div class="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+        Goles jornada: <span id="standingsGoalsTotal">0</span>
+      </div>
+    </div>
+
+    <div class="grid gap-2 mt-4">
+      <select id="standingsPool" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"></select>
+
+      <button id="btnLoadStandings" class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
+        Cargar tabla
+      </button>
+    </div>
+
+    <div class="mt-4 text-sm text-zinc-400">
+      La tabla se ordena automáticamente del mayor número de aciertos al menor.
+    </div>
+
+    <div id="standingsList" class="mt-4 space-y-2"></div>
+  </div>
+</section>
+
   </div>
 
   <!-- CONTENEDOR OCULTO EXPORT -->
@@ -461,6 +487,10 @@
 <button class="bottom-nav-btn" data-tab="tab-results">
   <span>📊</span>
   <small>Resultados</small>
+</button>
+<button class="bottom-nav-btn" data-tab="tab-standings">
+  <span>🏅</span>
+  <small>Aciertos</small>
 </button>
   </nav>
 </section>
