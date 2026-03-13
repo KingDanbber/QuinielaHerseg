@@ -2513,7 +2513,7 @@ async function exportStandingsImage() {
 }
 
 //Funcion Resultado Ganador Quin Sencilla
-function renderSimpleWinnerBox(rows) {
+function renderSimpleWinnerBox(rows, poolStats) {
   if (!rows || !rows.length) {
     return `
       <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
@@ -2527,35 +2527,113 @@ function renderSimpleWinnerBox(rows) {
     return r.points === topPoints;
   });
 
+  const prizePool = Number(poolStats?.prize_pool || 0);
+  const paidCount = Number(poolStats?.paid_count || 0);
+  const totalCollected = Number(poolStats?.total_collected || 0);
+  const commissionAmount = Number(poolStats?.commission_amount || 0);
+
   if (topPoints === 0) {
     return `
-      <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
-        Todavía no hay aciertos registrados en esta jornada.
+      <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
+        <div class="text-xs uppercase tracking-wide text-zinc-400">Quiniela Sencilla</div>
+        <div class="mt-2 text-sm text-zinc-300">Todavía no hay aciertos registrados en esta jornada.</div>
+
+        <div class="grid grid-cols-3 gap-2 mt-4 text-sm">
+          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Pagados</div>
+            <div class="font-bold text-white">${paidCount}</div>
+          </div>
+          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Total</div>
+            <div class="font-bold text-white">${money(totalCollected)}</div>
+          </div>
+          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Bolsa</div>
+            <div class="font-bold text-white">${money(prizePool)}</div>
+          </div>
+        </div>
       </div>
     `;
   }
 
   if (leaders.length === 1) {
     const leader = leaders[0];
+
     return `
       <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
         <div class="text-xs uppercase tracking-wide text-emerald-300">Ganador provisional • Quiniela Sencilla</div>
+
         <div class="mt-2 text-xl font-extrabold text-white">${leader.name}</div>
         <div class="text-sm text-zinc-300 mt-1">
           ${leader.area || "Sin área"} • ${leader.points} aciertos
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
+          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Bolsa actual</div>
+            <div class="font-bold text-white">${money(prizePool)}</div>
+          </div>
+          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Premio estimado</div>
+            <div class="font-bold text-emerald-300">${money(prizePool)}</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 mt-2 text-sm">
+          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Pagados</div>
+            <div class="font-bold text-white">${paidCount}</div>
+          </div>
+          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Total</div>
+            <div class="font-bold text-white">${money(totalCollected)}</div>
+          </div>
+          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+            <div class="text-xs text-zinc-400">Comisión</div>
+            <div class="font-bold text-white">${money(commissionAmount)}</div>
+          </div>
         </div>
       </div>
     `;
   }
 
+  const splitPrize = leaders.length ? prizePool / leaders.length : 0;
+
   return `
     <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
       <div class="text-xs uppercase tracking-wide text-amber-300">Empate provisional • Quiniela Sencilla</div>
+
       <div class="mt-2 text-base font-extrabold text-white">
         ${leaders.map(function(x) { return x.name; }).join(", ")}
       </div>
       <div class="text-sm text-zinc-300 mt-1">
         Todos llevan ${topPoints} aciertos
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
+        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+          <div class="text-xs text-zinc-400">Bolsa actual</div>
+          <div class="font-bold text-white">${money(prizePool)}</div>
+        </div>
+        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+          <div class="text-xs text-zinc-400">Premio estimado por persona</div>
+          <div class="font-bold text-amber-300">${money(splitPrize)}</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 mt-2 text-sm">
+        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+          <div class="text-xs text-zinc-400">Pagados</div>
+          <div class="font-bold text-white">${paidCount}</div>
+        </div>
+        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+          <div class="text-xs text-zinc-400">Total</div>
+          <div class="font-bold text-white">${money(totalCollected)}</div>
+        </div>
+        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
+          <div class="text-xs text-zinc-400">Comisión</div>
+          <div class="font-bold text-white">${money(commissionAmount)}</div>
+        </div>
       </div>
     </div>
   `;
