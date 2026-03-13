@@ -1010,6 +1010,7 @@ const rowsHtml = (participants || []).map(function(participant) {
 attachPickStatusExportEvents();
 attachPickStatusFilterEvents();
 applyPickStatusFilter(currentPickStatusFilter);
+updatePickStatusFilterCounts();
 }
 
 //Aplicar Filtró sin recargar todo
@@ -1018,9 +1019,12 @@ function applyPickStatusFilter(filterKey) {
 
   document.querySelectorAll(".pick-filter-btn").forEach(function(btn) {
     const isActive = btn.getAttribute("data-filter") === filterKey;
+
     btn.classList.toggle("bg-emerald-600", isActive);
     btn.classList.toggle("text-white", isActive);
+
     btn.classList.toggle("bg-zinc-800", !isActive);
+    btn.classList.toggle("hover:bg-zinc-700", !isActive);
   });
 
   document.querySelectorAll(".pick-status-card").forEach(function(card) {
@@ -1038,6 +1042,25 @@ function attachPickStatusFilterEvents() {
       applyPickStatusFilter(filterKey);
     });
   });
+}
+
+//Contador Automático Filtros
+function updatePickStatusFilterCounts() {
+  const cards = Array.from(document.querySelectorAll(".pick-status-card"));
+
+  const counts = {
+    all: cards.length,
+    complete: cards.filter(c => c.getAttribute("data-status") === "complete").length,
+    partial: cards.filter(c => c.getAttribute("data-status") === "partial").length,
+    pending: cards.filter(c => c.getAttribute("data-status") === "pending").length,
+    noboleto: cards.filter(c => c.getAttribute("data-status") === "noboleto").length
+  };
+
+  if ($("pickCountAll")) $("pickCountAll").textContent = counts.all;
+  if ($("pickCountComplete")) $("pickCountComplete").textContent = counts.complete;
+  if ($("pickCountPartial")) $("pickCountPartial").textContent = counts.partial;
+  if ($("pickCountPending")) $("pickCountPending").textContent = counts.pending;
+  if ($("pickCountNoBoleto")) $("pickCountNoBoleto").textContent = counts.noboleto;
 }
 
 function attachPickStatusOpenEvents() {
