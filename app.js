@@ -2284,6 +2284,8 @@ async function loadStandings() {
     return a.name.localeCompare(b.name);
   });
 
+$("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(rows);
+
   $("standingsList").innerHTML = rows.length
     ? rows.map(function(r, index) {
         const pos = index + 1;
@@ -2500,6 +2502,55 @@ async function exportStandingsImage() {
     printArea.innerHTML = "";
     printArea.classList.add("hidden");
   }
+}
+
+//Funcion Resultado Ganador Quin Sencilla
+function renderSimpleWinnerBox(rows) {
+  if (!rows || !rows.length) {
+    return `
+      <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
+        Aún no hay datos suficientes para determinar líder o ganador provisional.
+      </div>
+    `;
+  }
+
+  const topPoints = rows[0].points || 0;
+  const leaders = rows.filter(function(r) {
+    return r.points === topPoints;
+  });
+
+  if (topPoints === 0) {
+    return `
+      <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
+        Todavía no hay aciertos registrados en esta jornada.
+      </div>
+    `;
+  }
+
+  if (leaders.length === 1) {
+    const leader = leaders[0];
+    return `
+      <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+        <div class="text-xs uppercase tracking-wide text-emerald-300">Ganador provisional • Quiniela Sencilla</div>
+        <div class="mt-2 text-xl font-extrabold text-white">${leader.name}</div>
+        <div class="text-sm text-zinc-300 mt-1">
+          ${leader.area || "Sin área"} • ${leader.points} aciertos
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+      <div class="text-xs uppercase tracking-wide text-amber-300">Empate provisional • Quiniela Sencilla</div>
+      <div class="mt-2 text-base font-extrabold text-white">
+        ${leaders.map(function(x) { return x.name; }).join(", ")}
+      </div>
+      <div class="text-sm text-zinc-300 mt-1">
+        Todos llevan ${topPoints} aciertos
+      </div>
+    </div>
+  `;
 }
 
 // =====================
