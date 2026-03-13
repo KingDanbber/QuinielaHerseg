@@ -2292,7 +2292,9 @@ const { data: poolStats, error: statsErr } = await supabaseClient
 
 if (statsErr) return showAlert(statsErr.message, "error");
 
-$("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(rows, poolStats);
+const completionInfo = await getPoolCompletionInfo(pool_id);
+
+$("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(rows, poolStats, completionInfo);
 
   $("standingsList").innerHTML = rows.length
     ? rows.map(function(r, index) {
@@ -2513,11 +2515,11 @@ async function exportStandingsImage() {
 }
 
 //Funcion Resultado Ganador Quin Sencilla
-function renderSimpleWinnerBox(rows, poolStats) {
+function renderSimpleWinnerBox(rows, poolStats, completionInfo) {
   if (!rows || !rows.length) {
     return `
       <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
-        Aún no hay datos suficientes para determinar líder o ganador provisional.
+        Aún no hay datos suficientes para determinar líder o ganador.
       </div>
     `;
   }
@@ -2532,11 +2534,28 @@ function renderSimpleWinnerBox(rows, poolStats) {
   const totalCollected = Number(poolStats?.total_collected || 0);
   const commissionAmount = Number(poolStats?.commission_amount || 0);
 
+  const isFinished = !!(completionInfo && completionInfo.isFinished);
+  const totalMatches = Number(completionInfo?.totalMatches || 0);
+  const completedMatches = Number(completionInfo?.completedMatches || 0);
+
+  const titleSingle = isFinished
+    ? "Ganador final • Quiniela Sencilla"
+    : "Ganador provisional • Quiniela Sencilla";
+
+  const titleTie = isFinished
+    ? "Empate final • Quiniela Sencilla"
+    : "Empate provisional • Quiniela Sencilla";
+
+  const progressText = totalMatches
+    ? `Partidos con resultado: ${completedMatches}/${totalMatches}`
+    : "Sin partidos cargados";
+
   if (topPoints === 0) {
     return `
       <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
         <div class="text-xs uppercase tracking-wide text-zinc-400">Quiniela Sencilla</div>
         <div class="mt-2 text-sm text-zinc-300">Todavía no hay aciertos registrados en esta jornada.</div>
+        <div class="text-xs text-zinc-500 mt-2">${progressText}</div>
 
         <div class="grid grid-cols-3 gap-2 mt-4 text-sm">
           <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
@@ -2558,15 +2577,25 @@ function renderSimpleWinnerBox(rows, poolStats) {
 
   if (leaders.length === 1) {
     const leader = leaders[0];
+    const boxClass = isFinished
+      ? "bg-sky-500/10 border-sky-500/20"
+      : "bg-emerald-500/10 border-emerald-500/20";
+    const titleClass = isFinished
+      ? "text-sky-300"
+      : "text-emerald-300";
+    const prizeClass = isFinished
+      ? "text-sky-300"
+      : "text-emerald-300";
 
     return `
-      <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-        <div class="text-xs uppercase tracking-wide text-emerald-300">Ganador provisional • Quiniela Sencilla</div>
+      <div class="p-4 ${boxClass} border rounded-xl">
+        <div class="text-xs uppercase tracking-wide ${titleClass}">${titleSingle}</div>
 
         <div class="mt-2 text-xl font-extrabold text-white">${leader.name}</div>
         <div class="text-sm text-zinc-300 mt-1">
           ${leader.area || "Sin área"} • ${leader.points} aciertos
         </div>
+        <div class="text-xs text-zinc-400 mt-2">${progressText}</div>
 
         <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
           <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
@@ -2575,7 +2604,7 @@ function renderSimpleWinnerBox(rows, poolStats) {
           </div>
           <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
             <div class="text-xs text-zinc-400">Premio estimado</div>
-            <div class="font-bold text-emerald-300">${money(prizePool)}</div>
+            <div class="font-bold ${prizeClass}">${money(prizePool)}</div>
           </div>
         </div>
 
@@ -2598,10 +2627,19 @@ function renderSimpleWinnerBox(rows, poolStats) {
   }
 
   const splitPrize = leaders.length ? prizePool / leaders.length : 0;
+  const boxClass = isFinished
+    ? "bg-orange-500/10 border-orange-500/20"
+    : "bg-amber-500/10 border-amber-500/20";
+  const titleClass = isFinished
+    ? "text-orange-300"
+    : "text-amber-300";
+  const prizeClass = isFinished
+    ? "text-orange-300"
+    : "text-amber-300";
 
   return `
-    <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-      <div class="text-xs uppercase tracking-wide text-amber-300">Empate provisional • Quiniela Sencilla</div>
+    <div class="p-4 ${boxClass} border rounded-xl">
+      <div class="text-xs uppercase tracking-wide ${titleClass}">${titleTie}</div>
 
       <div class="mt-2 text-base font-extrabold text-white">
         ${leaders.map(function(x) { return x.name; }).join(", ")}
@@ -2609,6 +2647,7 @@ function renderSimpleWinnerBox(rows, poolStats) {
       <div class="text-sm text-zinc-300 mt-1">
         Todos llevan ${topPoints} aciertos
       </div>
+      <div class="text-xs text-zinc-400 mt-2">${progressText}</div>
 
       <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
         <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
@@ -2617,7 +2656,7 @@ function renderSimpleWinnerBox(rows, poolStats) {
         </div>
         <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
           <div class="text-xs text-zinc-400">Premio estimado por persona</div>
-          <div class="font-bold text-amber-300">${money(splitPrize)}</div>
+          <div class="font-bold ${prizeClass}">${money(splitPrize)}</div>
         </div>
       </div>
 
@@ -2637,6 +2676,29 @@ function renderSimpleWinnerBox(rows, poolStats) {
       </div>
     </div>
   `;
+}
+
+//Funcion Detección Automático Cierre Jornada
+async function getPoolCompletionInfo(poolId) {
+  const { data, error } = await supabaseClient
+    .from("matches")
+    .select("id, home_goals, away_goals")
+    .eq("pool_id", poolId);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const totalMatches = rows.length;
+
+  const completedMatches = rows.filter(function(m) {
+    return m.home_goals !== null && m.away_goals !== null;
+  }).length;
+
+  return {
+    totalMatches: totalMatches,
+    completedMatches: completedMatches,
+    isFinished: totalMatches > 0 && completedMatches === totalMatches
+  };
 }
 
 // =====================
