@@ -2284,7 +2284,15 @@ async function loadStandings() {
     return a.name.localeCompare(b.name);
   });
 
-$("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(rows);
+const { data: poolStats, error: statsErr } = await supabaseClient
+  .from("pool_stats")
+  .select("paid_count, total_collected, commission_amount, prize_pool")
+  .eq("pool_id", pool_id)
+  .maybeSingle();
+
+if (statsErr) return showAlert(statsErr.message, "error");
+
+$("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(rows, poolStats);
 
   $("standingsList").innerHTML = rows.length
     ? rows.map(function(r, index) {
