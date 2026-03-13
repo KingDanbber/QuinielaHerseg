@@ -35,6 +35,7 @@ let currentPickEntryId = null;
 let currentPickPoolId = null;
 let currentPickParticipantId = null;
 let currentPickStatusFilter = "all";
+let currentPickStatusSearch = "";
 
 const TEAM_LOGOS = {
   "AMÉRICA": "./assets/logos/america.png",
@@ -831,6 +832,8 @@ function clearPicksSelection() {
   });
 }
 
+// Lista Pronosticos Guardados
+
 async function loadPickStatusList() {
   hideAlert();
 
@@ -981,7 +984,11 @@ const rowsHtml = (participants || []).map(function(participant) {
       : "";
 
   return `
-    <div class="pick-status-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass} ${hiddenByFilter}" data-status="${statusKey}">
+    <div
+  class="pick-status-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass} ${hiddenByFilter}"
+  data-status="${statusKey}"
+  data-name="${String(participant.name || "").toLowerCase()}"
+  data-area="${String(area || "").toLowerCase()}">
       <div class="min-w-0 flex-1">
         <div class="font-semibold text-sm leading-tight break-words">${participant.name}</div>
         <div class="text-xs text-zinc-400 mt-1 break-words">${area}</div>
@@ -1009,13 +1016,18 @@ const rowsHtml = (participants || []).map(function(participant) {
   attachPickStatusOpenEvents();
 attachPickStatusExportEvents();
 attachPickStatusFilterEvents();
+attachPickStatusSearchEvent();
 applyPickStatusFilter(currentPickStatusFilter);
 updatePickStatusFilterCounts();
 }
 
-//Aplicar Filtró sin recargar todo
+// ===================
+// Aplicar Filtró sin recargar todo
+
 function applyPickStatusFilter(filterKey) {
   currentPickStatusFilter = filterKey;
+
+  const searchText = (currentPickStatusSearch || "").trim().toLowerCase();
 
   document.querySelectorAll(".pick-filter-btn").forEach(function(btn) {
     const isActive = btn.getAttribute("data-filter") === filterKey;
@@ -1029,12 +1041,38 @@ function applyPickStatusFilter(filterKey) {
 
   document.querySelectorAll(".pick-status-card").forEach(function(card) {
     const status = card.getAttribute("data-status");
-    const shouldShow = filterKey === "all" || status === filterKey;
-    card.classList.toggle("hidden", !shouldShow);
+    const name = card.getAttribute("data-name") || "";
+    const area = card.getAttribute("data-area") || "";
+
+    const matchStatus = filterKey === "all" || status === filterKey;
+    const matchSearch =
+      !searchText ||
+      name.includes(searchText) ||
+      area.includes(searchText);
+
+    card.classList.toggle("hidden", !(matchStatus && matchSearch));
   });
 }
 
-//Activar Funciones Botón Filtro
+// ================
+// Activar Buscador
+
+function attachPickStatusSearchEvent() {
+  const input = $("pickStatusSearch");
+  if (!input) return;
+
+  input.removeEventListener("input", handlePickStatusSearchInput);
+  input.addEventListener("input", handlePickStatusSearchInput);
+}
+
+function handlePickStatusSearchInput(e) {
+  currentPickStatusSearch = e.target.value || "";
+  applyPickStatusFilter(currentPickStatusFilter);
+}
+
+// ====================
+// Activar Funciones Botón Filtro
+
 function attachPickStatusFilterEvents() {
   document.querySelectorAll(".pick-filter-btn").forEach(function(btn) {
     btn.addEventListener("click", function() {
