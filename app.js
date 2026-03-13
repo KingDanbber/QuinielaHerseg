@@ -889,6 +889,8 @@ async function loadPickStatusList() {
   let statusEmoji = "🚫";
   let statusTitle = "Sin boleto";
   let actionBtn = "";
+  let cardClass = "bg-zinc-950 border-zinc-800";
+  let iconWrapClass = "border-zinc-700 bg-zinc-900";
 
   if (entry) {
     const pickCount = picksCountByEntry.get(entry.id) || 0;
@@ -896,42 +898,61 @@ async function loadPickStatusList() {
     if (pickCount > 0) {
       statusEmoji = "✅";
       statusTitle = "Capturado";
+      cardClass = "bg-emerald-500/5 border-emerald-500/20";
+      iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
     } else {
       statusEmoji = "⏳";
       statusTitle = "Pendiente";
+      cardClass = "bg-amber-500/5 border-amber-500/20";
+      iconWrapClass = "border-amber-500/30 bg-amber-500/10";
     }
 
-    actionBtn = `
-      <div class="flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-          data-participant-id="${participant.id}"
-          title="Abrir boleto">
-          👁️
-        </button>
+    if (pickCount > 0) {
+  actionBtn = `
+    <div class="flex items-center gap-2 shrink-0">
+      <button
+        type="button"
+        class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+        data-participant-id="${participant.id}"
+        title="Abrir boleto">
+        👁️
+      </button>
 
-        <button
-          type="button"
-          class="pick-status-export w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-          data-participant-id="${participant.id}"
-          title="Descargar imagen">
-          🖼️
-        </button>
-      </div>
-    `;
+      <button
+        type="button"
+        class="pick-status-export w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+        data-participant-id="${participant.id}"
+        title="Descargar imagen">
+        🖼️
+      </button>
+    </div>
+  `;
+} else {
+  actionBtn = `
+    <div class="flex items-center gap-2 shrink-0">
+      <button
+        type="button"
+        class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+        data-participant-id="${participant.id}"
+        title="Abrir boleto">
+        👁️
+      </button>
+    </div>
+  `;
+}
   }
 
   return `
-    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+    <div class="p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}">
       <div class="min-w-0 flex-1">
         <div class="font-semibold text-sm leading-tight break-words">${participant.name}</div>
         <div class="text-xs text-zinc-400 mt-1 break-words">${area}</div>
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <div class="w-11 h-11 rounded-xl border border-zinc-700 bg-zinc-900 flex items-center justify-center text-xl"
-             title="${statusTitle}">
+        <div
+          class="w-11 h-11 rounded-xl border flex items-center justify-center text-xl ${iconWrapClass}"
+          title="${statusTitle}">
           ${statusEmoji}
         </div>
         ${actionBtn}
