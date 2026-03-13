@@ -395,21 +395,30 @@
   <div>🖼️ Descargar imagen</div>
 </div>
 
-<div id="pickStatusFilters" class="flex gap-2 overflow-x-auto pb-1 mb-3">
-  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm whitespace-nowrap" data-filter="all">
-    Todos
+<div id="pickStatusFilters" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm text-left" data-filter="all">
+    <div class="font-semibold">Todos</div>
+    <div class="text-xs opacity-80" id="pickCountAll">0</div>
   </button>
-  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="complete">
-    ✅ Completos
+
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="complete">
+    <div class="font-semibold">✅ Completos</div>
+    <div class="text-xs opacity-80" id="pickCountComplete">0</div>
   </button>
-  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="partial">
-    🟡 Incompletos
+
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="partial">
+    <div class="font-semibold">🟡 Incompletos</div>
+    <div class="text-xs opacity-80" id="pickCountPartial">0</div>
   </button>
-  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="pending">
-    ⏳ Pendientes
+
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="pending">
+    <div class="font-semibold">⏳ Pendientes</div>
+    <div class="text-xs opacity-80" id="pickCountPending">0</div>
   </button>
-  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="noboleto">
-    🚫 Sin boleto
+
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="noboleto">
+    <div class="font-semibold">🚫 Sin boleto</div>
+    <div class="text-xs opacity-80" id="pickCountNoBoleto">0</div>
   </button>
 </div>
 
