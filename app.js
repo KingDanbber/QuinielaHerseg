@@ -34,6 +34,7 @@ let showArchivedParticipants = false;
 let currentPickEntryId = null;
 let currentPickPoolId = null;
 let currentPickParticipantId = null;
+let currentPickStatusFilter = "all";
 
 const TEAM_LOGOS = {
   "AMÉRICA": "./assets/logos/america.png",
@@ -902,6 +903,7 @@ const rowsHtml = (participants || []).map(function(participant) {
 
   let statusEmoji = "🚫";
   let statusTitle = "Sin boleto";
+  let statusKey = "noboleto";
   let actionBtn = "";
   let cardClass = "bg-zinc-950 border-zinc-800";
   let iconWrapClass = "border-zinc-700 bg-zinc-900";
@@ -920,17 +922,20 @@ const rowsHtml = (participants || []).map(function(participant) {
       if (totalMatchesInPool > 0 && pickCount >= totalMatchesInPool) {
         statusEmoji = "✅";
         statusTitle = "Capturado completo";
+        statusKey = "complete";
         cardClass = "bg-emerald-500/5 border-emerald-500/20";
         iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
       } else {
         statusEmoji = "🟡";
         statusTitle = "Captura incompleta";
+        statusKey = "partial";
         cardClass = "bg-yellow-500/5 border-yellow-500/20";
         iconWrapClass = "border-yellow-500/30 bg-yellow-500/10";
       }
     } else {
       statusEmoji = "⏳";
       statusTitle = "Pendiente";
+      statusKey = "pending";
       cardClass = "bg-amber-500/5 border-amber-500/20";
       iconWrapClass = "border-amber-500/30 bg-amber-500/10";
     }
@@ -970,8 +975,13 @@ const rowsHtml = (participants || []).map(function(participant) {
     }
   }
 
+  const hiddenByFilter =
+    currentPickStatusFilter !== "all" && currentPickStatusFilter !== statusKey
+      ? "hidden"
+      : "";
+
   return `
-    <div class="p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}">
+    <div class="pick-status-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass} ${hiddenByFilter}" data-status="${statusKey}">
       <div class="min-w-0 flex-1">
         <div class="font-semibold text-sm leading-tight break-words">${participant.name}</div>
         <div class="text-xs text-zinc-400 mt-1 break-words">${area}</div>
@@ -998,6 +1008,36 @@ const rowsHtml = (participants || []).map(function(participant) {
 
   attachPickStatusOpenEvents();
 attachPickStatusExportEvents();
+attachPickStatusFilterEvents();
+applyPickStatusFilter(currentPickStatusFilter);
+}
+
+//Aplicar Filtró sin recargar todo
+function applyPickStatusFilter(filterKey) {
+  currentPickStatusFilter = filterKey;
+
+  document.querySelectorAll(".pick-filter-btn").forEach(function(btn) {
+    const isActive = btn.getAttribute("data-filter") === filterKey;
+    btn.classList.toggle("bg-emerald-600", isActive);
+    btn.classList.toggle("text-white", isActive);
+    btn.classList.toggle("bg-zinc-800", !isActive);
+  });
+
+  document.querySelectorAll(".pick-status-card").forEach(function(card) {
+    const status = card.getAttribute("data-status");
+    const shouldShow = filterKey === "all" || status === filterKey;
+    card.classList.toggle("hidden", !shouldShow);
+  });
+}
+
+//Activar Funciones Botón Filtro
+function attachPickStatusFilterEvents() {
+  document.querySelectorAll(".pick-filter-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      const filterKey = btn.getAttribute("data-filter");
+      applyPickStatusFilter(filterKey);
+    });
+  });
 }
 
 function attachPickStatusOpenEvents() {
