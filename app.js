@@ -965,6 +965,11 @@ function attachPickStatusExportEvents() {
     btn.addEventListener("click", async function() {
       const participantId = btn.getAttribute("data-participant-id");
       await exportParticipantPickImage($("pickPool").value, participantId);
+
+document.getElementById("pickMatches")?.scrollIntoView({
+  behavior: "smooth",
+  block: "start"
+});
     });
   });
 }
