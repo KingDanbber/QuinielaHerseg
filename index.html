@@ -395,6 +395,24 @@
   <div>🖼️ Descargar imagen</div>
 </div>
 
+<div id="pickStatusFilters" class="flex gap-2 overflow-x-auto pb-1 mb-3">
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm whitespace-nowrap" data-filter="all">
+    Todos
+  </button>
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="complete">
+    ✅ Completos
+  </button>
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="partial">
+    🟡 Incompletos
+  </button>
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="pending">
+    ⏳ Pendientes
+  </button>
+  <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm whitespace-nowrap" data-filter="noboleto">
+    🚫 Sin boleto
+  </button>
+</div>
+
   <div id="pickStatusListWrap" class="max-h-[420px] overflow-y-auto pr-1">
     <div id="pickStatusList" class="space-y-2"></div>
   </div>
