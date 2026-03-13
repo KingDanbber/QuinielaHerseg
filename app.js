@@ -882,7 +882,21 @@ async function loadPickStatusList() {
     picksCountByEntry.set(p.entry_id, (picksCountByEntry.get(p.entry_id) || 0) + 1);
   });
 
-  const rowsHtml = (participants || []).map(function(participant) {
+  const totalMatchesInPool = await (async function() {
+  const { count, error } = await supabaseClient
+    .from("matches")
+    .select("*", { count: "exact", head: true })
+    .eq("pool_id", pool_id);
+
+  if (error) {
+    showAlert(error.message, "error");
+    return 0;
+  }
+
+  return Number(count || 0);
+})();
+
+const rowsHtml = (participants || []).map(function(participant) {
   const entry = entryByParticipant.get(participant.id);
   const area = participant.area ? participant.area : "Sin área";
 
@@ -891,15 +905,29 @@ async function loadPickStatusList() {
   let actionBtn = "";
   let cardClass = "bg-zinc-950 border-zinc-800";
   let iconWrapClass = "border-zinc-700 bg-zinc-900";
+  let progressHtml = `<div class="text-xs text-zinc-500 mt-1">0/${totalMatchesInPool || 0}</div>`;
 
   if (entry) {
     const pickCount = picksCountByEntry.get(entry.id) || 0;
 
+    progressHtml = `
+      <div class="text-xs mt-1 ${pickCount > 0 ? "text-zinc-300" : "text-zinc-500"}">
+        ${pickCount}/${totalMatchesInPool || 0}
+      </div>
+    `;
+
     if (pickCount > 0) {
-      statusEmoji = "✅";
-      statusTitle = "Capturado";
-      cardClass = "bg-emerald-500/5 border-emerald-500/20";
-      iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
+      if (totalMatchesInPool > 0 && pickCount >= totalMatchesInPool) {
+        statusEmoji = "✅";
+        statusTitle = "Capturado completo";
+        cardClass = "bg-emerald-500/5 border-emerald-500/20";
+        iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
+      } else {
+        statusEmoji = "🟡";
+        statusTitle = "Captura incompleta";
+        cardClass = "bg-yellow-500/5 border-yellow-500/20";
+        iconWrapClass = "border-yellow-500/30 bg-yellow-500/10";
+      }
     } else {
       statusEmoji = "⏳";
       statusTitle = "Pendiente";
@@ -908,38 +936,38 @@ async function loadPickStatusList() {
     }
 
     if (pickCount > 0) {
-  actionBtn = `
-    <div class="flex items-center gap-2 shrink-0">
-      <button
-        type="button"
-        class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-        data-participant-id="${participant.id}"
-        title="Abrir boleto">
-        👁️
-      </button>
+      actionBtn = `
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+            data-participant-id="${participant.id}"
+            title="Abrir boleto">
+            👁️
+          </button>
 
-      <button
-        type="button"
-        class="pick-status-export w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-        data-participant-id="${participant.id}"
-        title="Descargar imagen">
-        🖼️
-      </button>
-    </div>
-  `;
-} else {
-  actionBtn = `
-    <div class="flex items-center gap-2 shrink-0">
-      <button
-        type="button"
-        class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-        data-participant-id="${participant.id}"
-        title="Abrir boleto">
-        👁️
-      </button>
-    </div>
-  `;
-}
+          <button
+            type="button"
+            class="pick-status-export w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+            data-participant-id="${participant.id}"
+            title="Descargar imagen">
+            🖼️
+          </button>
+        </div>
+      `;
+    } else {
+      actionBtn = `
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+            data-participant-id="${participant.id}"
+            title="Abrir boleto">
+            👁️
+          </button>
+        </div>
+      `;
+    }
   }
 
   return `
@@ -947,6 +975,7 @@ async function loadPickStatusList() {
       <div class="min-w-0 flex-1">
         <div class="font-semibold text-sm leading-tight break-words">${participant.name}</div>
         <div class="text-xs text-zinc-400 mt-1 break-words">${area}</div>
+        ${progressHtml}
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
