@@ -3093,6 +3093,9 @@ $("btnClearPicks").addEventListener("click", clearPicksSelection);
 $("btnRefreshPickStatus").addEventListener("click", loadPickStatusList);
 
 $("pickPool").addEventListener("change", async () => {
+  currentPickStatusSearch = "";
+  if ($("pickStatusSearch")) $("pickStatusSearch").value = "";
+
   await fillPickParticipantsSelect();
   await loadPickStatusList();
   $("pickMatches").innerHTML = "";
