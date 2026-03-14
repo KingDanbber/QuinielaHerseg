@@ -208,6 +208,16 @@ function formatMxHeader(date=new Date()) {
   return formatted;
 }
 
+function openMoreMenu() {
+  $("moreMenuSheet").classList.remove("hidden");
+  document.body.classList.add("overflow-hidden");
+}
+
+function closeMoreMenu() {
+  $("moreMenuSheet").classList.add("hidden");
+  document.body.classList.remove("overflow-hidden");
+}
+
 // =====================
 // Supabase helpers
 // =====================
@@ -235,58 +245,123 @@ async function upsertProfile(userId, displayName) {
   if (error) throw error;
 }
 
+// =========================
+// ShowAppTab
+
 async function showAppTab(tabId) {
+
+if ($("moreMenuSheet")) {
+  $("moreMenuSheet").classList.add("hidden");
+}
+
+  // Oculta todas las pestañas
   document.querySelectorAll(".app-tab").forEach(tab => {
     tab.classList.add("hidden");
   });
 
+  // Muestra la pestaña seleccionada
   const target = document.getElementById(tabId);
   if (target) target.classList.remove("hidden");
 
+
+  // Actualiza botones del menú inferior
   document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.getAttribute("data-tab") === tabId);
+
+    const btnTab = btn.getAttribute("data-tab");
+    const isActive = btnTab === tabId;
+
+    btn.classList.toggle("active", isActive);
+    btn.classList.toggle("bg-emerald-600/20", isActive);
+    btn.classList.toggle("text-emerald-300", isActive);
+
   });
 
+
+  // Si la pestaña viene desde el menú "Más"
+  // quitamos el estado activo de los botones inferiores
+  const mainTabs = [
+    "tab-dashboard",
+    "tab-participants",
+    "tab-pools",
+    "tab-picks"
+  ];
+
+  if (!mainTabs.includes(tabId)) {
+    document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
+      btn.classList.remove("active");
+      btn.classList.remove("bg-emerald-600/20");
+      btn.classList.remove("text-emerald-300");
+    });
+  }
+
+
   try {
+
+    // DASHBOARD
     if (tabId === "tab-dashboard") {
       await loadDashboardSummary();
     }
 
+
+    // PARTICIPANTES
     if (tabId === "tab-participants") {
       await loadParticipants();
     }
 
+
+    // JORNADAS
     if (tabId === "tab-pools") {
       await loadPools();
     }
 
-    if (tabId === "tab-templates") {
-  await fillTplPools();
-}
 
+    // PLANTILLAS
+    if (tabId === "tab-templates") {
+      await fillTplPools();
+    }
+
+
+    // PAGOS
     if (tabId === "tab-payments") {
       await fillEntryPoolsSelect();
       await fillEntryParticipantsSelect();
       await loadEntriesAndStats();
     }
 
+
+    // PICKS
     if (tabId === "tab-picks") {
-  await fillPickPoolsSelect();
-  await fillPickParticipantsSelect();
-  await loadPickStatusList(); }
+      await fillPickPoolsSelect();
+      await fillPickParticipantsSelect();
+      await loadPickStatusList();
+    }
 
-if (tabId === "tab-results") {
-  await fillResultsPoolsSelect();
-}
 
-if (tabId === "tab-standings") {
-  await fillStandingsPoolsSelect();
-}
+    // RESULTADOS
+    if (tabId === "tab-results") {
+      await fillResultsPoolsSelect();
+    }
+
+
+    // TABLA DE ACIERTOS
+    if (tabId === "tab-standings") {
+      await fillStandingsPoolsSelect();
+    }
+
 
   } catch (err) {
-    showAlert("Error cargando sección: " + (err?.message || err), "error");
+
+    showAlert(
+      "Error cargando sección: " + (err?.message || err),
+      "error"
+    );
+
   }
+
 }
+
+// ===============
+// Crear Jornadas: Modos Juego
 
 function formatModeLabel(mode) {
   switch (mode) {
@@ -2956,6 +3031,19 @@ $("formProfile").addEventListener("submit", async (e) => {
     setBusy(btn, false);
     showAlert(err?.message || "Error guardando nombre.", "error");
   }
+});
+
+// Botón Más
+$("btnMoreMenu").addEventListener("click", openMoreMenu);
+$("btnCloseMoreMenu").addEventListener("click", closeMoreMenu);
+$("moreMenuBackdrop").addEventListener("click", closeMoreMenu);
+
+document.querySelectorAll(".more-menu-btn").forEach(function(btn) {
+  btn.addEventListener("click", async function() {
+    const tabId = btn.getAttribute("data-tab");
+    closeMoreMenu();
+    await showAppTab(tabId);
+  });
 });
 
 // Participantes: insertar
