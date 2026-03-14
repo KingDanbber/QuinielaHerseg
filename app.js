@@ -267,10 +267,6 @@ async function upsertProfile(userId, displayName) {
 
 async function showAppTab(tabId) {
 
-if ($("moreMenuSheet")) {
-  $("moreMenuSheet").classList.add("hidden");
-}
-
   // Oculta todas las pestañas
   document.querySelectorAll(".app-tab").forEach(tab => {
     tab.classList.add("hidden");
@@ -278,26 +274,26 @@ if ($("moreMenuSheet")) {
 
   // Muestra la pestaña seleccionada
   const target = document.getElementById(tabId);
-  if (target) target.classList.remove("hidden");
-
+  if (target) {
+    target.classList.remove("hidden");
+  } else {
+    showAlert("No existe la sección: " + tabId, "error");
+    return;
+  }
 
   // Actualiza botones del menú inferior
   document.querySelectorAll(".bottom-nav-btn").forEach(btn => {
-
     const btnTab = btn.getAttribute("data-tab");
     const isActive = btnTab === tabId;
 
     btn.classList.toggle("active", isActive);
     btn.classList.toggle("bg-emerald-600/20", isActive);
     btn.classList.toggle("text-emerald-300", isActive);
-
   });
 
-
-  // Si la pestaña viene desde el menú "Más"
-  // quitamos el estado activo de los botones inferiores
+  // Si viene desde menú "Más", limpia activos del menú principal
   const mainTabs = [
-    "tab-dashboard",
+    "tab-home",
     "tab-participants",
     "tab-pools",
     "tab-picks"
@@ -311,32 +307,32 @@ if ($("moreMenuSheet")) {
     });
   }
 
+  // Cierra menú "Más" si existe
+  if ($("moreMenuSheet")) {
+    $("moreMenuSheet").classList.add("hidden");
+  }
 
   try {
 
-    // DASHBOARD
-    if (tabId === "tab-dashboard") {
+    // INICIO
+    if (tabId === "tab-home") {
       await loadDashboardSummary();
     }
-
 
     // PARTICIPANTES
     if (tabId === "tab-participants") {
       await loadParticipants();
     }
 
-
     // JORNADAS
     if (tabId === "tab-pools") {
       await loadPools();
     }
 
-
     // PLANTILLAS
     if (tabId === "tab-templates") {
       await fillTplPools();
     }
-
 
     // PAGOS
     if (tabId === "tab-payments") {
@@ -345,7 +341,6 @@ if ($("moreMenuSheet")) {
       await loadEntriesAndStats();
     }
 
-
     // PICKS
     if (tabId === "tab-picks") {
       await fillPickPoolsSelect();
@@ -353,30 +348,21 @@ if ($("moreMenuSheet")) {
       await loadPickStatusList();
     }
 
-
     // RESULTADOS
     if (tabId === "tab-results") {
       await fillResultsPoolsSelect();
     }
 
-
-    // TABLA DE ACIERTOS
+    // ACIERTOS
     if (tabId === "tab-standings") {
       await fillStandingsPoolsSelect();
     }
 
-
   } catch (err) {
-
-    showAlert(
-      "Error cargando sección: " + (err?.message || err),
-      "error"
-    );
-
+    showAlert("Error cargando sección: " + (err?.message || err), "error");
   }
 
-await updateNavBadges();
-
+  await updateNavBadges();
 }
 
 // =================
@@ -3455,7 +3441,7 @@ async function init() {
   await loadDashboardSummary();
 
   initBottomNav();
-  await showAppTab("tab-dashboard");
+  await showAppTab("tab-home");
 await updateNavBadges();
 }
 
