@@ -208,6 +208,7 @@ function formatMxHeader(date=new Date()) {
   return formatted;
 }
 
+// Botón Mas
 function openMoreMenu() {
   $("moreMenuSheet").classList.remove("hidden");
   document.body.classList.add("overflow-hidden");
@@ -216,6 +217,22 @@ function openMoreMenu() {
 function closeMoreMenu() {
   $("moreMenuSheet").classList.add("hidden");
   document.body.classList.remove("overflow-hidden");
+}
+
+// Badges
+function setBadge(elId, count) {
+  const el = $(elId);
+  if (!el) return;
+
+  const n = Number(count || 0);
+
+  if (n > 0) {
+    el.textContent = n > 99 ? "99+" : String(n);
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "0";
+    el.classList.add("hidden");
+  }
 }
 
 // =====================
@@ -358,6 +375,143 @@ if ($("moreMenuSheet")) {
 
   }
 
+await updateNavBadges();
+
+}
+
+// =================
+// Actualizar Badges
+async function updateNavBadges() {
+  try {
+    // 1) Buscar jornada activa
+    const { data: activePool, error: poolErr } = await supabaseClient
+      .from("pools")
+      .select("id, name, status")
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (poolErr) {
+      console.warn("Badges pools:", poolErr.message);
+      setBadge("navBadgePicks", 0);
+      setBadge("navBadgeMore", 0);
+      setBadge("moreBadgePayments", 0);
+      setBadge("moreBadgeResults", 0);
+      return;
+    }
+
+    if (!activePool?.id) {
+      setBadge("navBadgePicks", 0);
+      setBadge("navBadgeMore", 0);
+      setBadge("moreBadgePayments", 0);
+      setBadge("moreBadgeResults", 0);
+      return;
+    }
+
+    const poolId = activePool.id;
+
+    // 2) Participantes activos
+    const { data: participants, error: pErr } = await supabaseClient
+      .from("participants")
+      .select("id")
+      .eq("is_active", true);
+
+    if (pErr) {
+      console.warn("Badges participants:", pErr.message);
+      return;
+    }
+
+    // 3) Entries de la jornada activa
+    const { data: entries, error: eErr } = await supabaseClient
+      .from("entries")
+      .select("id, participant_id, paid")
+      .eq("pool_id", poolId);
+
+    if (eErr) {
+      console.warn("Badges entries:", eErr.message);
+      return;
+    }
+
+    // 4) Matches de la jornada activa
+    const { data: matches, error: mErr } = await supabaseClient
+      .from("matches")
+      .select("id, home_goals, away_goals")
+      .eq("pool_id", poolId);
+
+    if (mErr) {
+      console.warn("Badges matches:", mErr.message);
+      return;
+    }
+
+    const totalMatches = (matches || []).length;
+
+    // 5) Picks capturados
+    const entryIds = (entries || []).map(function(e) { return e.id; });
+
+    let picks = [];
+    if (entryIds.length) {
+      const { data: picksData, error: picksErr } = await supabaseClient
+        .from("predictions_1x2")
+        .select("entry_id, match_id");
+
+      if (!picksErr) {
+        picks = (picksData || []).filter(function(p) {
+          return entryIds.indexOf(p.entry_id) !== -1;
+        });
+      }
+    }
+
+    const picksCountByEntry = new Map();
+    picks.forEach(function(p) {
+      picksCountByEntry.set(
+        p.entry_id,
+        (picksCountByEntry.get(p.entry_id) || 0) + 1
+      );
+    });
+
+    // 6) Badge Picks:
+    // cuenta entries con captura pendiente o incompleta
+    let picksPendingCount = 0;
+    (entries || []).forEach(function(entry) {
+      const pickCount = picksCountByEntry.get(entry.id) || 0;
+      if (pickCount < totalMatches) {
+        picksPendingCount++;
+      }
+    });
+
+    // 7) Badge Pagos:
+    // participantes activos sin boleto pagado
+    const paidParticipants = new Set(
+      (entries || [])
+        .filter(function(e) { return e.paid === true; })
+        .map(function(e) { return e.participant_id; })
+    );
+
+    let paymentsPendingCount = 0;
+    (participants || []).forEach(function(p) {
+      if (!paidParticipants.has(p.id)) {
+        paymentsPendingCount++;
+      }
+    });
+
+    // 8) Badge Resultados:
+    // partidos sin goles capturados
+    const resultsPendingCount = (matches || []).filter(function(m) {
+      return m.home_goals === null || m.away_goals === null;
+    }).length;
+
+    // 9) Badge Más:
+    const moreCount = paymentsPendingCount + resultsPendingCount;
+
+    setBadge("navBadgePicks", picksPendingCount);
+    setBadge("navBadgeMore", moreCount);
+    setBadge("moreBadgePayments", paymentsPendingCount);
+    setBadge("moreBadgeResults", resultsPendingCount);
+
+  } catch (err) {
+    console.warn("updateNavBadges:", err?.message || err);
+  }
 }
 
 // ===============
@@ -3295,6 +3449,7 @@ async function init() {
 
   initBottomNav();
   await showAppTab("tab-dashboard");
+await updateNavBadges();
 }
 
 // Arranque
