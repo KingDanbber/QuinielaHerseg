@@ -103,7 +103,7 @@
 
     <!-- DASHBOARD APP -->
 <section id="viewDash" class="hidden">
-  <div class="pb-24">
+  <div class="pb-28">
 
     <!-- TOP BAR -->
     <div class="mb-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-600/10 to-emerald-400/5 border border-emerald-500/20 backdrop-blur-sm">
@@ -515,45 +515,79 @@
 
   </div>
 
+<div id="moreMenuSheet" class="hidden fixed inset-0 z-[60]">
+  <div id="moreMenuBackdrop" class="absolute inset-0 bg-black/60"></div>
+
+  <div class="absolute bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-800 rounded-t-3xl p-4">
+    <div class="w-14 h-1.5 rounded-full bg-zinc-700 mx-auto mb-4"></div>
+
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-semibold text-lg">Más secciones</h3>
+      <button id="btnCloseMoreMenu" class="w-10 h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-lg">
+        ✕
+      </button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 pb-4">
+      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-templates">
+        <div class="text-2xl mb-1">🧾</div>
+        <div class="font-semibold">Plantillas</div>
+        <div class="text-xs text-zinc-400 mt-1">Editor, preview y exportación</div>
+      </button>
+
+      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-entries">
+        <div class="text-2xl mb-1">💵</div>
+        <div class="font-semibold">Pagos</div>
+        <div class="text-xs text-zinc-400 mt-1">Boletos y bolsa</div>
+      </button>
+
+      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-results">
+        <div class="text-2xl mb-1">📊</div>
+        <div class="font-semibold">Resultados</div>
+        <div class="text-xs text-zinc-400 mt-1">Goles y marcadores</div>
+      </button>
+
+      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-standings">
+        <div class="text-2xl mb-1">🏅</div>
+        <div class="font-semibold">Aciertos</div>
+        <div class="text-xs text-zinc-400 mt-1">Tabla y ganador</div>
+      </button>
+    </div>
+  </div>
+</div>
+
   <!-- CONTENEDOR OCULTO EXPORT -->
   <div id="printArea" class="hidden"></div>
 
   <!-- NAV INFERIOR -->
-  <nav class="bottom-nav">
-    <button class="bottom-nav-btn active" data-tab="tab-dashboard">
-      <span>🏠</span>
+  <nav id="bottomNav" class="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 border-t border-zinc-800 backdrop-blur">
+  <div class="grid grid-cols-5 gap-1 px-2 py-2">
+    <button class="bottom-nav-btn active flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-home">
+      <span class="text-2xl">🏠</span>
       <small>Inicio</small>
     </button>
-    <button class="bottom-nav-btn" data-tab="tab-participants">
-      <span>👥</span>
+
+    <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-participants">
+      <span class="text-2xl">👥</span>
       <small>Particip.</small>
     </button>
-    <button class="bottom-nav-btn" data-tab="tab-pools">
-      <span>🏆</span>
+
+    <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-pools">
+      <span class="text-2xl">🏆</span>
       <small>Jornadas</small>
     </button>
-    <button class="bottom-nav-btn" data-tab="tab-templates">
-      <span>🧾</span>
-      <small>Plantillas</small>
-    </button>
-    <button class="bottom-nav-btn" data-tab="tab-payments">
-      <span>💵</span>
-      <small>Pagos</small>
-    </button>
-    <button class="bottom-nav-btn" data-tab="tab-picks">
-      <span>🎯</span>
+
+    <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-picks">
+      <span class="text-2xl">🎯</span>
       <small>Picks</small>
     </button>
-<button class="bottom-nav-btn" data-tab="tab-results">
-  <span>📊</span>
-  <small>Resultados</small>
-</button>
-<button class="bottom-nav-btn" data-tab="tab-standings">
-  <span>🏅</span>
-  <small>Aciertos</small>
-</button>
-  </nav>
-</section>
+
+    <button id="btnMoreMenu" class="flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm bg-zinc-900 hover:bg-zinc-800">
+      <span class="text-2xl">☰</span>
+      <small>Más</small>
+    </button>
+  </div>
+</nav>
 
 
 
