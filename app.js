@@ -398,6 +398,7 @@ async function updateNavBadges() {
       setBadge("navBadgeMore", 0);
       setBadge("moreBadgePayments", 0);
       setBadge("moreBadgeResults", 0);
+      setBadge("moreBadgeStandings", 0);
       return;
     }
 
@@ -406,6 +407,7 @@ async function updateNavBadges() {
       setBadge("navBadgeMore", 0);
       setBadge("moreBadgePayments", 0);
       setBadge("moreBadgeResults", 0);
+      setBadge("moreBadgeStandings", 0);
       return;
     }
 
@@ -470,8 +472,7 @@ async function updateNavBadges() {
       );
     });
 
-    // 6) Badge Picks:
-    // cuenta entries con captura pendiente o incompleta
+    // 6) Badge Picks: boletos con picks pendientes o incompletos
     let picksPendingCount = 0;
     (entries || []).forEach(function(entry) {
       const pickCount = picksCountByEntry.get(entry.id) || 0;
@@ -480,8 +481,7 @@ async function updateNavBadges() {
       }
     });
 
-    // 7) Badge Pagos:
-    // participantes activos sin boleto pagado
+    // 7) Badge Pagos: participantes activos sin boleto pagado
     const paidParticipants = new Set(
       (entries || [])
         .filter(function(e) { return e.paid === true; })
@@ -495,19 +495,26 @@ async function updateNavBadges() {
       }
     });
 
-    // 8) Badge Resultados:
-    // partidos sin goles capturados
+    // 8) Badge Resultados: partidos sin goles capturados
     const resultsPendingCount = (matches || []).filter(function(m) {
       return m.home_goals === null || m.away_goals === null;
     }).length;
 
-    // 9) Badge Más:
-    const moreCount = paymentsPendingCount + resultsPendingCount;
+    // 9) Badge Aciertos: listo cuando ya no hay resultados pendientes
+    const standingsReadyCount =
+      resultsPendingCount === 0 && totalMatches > 0 ? 1 : 0;
+
+    // 10) Badge Más
+    const moreCount =
+      paymentsPendingCount +
+      resultsPendingCount +
+      standingsReadyCount;
 
     setBadge("navBadgePicks", picksPendingCount);
     setBadge("navBadgeMore", moreCount);
     setBadge("moreBadgePayments", paymentsPendingCount);
     setBadge("moreBadgeResults", resultsPendingCount);
+    setBadge("moreBadgeStandings", standingsReadyCount);
 
   } catch (err) {
     console.warn("updateNavBadges:", err?.message || err);
