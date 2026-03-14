@@ -529,30 +529,32 @@
     </div>
 
     <div class="grid grid-cols-2 gap-3 pb-4">
-      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-templates">
-        <div class="text-2xl mb-1">🧾</div>
-        <div class="font-semibold">Plantillas</div>
-        <div class="text-xs text-zinc-400 mt-1">Editor, preview y exportación</div>
-      </button>
+  <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-templates">
+    <div class="text-2xl mb-1">🧾</div>
+    <div class="font-semibold">Plantillas</div>
+    <div class="text-xs text-zinc-400 mt-1">Editor, preview y exportación</div>
+  </button>
 
-      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-entries">
-        <div class="text-2xl mb-1">💵</div>
-        <div class="font-semibold">Pagos</div>
-        <div class="text-xs text-zinc-400 mt-1">Boletos y bolsa</div>
-      </button>
+  <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-payments">
+    <div class="text-2xl mb-1">💵</div>
+    <div class="font-semibold">Pagos</div>
+    <div class="text-xs text-zinc-400 mt-1">Boletos y bolsa</div>
+    <span id="moreBadgePayments" class="hidden absolute top-3 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">0</span>
+  </button>
 
-      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-results">
-        <div class="text-2xl mb-1">📊</div>
-        <div class="font-semibold">Resultados</div>
-        <div class="text-xs text-zinc-400 mt-1">Goles y marcadores</div>
-      </button>
+  <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-results">
+    <div class="text-2xl mb-1">📊</div>
+    <div class="font-semibold">Resultados</div>
+    <div class="text-xs text-zinc-400 mt-1">Goles y marcadores</div>
+    <span id="moreBadgeResults" class="hidden absolute top-3 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">0</span>
+  </button>
 
-      <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left" data-tab="tab-standings">
-        <div class="text-2xl mb-1">🏅</div>
-        <div class="font-semibold">Aciertos</div>
-        <div class="text-xs text-zinc-400 mt-1">Tabla y ganador</div>
-      </button>
-    </div>
+  <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-standings">
+    <div class="text-2xl mb-1">🏅</div>
+    <div class="font-semibold">Aciertos</div>
+    <div class="text-xs text-zinc-400 mt-1">Tabla y ganador</div>
+  </button>
+</div>
   </div>
 </div>
 
@@ -577,15 +579,21 @@
       <small>Jornadas</small>
     </button>
 
-    <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-picks">
-      <span class="text-2xl">🎯</span>
-      <small>Picks</small>
-    </button>
+    <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm relative" data-tab="tab-picks">
+  <span class="text-2xl">🎯</span>
+  <small>Picks</small>
+  <span id="navBadgePicks" class="hidden absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">
+    0
+  </span>
+</button>
 
-    <button id="btnMoreMenu" class="flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm bg-zinc-900 hover:bg-zinc-800">
-      <span class="text-2xl">☰</span>
-      <small>Más</small>
-    </button>
+<button id="btnMoreMenu" class="flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm bg-zinc-900 hover:bg-zinc-800 relative">
+  <span class="text-2xl">☰</span>
+  <small>Más</small>
+  <span id="navBadgeMore" class="hidden absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">
+    0
+  </span>
+</button>
   </div>
 </nav>
 
