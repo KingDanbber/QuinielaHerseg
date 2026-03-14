@@ -363,6 +363,11 @@ async function showAppTab(tabId) {
   }
 
   await updateNavBadges();
+window.scrollTo({
+  top: 0,
+  behavior: "smooth"
+});
+
 }
 
 // =================
