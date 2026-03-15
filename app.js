@@ -611,43 +611,161 @@ async function loadParticipants() {
     const area = p.area ? p.area : "Sin área";
 
     return `
-      <div
-        class="participant-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}"
-        data-status="${statusKey}"
-        data-name="${String(p.name || "").toLowerCase()}"
-        data-area="${String(area || "").toLowerCase()}"
-        data-whatsapp="${String(whatsapp || "").toLowerCase()}">
+  <div
+    class="participant-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}"
+    data-status="${statusKey}"
+    data-name="${String(p.name || "").toLowerCase()}"
+    data-area="${String(area || "").toLowerCase()}"
+    data-whatsapp="${String(whatsapp || "").toLowerCase()}">
 
-        <div class="min-w-0 flex-1">
-          <div class="font-semibold text-sm leading-tight break-words">${p.name || "—"}</div>
-          <div class="text-xs text-zinc-400 mt-1 break-words">
-            ${area} &nbsp; • &nbsp; ${whatsapp}
-          </div>
-        </div>
-
-        <div class="flex items-center gap-2 shrink-0">
-          <div class="w-11 h-11 rounded-xl border flex items-center justify-center text-xl ${isActive ? "border-emerald-500/30 bg-emerald-500/10" : "border-zinc-700 bg-zinc-900"}"
-               title="${isActive ? "Activo" : "Archivado"}">
-            ${statusEmoji}
-          </div>
-
-          <button
-            type="button"
-            class="participant-delete-btn px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm"
-            data-id="${p.id}"
-            data-name="${p.name || ""}">
-            Eliminar
-          </button>
-        </div>
+    <div class="min-w-0 flex-1">
+      <div class="font-semibold text-sm leading-tight break-words">${p.name || "—"}</div>
+      <div class="text-xs text-zinc-400 mt-1 break-words">
+        ${area} &nbsp; • &nbsp; ${whatsapp}
       </div>
-    `;
+    </div>
+
+    <div class="flex items-center gap-2 shrink-0">
+      <div class="w-11 h-11 rounded-xl border flex items-center justify-center text-xl ${isActive ? "border-emerald-500/30 bg-emerald-500/10" : "border-zinc-700 bg-zinc-900"}"
+           title="${isActive ? "Activo" : "Archivado"}">
+        ${statusEmoji}
+      </div>
+
+      <button
+        type="button"
+        class="participant-edit-btn w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+        data-id="${p.id}"
+        data-name="${p.name || ""}"
+        data-area="${p.area || ""}"
+        data-whatsapp="${p.whatsapp || ""}"
+        title="Editar">
+        ✏️
+      </button>
+
+      <button
+        type="button"
+        class="participant-toggle-btn w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+        data-id="${p.id}"
+        data-active="${isActive ? "1" : "0"}"
+        data-name="${p.name || ""}"
+        title="${isActive ? "Archivar" : "Restaurar"}">
+        ${isActive ? "📦" : "♻️"}
+      </button>
+    </div>
+  </div>
+`;
   }).join("");
 
-  attachParticipantDeleteEvents();
-  attachParticipantFilterEvents();
-  attachParticipantSearchEvent();
-  applyParticipantFilter(currentParticipantFilter);
-  updateParticipantFilterCounts();
+  attachParticipantEditEvents();
+attachParticipantToggleEvents();
+attachParticipantFilterEvents();
+attachParticipantSearchEvent();
+applyParticipantFilter(currentParticipantFilter);
+updateParticipantFilterCounts();
+}
+
+// Función Modal Participantes
+function openParticipantEditModal(data) {
+  $("editParticipantId").value = data.id || "";
+  $("editParticipantName").value = data.name || "";
+  $("editParticipantArea").value = data.area || "";
+  $("editParticipantWhatsapp").value = data.whatsapp || "";
+
+  $("participantEditModal").classList.remove("hidden");
+  document.body.classList.add("overflow-hidden");
+}
+
+function closeParticipantEditModal() {
+  $("participantEditModal").classList.add("hidden");
+  document.body.classList.remove("overflow-hidden");
+}
+
+// Editar Participantes
+async function updateParticipant() {
+  hideAlert();
+
+  const id = $("editParticipantId").value;
+  const name = $("editParticipantName").value.trim();
+  const area = $("editParticipantArea").value.trim();
+  const whatsapp = $("editParticipantWhatsapp").value.trim();
+
+  if (!id || !name) {
+    return showAlert("Falta ID o nombre del participante.", "error");
+  }
+
+  const { error } = await supabaseClient
+    .from("participants")
+    .update({
+      name,
+      area,
+      whatsapp
+    })
+    .eq("id", id);
+
+  if (error) return showAlert(error.message, "error");
+
+  closeParticipantEditModal();
+  showAlert("Participante actualizado ✅", "ok");
+
+  await loadParticipants();
+  await fillEntryParticipantsSelect();
+  await fillPickParticipantsSelect();
+  await loadDashboardSummary();
+}
+
+// Función Archivar Restaurar
+async function toggleParticipantActive(id, isCurrentlyActive, participantName) {
+  hideAlert();
+
+  const nextValue = !isCurrentlyActive;
+  const actionText = isCurrentlyActive ? "archivar" : "restaurar";
+
+  const ok = confirm(`¿Seguro que quieres ${actionText} a ${participantName}?`);
+  if (!ok) return;
+
+  const { error } = await supabaseClient
+    .from("participants")
+    .update({ is_active: nextValue })
+    .eq("id", id);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert(
+    isCurrentlyActive ? "Participante archivado ✅" : "Participante restaurado ✅",
+    "ok"
+  );
+
+  await loadParticipants();
+  await fillEntryParticipantsSelect();
+  await fillPickParticipantsSelect();
+  await loadDashboardSummary();
+  await updateNavBadges();
+}
+
+// Listeneres Dinámicos Modal
+function attachParticipantEditEvents() {
+  document.querySelectorAll(".participant-edit-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      openParticipantEditModal({
+        id: btn.getAttribute("data-id"),
+        name: btn.getAttribute("data-name"),
+        area: btn.getAttribute("data-area"),
+        whatsapp: btn.getAttribute("data-whatsapp")
+      });
+    });
+  });
+}
+
+function attachParticipantToggleEvents() {
+  document.querySelectorAll(".participant-toggle-btn").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const id = btn.getAttribute("data-id");
+      const isCurrentlyActive = btn.getAttribute("data-active") === "1";
+      const participantName = btn.getAttribute("data-name") || "este participante";
+
+      await toggleParticipantActive(id, isCurrentlyActive, participantName);
+    });
+  });
 }
 
 // Función Filtro Visual Participantes
@@ -3638,6 +3756,13 @@ $("formParticipant").addEventListener("submit", async (e) => {
   await fillEntryParticipantsSelect();
   await fillPickParticipantsSelect();
   await loadDashboardSummary();
+});
+$("btnCloseParticipantEdit").addEventListener("click", closeParticipantEditModal);
+$("participantEditBackdrop").addEventListener("click", closeParticipantEditModal);
+
+$("formParticipantEdit").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await updateParticipant();
 });
 
 // Ver archivados / activos
