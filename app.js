@@ -956,8 +956,15 @@ async function loadEntryForPick(poolId, partId) {
 
   if (!entry) {
     currentPickEntryId = null;
+    currentPickPoolId = null;
+    currentPickParticipantId = null;
+
     $("pickEntryLabel").textContent = "Sin boleto";
     $("pickMatches").innerHTML = "";
+
+    $("btnSavePicks").disabled = true;
+    $("btnSavePicks").classList.add("opacity-50", "cursor-not-allowed");
+
     return showAlert("Ese participante no tiene boleto registrado en esta jornada.", "error");
   }
 
@@ -966,22 +973,26 @@ async function loadEntryForPick(poolId, partId) {
   currentPickParticipantId = participant_id;
 
   const { data: poolInfo, error: poolErr } = await supabaseClient
-  .from("pools")
-  .select("id, status, name")
-  .eq("id", pool_id)
-  .maybeSingle();
+    .from("pools")
+    .select("id, status, name")
+    .eq("id", pool_id)
+    .maybeSingle();
 
-if (poolErr) return showAlert(poolErr.message, "error");
+  if (poolErr) return showAlert(poolErr.message, "error");
 
-if (poolInfo?.status === "closed") {
-  $("pickEntryLabel").textContent = (entry.paid ? "Pagado ✅" : "Pendiente") + " • Jornada cerrada 🔒";
-  $("btnSavePicks").disabled = true;
-  $("btnSavePicks").classList.add("opacity-50", "cursor-not-allowed");
-} else {
-  $("pickEntryLabel").textContent = entry.paid ? "Pagado ✅" : "Pendiente";
-  $("btnSavePicks").disabled = false;
-  $("btnSavePicks").classList.remove("opacity-50", "cursor-not-allowed");
-}
+  if (poolInfo && poolInfo.status === "closed") {
+    $("pickEntryLabel").textContent =
+      (entry.paid ? "Pagado ✅" : "Pendiente") + " • Jornada cerrada 🔒";
+
+    $("btnSavePicks").disabled = true;
+    $("btnSavePicks").classList.add("opacity-50", "cursor-not-allowed");
+  } else {
+    $("pickEntryLabel").textContent =
+      entry.paid ? "Pagado ✅" : "Pendiente";
+
+    $("btnSavePicks").disabled = false;
+    $("btnSavePicks").classList.remove("opacity-50", "cursor-not-allowed");
+  }
 
   const { data: matches, error: matchError } = await supabaseClient
     .from("matches")
