@@ -3289,6 +3289,140 @@ async function getPoolCompletionInfo(poolId) {
   };
 }
 
+//  Construcción Cartel Ganador
+function makeWinnerCard(opts) {
+  var poolName = opts.poolName || "Jornada";
+  var season = opts.season || "";
+  var isFinished = !!opts.isFinished;
+  var winners = opts.winners || [];
+  var winningPoints = Number(opts.winningPoints || 0);
+  var prizePool = Number(opts.prizePool || 0);
+  var prizePerWinner = Number(opts.prizePerWinner || 0);
+  var winnersCount = Number(opts.winnersCount || 0);
+
+  var title = winnersCount > 1
+    ? (isFinished ? "Empate Final" : "Empate Provisional")
+    : (isFinished ? "Ganador Final" : "Ganador Provisional");
+
+  var names = winners.map(function(w) {
+    return w.name;
+  }).join(", ");
+
+  var subtitle = winnersCount > 1
+    ? "Premio dividido entre " + winnersCount + " participantes"
+    : "Resultado oficial de la Quiniela Sencilla";
+
+  var card = document.createElement("div");
+  card.style.width = "1080px";
+  card.style.background = "linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%)";
+  card.style.color = "#111111";
+  card.style.border = "1.5px solid #d4d4d8";
+  card.style.borderRadius = "28px";
+  card.style.padding = "60px";
+  card.style.boxSizing = "border-box";
+  card.style.fontFamily = "Arial, sans-serif";
+
+  card.innerHTML =
+    '<div style="text-align:center;">' +
+      '<div style="display:inline-flex;align-items:center;gap:10px;padding:12px 22px;border-radius:999px;background:#111111;color:#ffffff;font-size:22px;font-weight:800;">🏆 Quiniela Herseg MX</div>' +
+      '<div style="font-size:52px;font-weight:900;margin-top:26px;line-height:1.05;">' + title + '</div>' +
+      '<div style="font-size:24px;color:#555;margin-top:12px;">' + poolName + '</div>' +
+      '<div style="font-size:20px;color:#666;margin-top:8px;">' + season + '</div>' +
+    '</div>' +
+
+    '<div style="margin-top:38px;padding:28px;border-radius:24px;background:#ffffff;border:1px solid #d4d4d8;box-shadow:0 18px 50px rgba(0,0,0,.08);text-align:center;">' +
+      '<div style="font-size:20px;color:#555;text-transform:uppercase;letter-spacing:.6px;">' + subtitle + '</div>' +
+      '<div style="font-size:48px;font-weight:900;margin-top:18px;line-height:1.15;">' + names + '</div>' +
+      '<div style="font-size:24px;color:#444;margin-top:14px;">' + winningPoints + ' aciertos</div>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:30px;">' +
+      '<div style="padding:22px;border-radius:22px;background:#ffffff;border:1px solid #d4d4d8;text-align:center;">' +
+        '<div style="font-size:16px;color:#666;text-transform:uppercase;">Bolsa</div>' +
+        '<div style="font-size:34px;font-weight:900;margin-top:8px;">' + money(prizePool) + '</div>' +
+      '</div>' +
+
+      '<div style="padding:22px;border-radius:22px;background:#111111;color:#ffffff;border:1px solid #111111;text-align:center;">' +
+        '<div style="font-size:16px;color:#d4d4d8;text-transform:uppercase;">Premio</div>' +
+        '<div style="font-size:34px;font-weight:900;margin-top:8px;">' + money(prizePerWinner) + '</div>' +
+      '</div>' +
+
+      '<div style="padding:22px;border-radius:22px;background:#ffffff;border:1px solid #d4d4d8;text-align:center;">' +
+        '<div style="font-size:16px;color:#666;text-transform:uppercase;">Ganadores</div>' +
+        '<div style="font-size:34px;font-weight:900;margin-top:8px;">' + winnersCount + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div style="margin-top:34px;text-align:center;font-size:24px;font-weight:800;color:#111111;">Gracias por Participar</div>' +
+    '<div style="margin-top:10px;text-align:center;font-size:20px;color:#444;">Que la Fuerza te acompañe ✋🏻</div>';
+
+  return card;
+}
+
+// Exportar Cartel Ganador
+async function exportWinnerCard() {
+  hideAlert();
+
+  const pool_id = $("standingsPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+
+  const { data: pool, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, name, season")
+    .eq("id", pool_id)
+    .maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+
+  const completionInfo = await getPoolCompletionInfo(pool_id);
+  const winnerSummary = await loadSimpleWinnerSummary(pool_id);
+
+  if (!winnerSummary || !winnerSummary.winners || !winnerSummary.winners.length) {
+    return showAlert("No hay ganador calculado todavía para esta jornada.", "error");
+  }
+
+  const printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  const card = makeWinnerCard({
+    poolName: pool?.name || "Jornada",
+    season: pool?.season || "",
+    isFinished: completionInfo?.isFinished,
+    winners: winnerSummary.winners,
+    winningPoints: winnerSummary.winning_points,
+    prizePool: winnerSummary.prize_pool,
+    prizePerWinner: winnerSummary.prize_per_winner,
+    winnersCount: winnerSummary.winners_count
+  });
+
+  printArea.appendChild(card);
+
+  try {
+    const canvas = await html2canvas(card, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true
+    });
+
+    const a = document.createElement("a");
+    const safeName = (pool?.name || "ganador")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-");
+
+    a.download = safeName + "-ganador.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+
+    showAlert("Cartel del ganador generado ✅", "ok");
+  } catch (err) {
+    showAlert("Error generando cartel: " + (err?.message || err), "error");
+  } finally {
+    printArea.innerHTML = "";
+    printArea.classList.add("hidden");
+  }
+}
+
 // =====================
 // Eventos
 // =====================
@@ -3563,6 +3697,7 @@ $("btnSaveResults").addEventListener("click", saveResultsMatches);
 // Aciertos
 $("btnLoadStandings").addEventListener("click", loadStandings);
 $("btnExportStandingsImage").addEventListener("click", exportStandingsImage);
+$("btnExportWinnerCard").addEventListener("click", exportWinnerCard);
 
 // Logout
 $("btnSignOut").addEventListener("click", async () => {
