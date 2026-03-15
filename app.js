@@ -965,7 +965,23 @@ async function loadEntryForPick(poolId, partId) {
   currentPickPoolId = pool_id;
   currentPickParticipantId = participant_id;
 
+  const { data: poolInfo, error: poolErr } = await supabaseClient
+  .from("pools")
+  .select("id, status, name")
+  .eq("id", pool_id)
+  .maybeSingle();
+
+if (poolErr) return showAlert(poolErr.message, "error");
+
+if (poolInfo?.status === "closed") {
+  $("pickEntryLabel").textContent = (entry.paid ? "Pagado ✅" : "Pendiente") + " • Jornada cerrada 🔒";
+  $("btnSavePicks").disabled = true;
+  $("btnSavePicks").classList.add("opacity-50", "cursor-not-allowed");
+} else {
   $("pickEntryLabel").textContent = entry.paid ? "Pagado ✅" : "Pendiente";
+  $("btnSavePicks").disabled = false;
+  $("btnSavePicks").classList.remove("opacity-50", "cursor-not-allowed");
+}
 
   const { data: matches, error: matchError } = await supabaseClient
     .from("matches")
@@ -1013,11 +1029,28 @@ function attachPickButtonsEvents() {
   });
 }
 
+// ====================
+// Guardar Pronosticos
 async function savePicks() {
   hideAlert();
 
   if (!currentPickEntryId) {
     return showAlert("Primero carga un boleto.", "error");
+  }
+
+  const pool_id = currentPickPoolId || $("pickPool").value;
+
+  // 🔒 Bloquear si la jornada ya está cerrada
+  const { data: poolInfo, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, status, name")
+    .eq("id", pool_id)
+    .maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+
+  if (!poolInfo || poolInfo.status !== "open") {
+    return showAlert("Esta jornada ya está cerrada. No se pueden guardar pronósticos.", "error");
   }
 
   const selected = {};
@@ -1047,10 +1080,11 @@ async function savePicks() {
   if (error) return showAlert(error.message, "error");
 
   showAlert("Pronósticos guardados ✅", "ok");
-await loadPickStatusList();
+  await loadPickStatusList();
+  await updateNavBadges();
 }
 
-
+// Limpiar Selección de Pronosticos
 function clearPicksSelection() {
   document.querySelectorAll(".pick-btn").forEach(function(btn) {
     btn.classList.remove("bg-emerald-600", "border-emerald-500", "text-white");
@@ -1556,6 +1590,95 @@ function makePickedTicketCard(opts) {
   return card;
 }
 
+// ==============
+// Boletos
+// ==============
+
+// Función Bloqueo Cierre Quiniela
+async function closeActivePool() {
+  hideAlert();
+
+  const { data: activePool, error: findErr } = await supabaseClient
+    .from("pools")
+    .select("id, name, status")
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (findErr) return showAlert(findErr.message, "error");
+
+  if (!activePool) {
+    return showAlert("No hay jornada activa para cerrar.", "error");
+  }
+
+  const ok = confirm(`¿Seguro que quieres cerrar la jornada activa?\n\n${activePool.name}\n\nDespués ya no se podrán registrar boletos ni guardar pronósticos.`);
+  if (!ok) return;
+
+  const { error } = await supabaseClient
+    .from("pools")
+    .update({ status: "closed" })
+    .eq("id", activePool.id);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Jornada cerrada ✅", "ok");
+
+  await loadPools();
+  await loadDashboardSummary();
+  await fillEntryPoolsSelect();
+  await fillPickPoolsSelect();
+  await fillStandingsPoolsSelect();
+  await fillResultsPoolsSelect();
+  await updateNavBadges();
+}
+
+// Función Reabrir Quiniela
+async function openLatestClosedPool() {
+  hideAlert();
+
+  const { data: closedPool, error: findErr } = await supabaseClient
+    .from("pools")
+    .select("id, name, status")
+    .eq("status", "closed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (findErr) return showAlert(findErr.message, "error");
+
+  if (!closedPool) {
+    return showAlert("No hay jornada cerrada para reabrir.", "error");
+  }
+
+  const ok = confirm(`¿Seguro que quieres reabrir esta jornada?\n\n${closedPool.name}`);
+  if (!ok) return;
+
+  // opcional: cerrar otras abiertas antes
+  await supabaseClient
+    .from("pools")
+    .update({ status: "closed" })
+    .eq("status", "open");
+
+  const { error } = await supabaseClient
+    .from("pools")
+    .update({ status: "open" })
+    .eq("id", closedPool.id);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Jornada reabierta ✅", "ok");
+
+  await loadPools();
+  await loadDashboardSummary();
+  await fillEntryPoolsSelect();
+  await fillPickPoolsSelect();
+  await fillStandingsPoolsSelect();
+  await fillResultsPoolsSelect();
+  await updateNavBadges();
+}
+
+// Agregar Boleto
 async function addEntry() {
   hideAlert();
 
@@ -1567,6 +1690,19 @@ async function addEntry() {
     return showAlert("Falta seleccionar pool/participante.", "error");
   }
 
+  // 🔒 Bloquear si la jornada ya está cerrada
+  const { data: poolInfo, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, status, name")
+    .eq("id", pool_id)
+    .maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+
+  if (!poolInfo || poolInfo.status !== "open") {
+    return showAlert("Esta jornada ya está cerrada. No se pueden registrar más boletos.", "error");
+  }
+
   const payload = {
     pool_id,
     participant_id,
@@ -1574,7 +1710,10 @@ async function addEntry() {
     paid_at: paid ? new Date().toISOString() : null
   };
 
-  const { error } = await supabaseClient.from("entries").insert(payload);
+  const { error } = await supabaseClient
+    .from("entries")
+    .insert(payload);
+
   if (error) return showAlert(error.message, "error");
 
   showAlert("Boleto registrado ✅", "ok");
@@ -1584,8 +1723,10 @@ async function addEntry() {
   await fillPickPoolsSelect();
   await fillPickParticipantsSelect();
   await loadDashboardSummary();
+  await updateNavBadges();
 }
 
+//Lista Boletos Pagados
 async function loadEntriesAndStats() {
   const pool_id = $("entryPool").value;
   if (!pool_id) return;
@@ -3282,11 +3423,14 @@ $("formPool").addEventListener("submit", async (e) => {
   await fillPickPoolsSelect();
   await loadDashboardSummary();
 });
+$("btnCloseActivePool").addEventListener("click", closeActivePool);
+$("btnOpenActivePool").addEventListener("click", openLatestClosedPool);
 
 // Pagos / Boletos
 $("btnAddEntry").addEventListener("click", addEntry);
 $("btnRefreshStats").addEventListener("click", loadEntriesAndStats);
 $("entryPool").addEventListener("change", loadEntriesAndStats);
+
 
 // Plantillas
 $("btnBuildRows").addEventListener("click", () => {
@@ -3329,7 +3473,8 @@ $("btnLoadEntryForPick").addEventListener("click", async () => {
 
 $("btnSavePicks").addEventListener("click", savePicks);
 $("btnClearPicks").addEventListener("click", clearPicksSelection);
-
+$("btnSavePicks").disabled = poolInfo?.status === "closed";
+$("btnSavePicks").classList.toggle("opacity-50", poolInfo?.status === "closed");
 $("btnRefreshPickStatus").addEventListener("click", loadPickStatusList);
 
 $("pickPool").addEventListener("change", async () => {
