@@ -650,7 +650,30 @@
   </div>
 </nav>
 
+<div id="participantEditModal" class="hidden fixed inset-0 z-[70]">
+  <div id="participantEditBackdrop" class="absolute inset-0 bg-black/60"></div>
 
+  <div class="absolute inset-x-4 top-1/2 -translate-y-1/2 bg-zinc-950 border border-zinc-800 rounded-3xl p-4">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-semibold text-lg">Editar participante</h3>
+      <button id="btnCloseParticipantEdit" class="w-10 h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-lg">
+        ✕
+      </button>
+    </div>
+
+    <form id="formParticipantEdit" class="grid gap-3">
+      <input type="hidden" id="editParticipantId" />
+
+      <input id="editParticipantName" placeholder="Nombre" required class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl" />
+      <input id="editParticipantArea" placeholder="Área" class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl" />
+      <input id="editParticipantWhatsapp" placeholder="WhatsApp" class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl" />
+
+      <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
+        Guardar cambios
+      </button>
+    </form>
+  </div>
+</div>
 
 <script>
   document.body.insertAdjacentHTML(
