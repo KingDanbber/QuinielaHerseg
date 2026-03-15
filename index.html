@@ -161,25 +161,62 @@
     </section>
 
     <!-- TAB: PARTICIPANTES -->
-    <section id="tab-participants" class="app-tab hidden space-y-4">
-      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold">Participantes</h3>
-          <button id="btnToggleArchived" class="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-            👁️ Ver archivados
-          </button>
-        </div>
+<section id="tab-participants" class="app-tab hidden space-y-4">
+  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+    <h3 class="font-semibold mb-3">Participantes</h3>
 
-        <form id="formParticipant" class="grid gap-2 mb-4">
-          <input id="pName" placeholder="Nombre" required class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
-          <input id="pArea" placeholder="Área" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
-          <input id="pWhatsapp" placeholder="WhatsApp" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
-          <button class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">Agregar</button>
-        </form>
+    <form id="formParticipant" class="grid gap-2 mb-4">
+      <input id="pName" placeholder="Nombre" required class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
+      <input id="pArea" placeholder="Área" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
+      <input id="pWhatsapp" placeholder="WhatsApp" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
+      <button class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
+        Agregar
+      </button>
+    </form>
 
-        <div id="participantsList" class="space-y-2"></div>
-      </div>
-    </section>
+    <!-- Barra superior -->
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <div class="text-sm font-semibold">Listado</div>
+
+      <button id="btnToggleArchived" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" type="button" title="Ver archivados">
+        👁️
+      </button>
+    </div>
+
+    <!-- Filtros -->
+    <div id="participantFilters" class="grid grid-cols-3 gap-2 mb-3">
+      <button type="button" class="participant-filter-btn px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm text-left" data-filter="all">
+        <div class="font-semibold">Todos</div>
+        <div class="text-xs opacity-80" id="participantCountAll">0</div>
+      </button>
+
+      <button type="button" class="participant-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="active">
+        <div class="font-semibold">✅ Activos</div>
+        <div class="text-xs opacity-80" id="participantCountActive">0</div>
+      </button>
+
+      <button type="button" class="participant-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="archived">
+        <div class="font-semibold">📦 Archivados</div>
+        <div class="text-xs opacity-80" id="participantCountArchived">0</div>
+      </button>
+    </div>
+
+    <!-- Buscador -->
+    <div class="mb-3">
+      <input
+        id="participantSearch"
+        type="text"
+        placeholder="Buscar por nombre, área o WhatsApp..."
+        class="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm"
+      />
+    </div>
+
+    <!-- Lista scroll -->
+    <div id="participantsListWrap" class="max-h-[430px] overflow-y-auto pr-1">
+      <div id="participantsList" class="space-y-2"></div>
+    </div>
+  </div>
+</section>
 
     <!-- TAB: JORNADAS -->
     <section id="tab-pools" class="app-tab hidden space-y-4">
