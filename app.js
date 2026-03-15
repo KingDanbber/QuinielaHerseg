@@ -36,6 +36,8 @@ let currentPickPoolId = null;
 let currentPickParticipantId = null;
 let currentPickStatusFilter = "all";
 let currentPickStatusSearch = "";
+let currentParticipantFilter = "all";
+let currentParticipantSearch = "";
 
 const TEAM_LOGOS = {
   "AMÉRICA": "./assets/logos/america.png",
@@ -530,6 +532,7 @@ function formatModeLabel(mode) {
   }
 }
 
+// Cargar Dashboard
 async function loadDashboardSummary() {
   // jornada activa
   const { data: activePool, error: poolErr } = await supabaseClient
@@ -583,64 +586,142 @@ async function loadDashboardSummary() {
   }
 }
 
+// Guardar Participantes 
 async function loadParticipants() {
-  const q = supabaseClient
+  hideAlert();
+
+  const { data, error } = await supabaseClient
     .from("participants")
     .select("id, name, area, whatsapp, is_active, created_at")
-    .order("created_at", { ascending: false });
-
-  const { data, error } = showArchivedParticipants
-    ? await q.eq("is_active", false)
-    : await q.eq("is_active", true);
+    .order("created_at", { ascending: false })
+    .limit(500);
 
   if (error) return showAlert(error.message, "error");
 
   const rows = data || [];
-  $("participantsList").innerHTML = rows.map(p => `
-    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded flex justify-between items-center gap-2">
-      <div>
-        <div class="font-semibold">${p.name}</div>
-        <div class="text-xs text-zinc-400">${p.area || "-"} • ${p.whatsapp || "-"}</div>
+
+  $("participantsList").innerHTML = rows.map(function(p) {
+    const isActive = p.is_active !== false;
+    const statusKey = isActive ? "active" : "archived";
+    const cardClass = isActive
+      ? "bg-emerald-500/5 border-emerald-500/20"
+      : "bg-zinc-950 border-zinc-800";
+    const statusEmoji = isActive ? "✅" : "📦";
+    const whatsapp = p.whatsapp ? p.whatsapp : "—";
+    const area = p.area ? p.area : "Sin área";
+
+    return `
+      <div
+        class="participant-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}"
+        data-status="${statusKey}"
+        data-name="${String(p.name || "").toLowerCase()}"
+        data-area="${String(area || "").toLowerCase()}"
+        data-whatsapp="${String(whatsapp || "").toLowerCase()}">
+
+        <div class="min-w-0 flex-1">
+          <div class="font-semibold text-sm leading-tight break-words">${p.name || "—"}</div>
+          <div class="text-xs text-zinc-400 mt-1 break-words">
+            ${area} &nbsp; • &nbsp; ${whatsapp}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <div class="w-11 h-11 rounded-xl border flex items-center justify-center text-xl ${isActive ? "border-emerald-500/30 bg-emerald-500/10" : "border-zinc-700 bg-zinc-900"}"
+               title="${isActive ? "Activo" : "Archivado"}">
+            ${statusEmoji}
+          </div>
+
+          <button
+            type="button"
+            class="participant-delete-btn px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm"
+            data-id="${p.id}"
+            data-name="${p.name || ""}">
+            Eliminar
+          </button>
+        </div>
       </div>
+    `;
+  }).join("");
 
-      ${
-        showArchivedParticipants
-          ? `<button data-restore="${p.id}" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">Restaurar</button>`
-          : `<button data-archive="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">Eliminar</button>`
-      }
-    </div>
-  `).join("");
+  attachParticipantDeleteEvents();
+  attachParticipantFilterEvents();
+  attachParticipantSearchEvent();
+  applyParticipantFilter(currentParticipantFilter);
+  updateParticipantFilterCounts();
+}
 
-  // Archivar
-  document.querySelectorAll("[data-archive]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-archive");
-      if (!confirm("¿Eliminar participante? (Se ocultará, no se borra historial)")) return;
+// Función Filtro Visual Participantes
+function applyParticipantFilter(filterKey) {
+  currentParticipantFilter = filterKey;
 
-      const { error } = await supabaseClient.from("participants").update({ is_active: false }).eq("id", id);
-      if (error) return showAlert(error.message, "error");
+  const searchText = (currentParticipantSearch || "").trim().toLowerCase();
 
-      showAlert("Participante eliminado ✅", "ok");
-      await loadParticipants();
-      await fillEntryParticipantsSelect();
-    });
+  document.querySelectorAll(".participant-filter-btn").forEach(function(btn) {
+    const isActive = btn.getAttribute("data-filter") === filterKey;
+
+    btn.classList.toggle("bg-emerald-600", isActive);
+    btn.classList.toggle("text-white", isActive);
+
+    btn.classList.toggle("bg-zinc-800", !isActive);
+    btn.classList.toggle("hover:bg-zinc-700", !isActive);
   });
 
-  // Restaurar
-  document.querySelectorAll("[data-restore]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-restore");
+  document.querySelectorAll(".participant-card").forEach(function(card) {
+    const status = card.getAttribute("data-status");
+    const name = card.getAttribute("data-name") || "";
+    const area = card.getAttribute("data-area") || "";
+    const whatsapp = card.getAttribute("data-whatsapp") || "";
 
-      const { error } = await supabaseClient.from("participants").update({ is_active: true }).eq("id", id);
-      if (error) return showAlert(error.message, "error");
+    const matchStatus = filterKey === "all" || status === filterKey;
+    const matchSearch =
+      !searchText ||
+      name.includes(searchText) ||
+      area.includes(searchText) ||
+      whatsapp.includes(searchText);
 
-      showAlert("Participante restaurado ✅", "ok");
-      await loadParticipants();
-      await fillEntryParticipantsSelect();
+    card.classList.toggle("hidden", !(matchStatus && matchSearch));
+  });
+}
+
+function attachParticipantFilterEvents() {
+  document.querySelectorAll(".participant-filter-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      const filterKey = btn.getAttribute("data-filter");
+      applyParticipantFilter(filterKey);
     });
   });
 }
 
+// Buscador Participantes
+function attachParticipantSearchEvent() {
+  const input = $("participantSearch");
+  if (!input) return;
+
+  input.removeEventListener("input", handleParticipantSearchInput);
+  input.addEventListener("input", handleParticipantSearchInput);
+}
+
+function handleParticipantSearchInput(e) {
+  currentParticipantSearch = e.target.value || "";
+  applyParticipantFilter(currentParticipantFilter);
+}
+
+// Contador Buscador Filtro
+function updateParticipantFilterCounts() {
+  const cards = Array.from(document.querySelectorAll(".participant-card"));
+
+  const counts = {
+    all: cards.length,
+    active: cards.filter(c => c.getAttribute("data-status") === "active").length,
+    archived: cards.filter(c => c.getAttribute("data-status") === "archived").length
+  };
+
+  if ($("participantCountAll")) $("participantCountAll").textContent = counts.all;
+  if ($("participantCountActive")) $("participantCountActive").textContent = counts.active;
+  if ($("participantCountArchived")) $("participantCountArchived").textContent = counts.archived;
+}
+
+// Crear y Guardar Jornadas
 async function loadPools() {
   const { data, error } = await supabaseClient
     .from("pools")
@@ -3560,13 +3641,9 @@ $("formParticipant").addEventListener("submit", async (e) => {
 });
 
 // Ver archivados / activos
-$("btnToggleArchived").addEventListener("click", async () => {
-  showArchivedParticipants = !showArchivedParticipants;
-  $("btnToggleArchived").textContent = showArchivedParticipants
-    ? "👁️ Ver activos"
-    : "👁️ Ver archivados";
-
-  await loadParticipants();
+$("btnToggleArchived").addEventListener("click", () => {
+  const nextFilter = currentParticipantFilter === "archived" ? "all" : "archived";
+  applyParticipantFilter(nextFilter);
 });
 
 // Jornadas / Pools: insertar
