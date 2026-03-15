@@ -3484,8 +3484,7 @@ $("btnLoadEntryForPick").addEventListener("click", async () => {
 
 $("btnSavePicks").addEventListener("click", savePicks);
 $("btnClearPicks").addEventListener("click", clearPicksSelection);
-$("btnSavePicks").disabled = poolInfo?.status === "closed";
-$("btnSavePicks").classList.toggle("opacity-50", poolInfo?.status === "closed");
+
 $("btnRefreshPickStatus").addEventListener("click", loadPickStatusList);
 
 $("pickPool").addEventListener("change", async () => {
