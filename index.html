@@ -417,10 +417,49 @@
         </div>
 
         <div class="mt-4">
-          <div class="text-zinc-400 text-sm mb-2">Boletos registrados:</div>
-          <div id="entriesList" class="space-y-2 text-sm"></div>
-        </div>
-      </div>
+  <div class="flex items-center justify-between gap-2 mb-2">
+    <div class="text-zinc-400 text-sm">Boletos registrados</div>
+    <button id="btnRefreshEntriesList" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" type="button" title="Actualizar">
+      🔄
+    </button>
+  </div>
+
+  <div id="entriesFilters" class="grid grid-cols-2 gap-2 mb-3">
+    <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm text-left" data-filter="all">
+      <div class="font-semibold">Todos</div>
+      <div class="text-xs opacity-80" id="entriesCountAll">0</div>
+    </button>
+
+    <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="paid">
+      <div class="font-semibold">✅ Pagados</div>
+      <div class="text-xs opacity-80" id="entriesCountPaid">0</div>
+    </button>
+
+    <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="pending">
+      <div class="font-semibold">⏳ Pendientes</div>
+      <div class="text-xs opacity-80" id="entriesCountPending">0</div>
+    </button>
+
+    <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="complete">
+      <div class="font-semibold">✅ Picks completos</div>
+      <div class="text-xs opacity-80" id="entriesCountComplete">0</div>
+    </button>
+
+    <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="partial">
+      <div class="font-semibold">🟡 Incompletos</div>
+      <div class="text-xs opacity-80" id="entriesCountPartial">0</div>
+    </button>
+
+    <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="nopicks">
+      <div class="font-semibold">⏳ Sin picks</div>
+      <div class="text-xs opacity-80" id="entriesCountNoPicks">0</div>
+    </button>
+  </div>
+
+  <div id="entriesListWrap" class="max-h-[430px] overflow-y-auto pr-1">
+    <div id="entriesList" class="space-y-2"></div>
+  </div>
+</div>
     </section>
 
     <!-- TAB: PRONOSTICOS -->
