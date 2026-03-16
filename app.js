@@ -612,11 +612,12 @@ async function loadParticipants() {
 
     return `
   <div
-    class="participant-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}"
-    data-status="${statusKey}"
-    data-name="${String(p.name || "").toLowerCase()}"
-    data-area="${String(area || "").toLowerCase()}"
-    data-whatsapp="${String(whatsapp || "").toLowerCase()}">
+  class="participant-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}"
+  data-status="${statusKey}"
+  data-name="${String(p.name || "").toLowerCase()}"
+  data-area="${String(area || "").toLowerCase()}"
+  data-whatsapp="${String(whatsapp || "").toLowerCase()}"
+  data-has-whatsapp="${p.whatsapp ? "1" : "0"}">
 
     <div class="min-w-0 flex-1">
       <div class="font-semibold text-sm leading-tight break-words">${p.name || "—"}</div>
@@ -673,10 +674,14 @@ function updateParticipantKpis() {
   const total = cards.length;
   const active = cards.filter(c => c.getAttribute("data-status") === "active").length;
   const archived = cards.filter(c => c.getAttribute("data-status") === "archived").length;
+  const whatsappYes = cards.filter(c => c.getAttribute("data-has-whatsapp") === "1").length;
+  const whatsappNo = cards.filter(c => c.getAttribute("data-has-whatsapp") !== "1").length;
 
   if ($("participantKpiTotal")) $("participantKpiTotal").textContent = total;
   if ($("participantKpiActive")) $("participantKpiActive").textContent = active;
   if ($("participantKpiArchived")) $("participantKpiArchived").textContent = archived;
+  if ($("participantKpiWhatsappYes")) $("participantKpiWhatsappYes").textContent = whatsappYes;
+  if ($("participantKpiWhatsappNo")) $("participantKpiWhatsappNo").textContent = whatsappNo;
 }
 
 // Función Modal Participantes
