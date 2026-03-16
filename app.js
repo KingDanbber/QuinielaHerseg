@@ -662,6 +662,21 @@ attachParticipantFilterEvents();
 attachParticipantSearchEvent();
 applyParticipantFilter(currentParticipantFilter);
 updateParticipantFilterCounts();
+updateParticipantKpis();
+
+}
+
+// KPIs Participantes
+function updateParticipantKpis() {
+  const cards = Array.from(document.querySelectorAll(".participant-card"));
+
+  const total = cards.length;
+  const active = cards.filter(c => c.getAttribute("data-status") === "active").length;
+  const archived = cards.filter(c => c.getAttribute("data-status") === "archived").length;
+
+  if ($("participantKpiTotal")) $("participantKpiTotal").textContent = total;
+  if ($("participantKpiActive")) $("participantKpiActive").textContent = active;
+  if ($("participantKpiArchived")) $("participantKpiArchived").textContent = archived;
 }
 
 // Función Modal Participantes
