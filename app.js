@@ -1273,6 +1273,117 @@ async function loadEntryForPick(poolId, partId) {
   attachPickButtonsEvents();
 }
 
+// Marcar Pagos Pendientes
+async function markEntryPaid(entryId) {
+  hideAlert();
+
+  if (!entryId) return showAlert("No se encontró el boleto.", "error");
+
+  // Buscar el entry para validar su jornada
+  const { data: entry, error: entryErr } = await supabaseClient
+    .from("entries")
+    .select("id, pool_id, paid")
+    .eq("id", entryId)
+    .maybeSingle();
+
+  if (entryErr) return showAlert(entryErr.message, "error");
+  if (!entry) return showAlert("Boleto no encontrado.", "error");
+
+  // Validar estado de la jornada
+  const { data: poolInfo, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, status, name")
+    .eq("id", entry.pool_id)
+    .maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+
+  if (!poolInfo || poolInfo.status !== "open") {
+    return showAlert("Esta jornada ya está cerrada. No se puede registrar el pago.", "error");
+  }
+
+  const { error } = await supabaseClient
+    .from("entries")
+    .update({
+      paid: true,
+      paid_at: new Date().toISOString()
+    })
+    .eq("id", entryId);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Pago registrado ✅", "ok");
+
+  await loadEntriesAndStats();
+  await loadDashboardSummary();
+  await loadPickStatusList();
+  await updateNavBadges();
+}
+
+async function markEntryPending(entryId) {
+  hideAlert();
+
+  if (!entryId) return showAlert("No se encontró el boleto.", "error");
+
+  const { data: entry, error: entryErr } = await supabaseClient
+    .from("entries")
+    .select("id, pool_id, paid")
+    .eq("id", entryId)
+    .maybeSingle();
+
+  if (entryErr) return showAlert(entryErr.message, "error");
+  if (!entry) return showAlert("Boleto no encontrado.", "error");
+
+  const { data: poolInfo, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, status, name")
+    .eq("id", entry.pool_id)
+    .maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+
+  if (!poolInfo || poolInfo.status !== "open") {
+    return showAlert("Esta jornada ya está cerrada. No se puede cambiar el pago.", "error");
+  }
+
+  const ok = confirm("¿Seguro que quieres marcar este boleto como pendiente?");
+  if (!ok) return;
+
+  const { error } = await supabaseClient
+    .from("entries")
+    .update({
+      paid: false,
+      paid_at: null
+    })
+    .eq("id", entryId);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Boleto marcado como pendiente ⏳", "ok");
+
+  await loadEntriesAndStats();
+  await loadDashboardSummary();
+  await loadPickStatusList();
+  await updateNavBadges();
+}
+
+// Activar Botones Pagos Pendientes
+function attachEntryPaymentEvents() {
+  document.querySelectorAll(".entry-mark-paid").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const entryId = btn.getAttribute("data-entry-id");
+      await markEntryPaid(entryId);
+    });
+  });
+
+  document.querySelectorAll(".entry-mark-pending").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      const entryId = btn.getAttribute("data-entry-id");
+      await markEntryPending(entryId);
+    });
+  });
+}
+
 function attachPickButtonsEvents() {
   document.querySelectorAll(".pick-btn").forEach(function(btn) {
     btn.addEventListener("click", function() {
@@ -2015,33 +2126,80 @@ async function loadEntriesAndStats() {
     $("kpiPrize2").textContent = money(prize);
   }
 
+  // Validar estado de jornada para deshabilitar acciones si está cerrada
+  const { data: poolInfo, error: poolErr } = await supabaseClient
+    .from("pools")
+    .select("id, status, name")
+    .eq("id", pool_id)
+    .maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+
   // Lista de entries recientes
   const { data: rows, error } = await supabaseClient
     .from("entries")
-    .select("id, paid, created_at, participants(name), pools(name)")
+    .select("id, paid, paid_at, created_at, participants(name), pools(name)")
     .eq("pool_id", pool_id)
     .order("created_at", { ascending: false })
     .limit(30);
 
   if (error) return showAlert(error.message, "error");
 
+  const isClosed = poolInfo?.status === "closed";
+
   $("entriesList").innerHTML = (rows || []).map(r => {
     const badge = r.paid
       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
       : "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
 
+    const actionBtn = isClosed
+      ? `
+        <button
+          type="button"
+          class="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-500 text-sm cursor-not-allowed"
+          disabled>
+          🔒
+        </button>
+      `
+      : r.paid
+        ? `
+          <button
+            type="button"
+            class="entry-mark-pending px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+            data-entry-id="${r.id}">
+            ↩️ Pendiente
+          </button>
+        `
+        : `
+          <button
+            type="button"
+            class="entry-mark-paid px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm"
+            data-entry-id="${r.id}">
+            ✅ Pagar
+          </button>
+        `;
+
     return `
-      <div class="p-2 bg-zinc-950 border border-zinc-800 rounded flex items-center justify-between gap-2">
-        <div>
+      <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+        <div class="min-w-0">
           <div class="font-semibold">${r.participants?.name || "—"}</div>
-          <div class="text-xs text-zinc-400">${new Date(r.created_at).toLocaleString("es-MX")}</div>
+          <div class="text-xs text-zinc-400">
+            ${new Date(r.created_at).toLocaleString("es-MX")}
+            ${r.paid && r.paid_at ? " • Pagó: " + new Date(r.paid_at).toLocaleString("es-MX") : ""}
+          </div>
         </div>
-        <span class="text-xs px-2 py-1 rounded-full border ${badge}">
-          ${r.paid ? "Pagado" : "Pendiente"}
-        </span>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="text-xs px-2 py-1 rounded-full border ${badge}">
+            ${r.paid ? "Pagado" : "Pendiente"}
+          </span>
+          ${actionBtn}
+        </div>
       </div>
     `;
   }).join("");
+
+  attachEntryPaymentEvents();
 }
 
 async function fillTplPools() {
