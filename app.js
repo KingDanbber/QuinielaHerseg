@@ -24,6 +24,7 @@ document.body.insertAdjacentHTML(
 // =====================
 // CONFIG SUPABASE
 // =====================
+
 const SUPABASE_URL = "https://zapoxyrmeoqukshjzgki.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_qYDfuLHeUz6Uy3Vy5t8mFA_QfXbMU9v";
 
@@ -638,6 +639,14 @@ const whatsappBadge = hasWhatsapp
         ${statusEmoji}
       </div>
 
+<button
+    type="button"
+    class="participant-wa-btn w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+    onclick="openWhatsApp('${p.whatsapp || ""}')"
+    title="Abrir WhatsApp">
+    💬
+  </button>
+
       <button
         type="button"
         class="participant-edit-btn w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
@@ -671,6 +680,23 @@ applyParticipantFilter(currentParticipantFilter);
 updateParticipantFilterCounts();
 updateParticipantKpis();
 
+}
+
+// Abrir WhatsApp
+function openWhatsApp(number) {
+  if (!number) {
+    return showAlert("Este participante no tiene WhatsApp.", "error");
+  }
+
+  // limpiar número
+  const clean = String(number).replace(/\D/g, "");
+
+  if (clean.length < 10) {
+    return showAlert("Número inválido.", "error");
+  }
+
+  const url = `https://wa.me/52${clean}`;
+  window.open(url, "_blank");
 }
 
 // KPIs Participantes
