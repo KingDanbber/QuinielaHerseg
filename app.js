@@ -31,6 +31,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_qYDfuLHeUz6Uy3Vy5t8mFA_QfXbMU9v";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (id) => document.getElementById(id);
 
+// =================
+// Variables Globales
+
 let showArchivedParticipants = false;
 let currentPickEntryId = null;
 let currentPickPoolId = null;
@@ -40,6 +43,10 @@ let currentPickStatusSearch = "";
 let currentParticipantFilter = "all";
 let currentParticipantSearch = "";
 let currentEntriesFilter = "all";
+let currentEntriesSearch = "";
+
+// =================
+// Logos Equipos
 
 const TEAM_LOGOS = {
   "AMÉRICA": "./assets/logos/america.png",
@@ -2234,9 +2241,10 @@ async function loadEntriesAndStats() {
 
     return `
       <div
-        class="entry-card p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3"
-        data-paid-status="${paidStatus}"
-        data-picks-status="${picksStatus}">
+  class="entry-card p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3"
+  data-paid-status="${paidStatus}"
+  data-picks-status="${picksStatus}"
+  data-name="${String(r.participants?.name || "").toLowerCase()}">
 
         <div class="min-w-0">
           <div class="font-semibold">${r.participants?.name || "—"}</div>
@@ -2262,14 +2270,18 @@ async function loadEntriesAndStats() {
   }).join("");
 
   attachEntryPaymentEvents();
-  attachEntriesFilterEvents();
-  applyEntriesFilter(currentEntriesFilter);
-  updateEntriesFilterCounts();
+attachEntriesFilterEvents();
+attachEntriesSearchEvent();
+applyEntriesFilter(currentEntriesFilter);
+updateEntriesFilterCounts();
+
 }
 
 // Agregar Filtros Pagos
 function applyEntriesFilter(filterKey) {
   currentEntriesFilter = filterKey;
+
+  const searchText = (currentEntriesSearch || "").trim().toLowerCase();
 
   document.querySelectorAll(".entries-filter-btn").forEach(function(btn) {
     const isActive = btn.getAttribute("data-filter") === filterKey;
@@ -2284,18 +2296,36 @@ function applyEntriesFilter(filterKey) {
   document.querySelectorAll(".entry-card").forEach(function(card) {
     const paidStatus = card.getAttribute("data-paid-status");
     const picksStatus = card.getAttribute("data-picks-status");
+    const name = card.getAttribute("data-name") || "";
 
-    let shouldShow = true;
+    let matchFilter = true;
 
-    if (filterKey === "paid") shouldShow = paidStatus === "paid";
-    else if (filterKey === "pending") shouldShow = paidStatus === "pending";
-    else if (filterKey === "complete") shouldShow = picksStatus === "complete";
-    else if (filterKey === "partial") shouldShow = picksStatus === "partial";
-    else if (filterKey === "nopicks") shouldShow = picksStatus === "nopicks";
+    if (filterKey === "paid") matchFilter = paidStatus === "paid";
+    else if (filterKey === "pending") matchFilter = paidStatus === "pending";
+    else if (filterKey === "complete") matchFilter = picksStatus === "complete";
+    else if (filterKey === "partial") matchFilter = picksStatus === "partial";
+    else if (filterKey === "nopicks") matchFilter = picksStatus === "nopicks";
 
-    card.classList.toggle("hidden", !shouldShow);
+    const matchSearch = !searchText || name.includes(searchText);
+
+    card.classList.toggle("hidden", !(matchFilter && matchSearch));
   });
 }
+
+// Función Buscador Lista Pagos
+function attachEntriesSearchEvent() {
+  const input = $("entriesSearch");
+  if (!input) return;
+
+  input.removeEventListener("input", handleEntriesSearchInput);
+  input.addEventListener("input", handleEntriesSearchInput);
+}
+
+function handleEntriesSearchInput(e) {
+  currentEntriesSearch = e.target.value || "";
+  applyEntriesFilter(currentEntriesFilter);
+}
+
 
 function attachEntriesFilterEvents() {
   document.querySelectorAll(".entries-filter-btn").forEach(function(btn) {
@@ -4161,7 +4191,11 @@ $("btnOpenActivePool").addEventListener("click", openLatestClosedPool);
 // Pagos / Boletos
 $("btnAddEntry").addEventListener("click", addEntry);
 $("btnRefreshStats").addEventListener("click", loadEntriesAndStats);
-$("entryPool").addEventListener("change", loadEntriesAndStats);
+$("entryPool").addEventListener("change", async () => {
+  currentEntriesSearch = "";
+  if ($("entriesSearch")) $("entriesSearch").value = "";
+  await loadEntriesAndStats();
+});
 $("btnRefreshEntriesList").addEventListener("click", loadEntriesAndStats);
 
 
