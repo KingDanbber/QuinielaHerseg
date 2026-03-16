@@ -2126,7 +2126,7 @@ async function loadEntriesAndStats() {
     $("kpiPrize2").textContent = money(prize);
   }
 
-  // Validar estado de jornada para deshabilitar acciones si está cerrada
+  // Estado de la jornada
   const { data: poolInfo, error: poolErr } = await supabaseClient
     .from("pools")
     .select("id, status, name")
@@ -2135,22 +2135,70 @@ async function loadEntriesAndStats() {
 
   if (poolErr) return showAlert(poolErr.message, "error");
 
+  // Total de partidos en la jornada
+  const { count: totalMatches, error: matchesCountErr } = await supabaseClient
+    .from("matches")
+    .select("*", { count: "exact", head: true })
+    .eq("pool_id", pool_id);
+
+  if (matchesCountErr) return showAlert(matchesCountErr.message, "error");
+
   // Lista de entries recientes
   const { data: rows, error } = await supabaseClient
     .from("entries")
-    .select("id, paid, paid_at, created_at, participants(name), pools(name)")
+    .select("id, paid, paid_at, created_at, participant_id, participants(name), pools(name)")
     .eq("pool_id", pool_id)
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(100);
 
   if (error) return showAlert(error.message, "error");
 
-  const isClosed = poolInfo?.status === "closed";
+  const entryIds = (rows || []).map(function(r) { return r.id; });
 
-  $("entriesList").innerHTML = (rows || []).map(r => {
+  // Picks para esos entries
+  let picks = [];
+  if (entryIds.length) {
+    const { data: picksData, error: picksErr } = await supabaseClient
+      .from("predictions_1x2")
+      .select("entry_id, match_id");
+
+    if (picksErr) return showAlert(picksErr.message, "error");
+
+    picks = (picksData || []).filter(function(p) {
+      return entryIds.indexOf(p.entry_id) !== -1;
+    });
+  }
+
+  const picksCountByEntry = new Map();
+  picks.forEach(function(p) {
+    picksCountByEntry.set(
+      p.entry_id,
+      (picksCountByEntry.get(p.entry_id) || 0) + 1
+    );
+  });
+
+  const isClosed = poolInfo?.status === "closed";
+  const matchesTotal = Number(totalMatches || 0);
+
+  $("entriesList").innerHTML = (rows || []).map(function(r) {
     const badge = r.paid
       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
       : "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
+
+    const pickCount = Number(picksCountByEntry.get(r.id) || 0);
+
+    let picksEmoji = "⏳";
+    let picksTextClass = "text-zinc-400";
+
+    if (pickCount > 0) {
+      if (matchesTotal > 0 && pickCount >= matchesTotal) {
+        picksEmoji = "✅";
+        picksTextClass = "text-emerald-300";
+      } else {
+        picksEmoji = "🟡";
+        picksTextClass = "text-yellow-300";
+      }
+    }
 
     const actionBtn = isClosed
       ? `
@@ -2183,9 +2231,14 @@ async function loadEntriesAndStats() {
       <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
         <div class="min-w-0">
           <div class="font-semibold">${r.participants?.name || "—"}</div>
-          <div class="text-xs text-zinc-400">
+
+          <div class="text-xs text-zinc-400 mt-1">
             ${new Date(r.created_at).toLocaleString("es-MX")}
             ${r.paid && r.paid_at ? " • Pagó: " + new Date(r.paid_at).toLocaleString("es-MX") : ""}
+          </div>
+
+          <div class="text-xs mt-1 ${picksTextClass}">
+            ${picksEmoji} Picks ${pickCount}/${matchesTotal}
           </div>
         </div>
 
