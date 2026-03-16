@@ -34,6 +34,7 @@ const $ = (id) => document.getElementById(id);
 // =================
 // Variables Globales
 
+const QUINIELA_LOGO_URL = "./img/logo-herseg-quiniela.png";
 let showArchivedParticipants = false;
 let currentPickEntryId = null;
 let currentPickPoolId = null;
@@ -2529,137 +2530,157 @@ async function getMatches(pool_id){
 }
 
 function makeTemplateCard(opts) {
-  var title = opts.title;
-  var subtitle = opts.subtitle;
-  var jornadaText = opts.jornadaText;
-  var dateText = opts.dateText;
-  var priceText = opts.priceText;
-  var matches = opts.matches || [];
-  var exportMode = opts.exportMode === true;
+  const title = opts.title;
+  const subtitle = opts.subtitle;
+  const jornadaText = opts.jornadaText;
+  const dateText = opts.dateText;
+  const priceText = opts.priceText;
+  const matches = opts.matches || [];
+  const exportMode = opts.exportMode === true;
+  const showFooterInfo = opts.showFooterInfo !== false;
 
-  var bg = exportMode ? "#ffffff" : "#0b0f14";
-  var text = exportMode ? "#111111" : "#e5e7eb";
-  var sub = exportMode ? "#555555" : "#a1a1aa";
-  var border = exportMode ? "#222222" : "#1f2937";
-  var innerBg = exportMode ? "#ffffff" : "#0a0e13";
-  var soft = exportMode ? "#f4f4f5" : "#111827";
+  const bg = exportMode ? "#ffffff" : "#0b0f14";
+  const text = exportMode ? "#111111" : "#e5e7eb";
+  const sub = exportMode ? "#444444" : "#a1a1aa";
+  const border = exportMode ? "#222222" : "#1f2937";
+  const innerBg = exportMode ? "#ffffff" : "#0a0e13";
+  const softBg = exportMode ? "#f5f5f5" : "#111827";
 
-  var card = document.createElement("div");
+  const card = document.createElement("div");
   card.className = "qh-card";
   card.style.background = bg;
   card.style.color = text;
-  card.style.border = "1.5px solid " + border;
-  card.style.borderRadius = exportMode ? "16px" : "16px";
+  card.style.border = `1.5px solid ${border}`;
+  card.style.borderRadius = exportMode ? "14px" : "14px";
   card.style.padding = exportMode ? "22px" : "12px";
-  card.style.width = exportMode ? "760px" : "360px";
+  card.style.width = exportMode ? "820px" : "360px";
   card.style.maxWidth = "100%";
   card.style.boxSizing = "border-box";
   card.style.fontFamily = "Arial, sans-serif";
 
-  card.innerHTML =
-    '<div style="font-weight:800;text-align:center;font-size:' + (exportMode ? "28px" : "18px") + ';color:' + text + ';letter-spacing:.3px;">' +
-      title +
-    '</div>' +
+  const logoSize = exportMode ? 62 : 34;
 
-    '<div style="text-align:center;font-size:' + (exportMode ? "15px" : "12px") + ';color:' + sub + ';margin-top:4px;">' +
-      subtitle +
-    '</div>' +
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;gap:${exportMode ? "14px" : "8px"};margin-bottom:8px;">
+      <img
+        src="${typeof QUINIELA_LOGO_URL !== "undefined" ? QUINIELA_LOGO_URL : ""}"
+        alt="Logo Quiniela"
+        style="width:${logoSize}px;height:${logoSize}px;object-fit:contain;${typeof QUINIELA_LOGO_URL !== "undefined" ? "" : "display:none;"}"
+      />
+      <div style="text-align:center;">
+        <div style="font-weight:900;font-size:${exportMode ? "26px" : "16px"};color:${text};letter-spacing:.3px;line-height:1;">
+          ${title}
+        </div>
+        <div style="font-size:${exportMode ? "14px" : "11px"};color:${sub};margin-top:6px;">
+          ${subtitle}
+        </div>
+      </div>
+    </div>
 
-    '<div style="display:grid;grid-template-columns:1fr 1fr 100px;gap:10px;margin-top:16px;font-size:' + (exportMode ? "14px" : "12px") + ';">' +
-      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:10px;text-align:center;background:' + innerBg + ';color:' + text + ';">' +
-        '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';text-transform:uppercase;letter-spacing:.5px;">Jornada</div>' +
-        '<div style="font-weight:800;margin-top:3px;">' + jornadaText + '</div>' +
-      '</div>' +
+    <div style="display:grid;grid-template-columns:1fr 1fr 120px;gap:10px;margin-top:14px;font-size:${exportMode ? "14px" : "12px"};">
+      <div style="border:1px solid ${border};border-radius:10px;padding:${exportMode ? "12px 10px" : "8px"};text-align:center;background:${innerBg};color:${text};">
+        <div style="font-size:${exportMode ? "11px" : "10px"};color:${sub};text-transform:uppercase;letter-spacing:.5px;">Jornada</div>
+        <div style="font-weight:800;font-size:${exportMode ? "16px" : "13px"};margin-top:6px;">${jornadaText}</div>
+      </div>
 
-      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:10px;text-align:center;background:' + innerBg + ';color:' + text + ';">' +
-        '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';text-transform:uppercase;letter-spacing:.5px;">Fechas</div>' +
-        '<div style="font-weight:800;margin-top:3px;">' + dateText + '</div>' +
-      '</div>' +
+      <div style="border:1px solid ${border};border-radius:10px;padding:${exportMode ? "12px 10px" : "8px"};text-align:center;background:${innerBg};color:${text};">
+        <div style="font-size:${exportMode ? "11px" : "10px"};color:${sub};text-transform:uppercase;letter-spacing:.5px;">Fechas</div>
+        <div style="font-weight:800;font-size:${exportMode ? "16px" : "13px"};margin-top:6px;">${dateText}</div>
+      </div>
 
-      '<div style="border:1px solid ' + border + ';border-radius:10px;padding:10px;text-align:center;background:' + innerBg + ';color:' + text + ';">' +
-        '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';text-transform:uppercase;letter-spacing:.5px;">Costo</div>' +
-        '<div style="font-weight:900;margin-top:3px;">$' + Number(priceText || 0) + '</div>' +
-      '</div>' +
-    '</div>' +
+      <div style="border:1px solid ${border};border-radius:10px;padding:${exportMode ? "12px 10px" : "8px"};text-align:center;background:${innerBg};color:${text};">
+        <div style="font-size:${exportMode ? "11px" : "10px"};color:${sub};text-transform:uppercase;letter-spacing:.5px;">Costo</div>
+        <div style="font-weight:900;font-size:${exportMode ? "18px" : "14px"};margin-top:6px;">$${Number(priceText || 0)}</div>
+      </div>
+    </div>
 
-    '<div style="text-align:center;font-size:' + (exportMode ? "12px" : "10px") + ';color:' + sub + ';margin-top:10px;margin-bottom:8px;">Marca una sola opción por partido</div>' +
+    <div style="text-align:center;margin-top:${exportMode ? "16px" : "10px"};font-size:${exportMode ? "12px" : "10px"};color:${sub};">
+      Marca una sola opción por partido
+    </div>
 
-    '<div style="display:grid;grid-template-columns:' + (exportMode ? "70px 48px 1fr 70px 48px 1fr 70px" : "58px 34px 1fr 58px 34px 1fr 58px") + ';gap:' + (exportMode ? "10px" : "8px") + ';align-items:end;margin-top:6px;margin-bottom:8px;font-size:' + (exportMode ? "12px" : "10px") + ';font-weight:700;color:' + sub + ';text-transform:uppercase;letter-spacing:.4px;">' +
-      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:' + soft + ';">Local</div>' +
-      '<div></div>' +
-      '<div></div>' +
-      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:' + soft + ';">Empate</div>' +
-      '<div></div>' +
-      '<div></div>' +
-      '<div style="text-align:center;padding:5px 0;border-radius:8px;background:' + soft + ';">Visita</div>' +
-    '</div>' +
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:${exportMode ? "14px" : "8px"};margin-top:${exportMode ? "14px" : "10px"};">
+      <div style="text-align:center;font-size:${exportMode ? "12px" : "10px"};font-weight:800;color:${sub};background:${softBg};padding:${exportMode ? "8px" : "6px"};border-radius:10px;">LOCAL</div>
+      <div style="text-align:center;font-size:${exportMode ? "12px" : "10px"};font-weight:800;color:${sub};background:${softBg};padding:${exportMode ? "8px" : "6px"};border-radius:10px;">EMPATE</div>
+      <div style="text-align:center;font-size:${exportMode ? "12px" : "10px"};font-weight:800;color:${sub};background:${softBg};padding:${exportMode ? "8px" : "6px"};border-radius:10px;">VISITA</div>
+    </div>
 
-    '<div class="qh-table" style="margin-top:6px;display:grid;gap:' + (exportMode ? "10px" : "8px") + ';"></div>' +
+    <div class="qh-table" style="margin-top:${exportMode ? "14px" : "10px"};display:grid;gap:${exportMode ? "10px" : "7px"};"></div>
 
-    '<div style="margin-top:22px;font-size:' + (exportMode ? "13px" : "11px") + ';color:' + text + ';line-height:1.7;">' +
-      '<div>Nombre:_______________________________________________</div>' +
-      '<div>Área:______________________________</div>' +
-      '<div>WhatsApp:____________________________________________</div>' +
-      '<div style="font-size:' + (exportMode ? "11px" : "10px") + ';color:' + sub + ';margin-top:6px;">Registro único para recibir resultados, quinielas y premio acumulado.</div>' +
-    '</div>';
+    ${
+      showFooterInfo
+        ? `
+      <div style="margin-top:${exportMode ? "22px" : "14px"};padding:${exportMode ? "16px" : "10px"};border:1px solid ${border};border-radius:12px;background:${softBg};font-size:${exportMode ? "13px" : "10px"};line-height:1.55;color:${text};">
+        <div style="font-weight:700;">Devolver con tu pronóstico rellenado, tu nombre y tu área al WhatsApp: <strong>8715118046</strong></div>
+        <div style="margin-top:6px;"><strong>Fecha límite de registro de pronósticos:</strong> Viernes 05:00 PM</div>
+        <div style="margin-top:6px;"><strong>Boleto pagado, boleto jugado.</strong></div>
+        <div style="margin-top:6px;font-weight:800;">¡Suerte!</div>
+      </div>
+      `
+        : ""
+    }
+  `;
 
-  var table = card.querySelector(".qh-table");
+  const table = card.querySelector(".qh-table");
 
   matches.forEach(function (m) {
-    var row = document.createElement("div");
+    const row = document.createElement("div");
     row.style.display = "grid";
     row.style.gridTemplateColumns = exportMode
-      ? "70px 48px 1fr 70px 48px 1fr 70px"
-      : "58px 34px 1fr 58px 34px 1fr 58px";
+      ? "1fr 1fr 1fr"
+      : "1fr 1fr 1fr";
     row.style.alignItems = "center";
-    row.style.gap = exportMode ? "10px" : "8px";
+    row.style.gap = exportMode ? "14px" : "8px";
 
-    var boxW = exportMode ? 70 : 58;
-    var boxH = exportMode ? 32 : 28;
-    var teamFont = exportMode ? "15px" : "12px";
-    var logoSize = exportMode ? 30 : 22;
+    const boxW = exportMode ? 74 : 52;
+    const boxH = exportMode ? 42 : 30;
+    const teamFont = exportMode ? "16px" : "12px";
+    const logoSizeRow = exportMode ? 30 : 18;
 
-    var homeLogo = getTeamLogo(m.home_team);
-    var awayLogo = getTeamLogo(m.away_team);
+    const homeLogo = m.home_logo_url || "";
+    const awayLogo = m.away_logo_url || "";
 
-    row.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:center;">' +
-        '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:7px;background:' + innerBg + ';"></div>' +
-      '</div>' +
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;gap:${exportMode ? "16px" : "10px"};">
+        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
 
-      '<div style="display:flex;align-items:center;justify-content:center;padding-left:6px;padding-right:6px;">' +
-        (homeLogo
-          ? '<img src="' + homeLogo + '" style="width:' + logoSize + 'px;height:' + logoSize + 'px;object-fit:contain;" crossorigin="anonymous">'
-          : '') +
-      '</div>' +
+        <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;">
+          ${
+            homeLogo
+              ? `<img src="${homeLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">`
+              : ""
+          }
+          <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;">
+            ${m.home_team}
+          </div>
+        </div>
+      </div>
 
-      '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';padding-left:4px;">' +
-        m.home_team +
-      '</div>' +
+      <div style="display:flex;justify-content:center;">
+        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
+      </div>
 
-      '<div style="display:flex;align-items:center;justify-content:center;">' +
-        '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:7px;background:' + innerBg + ';"></div>' +
-      '</div>' +
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:${exportMode ? "16px" : "10px"};">
+        <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;justify-content:flex-end;">
+          ${
+            awayLogo
+              ? `<img src="${awayLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">`
+              : ""
+          }
+          <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;text-align:right;">
+            ${m.away_team}
+          </div>
+        </div>
 
-      '<div style="display:flex;align-items:center;justify-content:center;padding-left:6px;padding-right:6px;">' +
-        (awayLogo
-          ? '<img src="' + awayLogo + '" style="width:' + logoSize + 'px;height:' + logoSize + 'px;object-fit:contain;" crossorigin="anonymous">'
-          : '') +
-      '</div>' +
-
-      '<div style="text-align:left;font-weight:700;font-size:' + teamFont + ';color:' + text + ';padding-left:4px;">' +
-        m.away_team +
-      '</div>' +
-
-      '<div style="display:flex;align-items:center;justify-content:center;">' +
-        '<div style="width:' + boxW + 'px;height:' + boxH + 'px;border:1.5px solid ' + border + ';border-radius:7px;background:' + innerBg + ';"></div>' +
-      '</div>';
+        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
+      </div>
+    `;
 
     table.appendChild(row);
   });
 
   return card;
 }
+
 
 async function loadTemplateIntoEditor() {
   hideAlert();
@@ -2973,20 +2994,20 @@ async function exportStoryTemplatePNG() {
     exportMode: true
   });
 
-  card.style.width = "930px";
-  card.style.padding = "24px";
-  card.style.borderRadius = "24px";
-  card.style.boxShadow = "0 18px 60px rgba(0,0,0,.10)";
+  card.style.width = "940px";
+card.style.padding = "28px";
+card.style.borderRadius = "22px";
+card.style.boxShadow = "0 20px 60px rgba(0,0,0,.10)";
 
   const footer = document.createElement("div");
-  footer.style.textAlign = "center";
-  footer.style.fontSize = "24px";
-  footer.style.color = "#222222";
-  footer.style.marginTop = "8px";
-  footer.style.lineHeight = "1.5";
-  footer.innerHTML =
-    '<div style="font-weight:800;">Marca Local, Empate o Visita</div>' +
-    '<div style="margin-top:6px;">Envía tu pronóstico antes del cierre 📲</div>';
+footer.style.textAlign = "center";
+footer.style.fontSize = "22px";
+footer.style.color = "#222222";
+footer.style.marginTop = "10px";
+footer.innerHTML = `
+  Envía tu pronóstico al WhatsApp: <strong>8715118046</strong><br>
+  Fecha límite: Viernes 05:00 PM • ¡Suerte!
+`;
 
   story.appendChild(topBadge);
   story.appendChild(header);
