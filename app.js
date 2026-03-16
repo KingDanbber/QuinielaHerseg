@@ -608,6 +608,10 @@ async function loadParticipants() {
       : "bg-zinc-950 border-zinc-800";
     const statusEmoji = isActive ? "✅" : "📦";
     const whatsapp = p.whatsapp ? p.whatsapp : "—";
+const hasWhatsapp = !!p.whatsapp;
+const whatsappBadge = hasWhatsapp
+  ? '<span class="text-sky-300 text-xs ml-1">📱</span>'
+  : '<span class="text-amber-300 text-xs ml-1">⚠️</span>';
     const area = p.area ? p.area : "Sin área";
 
     return `
@@ -620,7 +624,9 @@ async function loadParticipants() {
   data-has-whatsapp="${p.whatsapp ? "1" : "0"}">
 
     <div class="min-w-0 flex-1">
-      <div class="font-semibold text-sm leading-tight break-words">${p.name || "—"}</div>
+      <div class="font-semibold text-sm leading-tight break-words flex items-center gap-1">
+  ${p.name || "—"} ${whatsappBadge}
+</div>
       <div class="text-xs text-zinc-400 mt-1 break-words">
         ${area} &nbsp; • &nbsp; ${whatsapp}
       </div>
