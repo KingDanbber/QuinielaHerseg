@@ -22,7 +22,7 @@
 
     <header class="flex justify-between items-center mb-6">
       <div>
-        <h1 class="text-xl font-bold">Admin Quiniela Herseg</h1>
+        <h1 class="text-xl font-bold">Admin Quiniela Herseg ⚽</h1>
         <p class="text-sm text-zinc-400">Panel privado (solo administradores)</p>
       </div>
       <button id="btnSignOut" class="hidden px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded">
@@ -182,6 +182,23 @@
         👁️
       </button>
     </div>
+
+<div class="grid grid-cols-3 gap-2 mb-3">
+  <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+    <div class="text-xs text-zinc-400">Total</div>
+    <div id="participantKpiTotal" class="font-bold text-white text-lg">0</div>
+  </div>
+
+  <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+    <div class="text-xs text-zinc-400">Activos</div>
+    <div id="participantKpiActive" class="font-bold text-emerald-300 text-lg">0</div>
+  </div>
+
+  <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+    <div class="text-xs text-zinc-400">Archivados</div>
+    <div id="participantKpiArchived" class="font-bold text-zinc-300 text-lg">0</div>
+  </div>
+</div>
 
     <!-- Filtros -->
     <div id="participantFilters" class="grid grid-cols-3 gap-2 mb-3">
