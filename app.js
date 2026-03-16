@@ -607,7 +607,7 @@ async function loadParticipants() {
     const cardClass = isActive
       ? "bg-emerald-500/5 border-emerald-500/20"
       : "bg-zinc-950 border-zinc-800";
-    const statusEmoji = isActive ? "✅" : "📦";
+    const statusEmoji = isActive ? "🟢" : "⚫";
     const whatsapp = p.whatsapp ? p.whatsapp : "—";
 const hasWhatsapp = !!p.whatsapp;
 const whatsappBadge = hasWhatsapp
