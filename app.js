@@ -39,6 +39,7 @@ let currentPickStatusFilter = "all";
 let currentPickStatusSearch = "";
 let currentParticipantFilter = "all";
 let currentParticipantSearch = "";
+let currentEntriesFilter = "all";
 
 const TEAM_LOGOS = {
   "AMÉRICA": "./assets/logos/america.png",
@@ -2143,13 +2144,13 @@ async function loadEntriesAndStats() {
 
   if (matchesCountErr) return showAlert(matchesCountErr.message, "error");
 
-  // Lista de entries recientes
+  // Lista de entries
   const { data: rows, error } = await supabaseClient
     .from("entries")
     .select("id, paid, paid_at, created_at, participant_id, participants(name), pools(name)")
     .eq("pool_id", pool_id)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(300);
 
   if (error) return showAlert(error.message, "error");
 
@@ -2181,24 +2182,28 @@ async function loadEntriesAndStats() {
   const matchesTotal = Number(totalMatches || 0);
 
   $("entriesList").innerHTML = (rows || []).map(function(r) {
-    const badge = r.paid
-      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
-      : "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
-
+    const paidStatus = r.paid ? "paid" : "pending";
     const pickCount = Number(picksCountByEntry.get(r.id) || 0);
 
     let picksEmoji = "⏳";
     let picksTextClass = "text-zinc-400";
+    let picksStatus = "nopicks";
 
     if (pickCount > 0) {
       if (matchesTotal > 0 && pickCount >= matchesTotal) {
         picksEmoji = "✅";
         picksTextClass = "text-emerald-300";
+        picksStatus = "complete";
       } else {
         picksEmoji = "🟡";
         picksTextClass = "text-yellow-300";
+        picksStatus = "partial";
       }
     }
+
+    const badge = r.paid
+      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+      : "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
 
     const actionBtn = isClosed
       ? `
@@ -2228,7 +2233,11 @@ async function loadEntriesAndStats() {
         `;
 
     return `
-      <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+      <div
+        class="entry-card p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3"
+        data-paid-status="${paidStatus}"
+        data-picks-status="${picksStatus}">
+
         <div class="min-w-0">
           <div class="font-semibold">${r.participants?.name || "—"}</div>
 
@@ -2253,6 +2262,69 @@ async function loadEntriesAndStats() {
   }).join("");
 
   attachEntryPaymentEvents();
+  attachEntriesFilterEvents();
+  applyEntriesFilter(currentEntriesFilter);
+  updateEntriesFilterCounts();
+}
+
+// Agregar Filtros Pagos
+function applyEntriesFilter(filterKey) {
+  currentEntriesFilter = filterKey;
+
+  document.querySelectorAll(".entries-filter-btn").forEach(function(btn) {
+    const isActive = btn.getAttribute("data-filter") === filterKey;
+
+    btn.classList.toggle("bg-emerald-600", isActive);
+    btn.classList.toggle("text-white", isActive);
+
+    btn.classList.toggle("bg-zinc-800", !isActive);
+    btn.classList.toggle("hover:bg-zinc-700", !isActive);
+  });
+
+  document.querySelectorAll(".entry-card").forEach(function(card) {
+    const paidStatus = card.getAttribute("data-paid-status");
+    const picksStatus = card.getAttribute("data-picks-status");
+
+    let shouldShow = true;
+
+    if (filterKey === "paid") shouldShow = paidStatus === "paid";
+    else if (filterKey === "pending") shouldShow = paidStatus === "pending";
+    else if (filterKey === "complete") shouldShow = picksStatus === "complete";
+    else if (filterKey === "partial") shouldShow = picksStatus === "partial";
+    else if (filterKey === "nopicks") shouldShow = picksStatus === "nopicks";
+
+    card.classList.toggle("hidden", !shouldShow);
+  });
+}
+
+function attachEntriesFilterEvents() {
+  document.querySelectorAll(".entries-filter-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      const filterKey = btn.getAttribute("data-filter");
+      applyEntriesFilter(filterKey);
+    });
+  });
+}
+
+// Agregar Contadores Filtros Pagos
+function updateEntriesFilterCounts() {
+  const cards = Array.from(document.querySelectorAll(".entry-card"));
+
+  const counts = {
+    all: cards.length,
+    paid: cards.filter(c => c.getAttribute("data-paid-status") === "paid").length,
+    pending: cards.filter(c => c.getAttribute("data-paid-status") === "pending").length,
+    complete: cards.filter(c => c.getAttribute("data-picks-status") === "complete").length,
+    partial: cards.filter(c => c.getAttribute("data-picks-status") === "partial").length,
+    nopicks: cards.filter(c => c.getAttribute("data-picks-status") === "nopicks").length
+  };
+
+  if ($("entriesCountAll")) $("entriesCountAll").textContent = counts.all;
+  if ($("entriesCountPaid")) $("entriesCountPaid").textContent = counts.paid;
+  if ($("entriesCountPending")) $("entriesCountPending").textContent = counts.pending;
+  if ($("entriesCountComplete")) $("entriesCountComplete").textContent = counts.complete;
+  if ($("entriesCountPartial")) $("entriesCountPartial").textContent = counts.partial;
+  if ($("entriesCountNoPicks")) $("entriesCountNoPicks").textContent = counts.nopicks;
 }
 
 async function fillTplPools() {
@@ -4090,6 +4162,7 @@ $("btnOpenActivePool").addEventListener("click", openLatestClosedPool);
 $("btnAddEntry").addEventListener("click", addEntry);
 $("btnRefreshStats").addEventListener("click", loadEntriesAndStats);
 $("entryPool").addEventListener("change", loadEntriesAndStats);
+$("btnRefreshEntriesList").addEventListener("click", loadEntriesAndStats);
 
 
 // Plantillas
