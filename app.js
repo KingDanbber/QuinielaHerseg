@@ -2623,60 +2623,50 @@ function makeTemplateCard(opts) {
   const table = card.querySelector(".qh-table");
 
   matches.forEach(function (m) {
-    const row = document.createElement("div");
-    row.style.display = "grid";
-    row.style.gridTemplateColumns = exportMode
-      ? "1fr 1fr 1fr"
-      : "1fr 1fr 1fr";
-    row.style.alignItems = "center";
-    row.style.gap = exportMode ? "14px" : "8px";
+  const row = document.createElement("div");
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = "1fr 1fr 1fr";
+  row.style.alignItems = "center";
+  row.style.gap = exportMode ? "14px" : "8px";
 
-    const boxW = exportMode ? 74 : 52;
-    const boxH = exportMode ? 42 : 30;
-    const teamFont = exportMode ? "16px" : "12px";
-    const logoSizeRow = exportMode ? 30 : 18;
+  const boxW = exportMode ? 74 : 52;
+  const boxH = exportMode ? 42 : 30;
+  const teamFont = exportMode ? "16px" : "12px";
+  const logoSizeRow = exportMode ? 30 : 18;
 
-    const homeLogo = m.home_logo_url || "";
-    const awayLogo = m.away_logo_url || "";
+  const homeLogo = getTeamLogo(m.home_team);
+  const awayLogo = getTeamLogo(m.away_team);
 
-    row.innerHTML = `
-      <div style="display:flex;align-items:center;gap:${exportMode ? "16px" : "10px"};">
-        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
+  row.innerHTML = `
+    <div style="display:flex;align-items:center;gap:${exportMode ? "16px" : "10px"};">
+      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
 
-        <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;">
-          ${
-            homeLogo
-              ? `<img src="${homeLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">`
-              : ""
-          }
-          <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;">
-            ${m.home_team}
-          </div>
+      <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;">
+        ${homeLogo ? `<img src="${homeLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">` : ""}
+        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;">
+          ${m.home_team}
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:center;">
+      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:${exportMode ? "16px" : "10px"};">
+      <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;justify-content:flex-end;">
+        ${awayLogo ? `<img src="${awayLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">` : ""}
+        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;text-align:right;">
+          ${m.away_team}
         </div>
       </div>
 
-      <div style="display:flex;justify-content:center;">
-        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
-      </div>
+      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
+    </div>
+  `;
 
-      <div style="display:flex;align-items:center;justify-content:flex-end;gap:${exportMode ? "16px" : "10px"};">
-        <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;justify-content:flex-end;">
-          ${
-            awayLogo
-              ? `<img src="${awayLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">`
-              : ""
-          }
-          <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;text-align:right;">
-            ${m.away_team}
-          </div>
-        </div>
-
-        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
-      </div>
-    `;
-
-    table.appendChild(row);
-  });
+  table.appendChild(row);
+});
 
   return card;
 }
