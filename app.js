@@ -2541,6 +2541,7 @@ function makeTemplateCard(opts) {
   const matches = opts.matches || [];
   const exportMode = opts.exportMode === true;
   const showFooterInfo = opts.showFooterInfo !== false;
+  const isStory = opts.isStory === true;
 
   const bg = exportMode ? "#ffffff" : "#0b0f14";
   const text = exportMode ? "#111111" : "#e5e7eb";
@@ -2663,7 +2664,7 @@ function makeTemplateCard(opts) {
       </div>
 
       <!-- AWAY TEAM -->
-      <div style="display:flex;align-items:center;justify-content:flex-start;padding-left:${exportMode ? "34px" : "12px"};gap:${exportMode ? "12px" : "8px"};min-width:0;">
+      <div style="display:flex;align-items:center;justify-content:flex-start;padding-left:${isStory ? (exportMode ? "24px" : "10px") : (exportMode ? "34px" : "12px")};gap:${exportMode ? "12px" : "8px"};min-width:0;">
         <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;letter-spacing:.3px;white-space:nowrap;">
           ${m.away_team}
         </div>
@@ -2992,23 +2993,24 @@ async function exportStoryTemplatePNG() {
     dateText: (pool?.date_label || "FECHAS"),
     priceText: Number(pool?.price || 20),
     matches,
-    exportMode: true
+    exportMode: true,
+    isStory: true
   });
 
   card.style.width = "940px";
-card.style.padding = "28px";
-card.style.borderRadius = "22px";
-card.style.boxShadow = "0 20px 60px rgba(0,0,0,.10)";
+  card.style.padding = "28px";
+  card.style.borderRadius = "22px";
+  card.style.boxShadow = "0 20px 60px rgba(0,0,0,.10)";
 
   const footer = document.createElement("div");
-footer.style.textAlign = "center";
-footer.style.fontSize = "22px";
-footer.style.color = "#222222";
-footer.style.marginTop = "10px";
-footer.innerHTML = `
-  Envía tu pronóstico al WhatsApp: <strong>8715118046</strong><br>
-  Fecha límite: Viernes 05:00 PM • ¡Suerte!
-`;
+  footer.style.textAlign = "center";
+  footer.style.fontSize = "22px";
+  footer.style.color = "#222222";
+  footer.style.marginTop = "10px";
+  footer.innerHTML = `
+    Envía tu pronóstico al WhatsApp: <strong>8715118046</strong><br>
+    Fecha límite: Viernes 05:00 PM • ¡Suerte!
+  `;
 
   story.appendChild(topBadge);
   story.appendChild(header);
