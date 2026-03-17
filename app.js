@@ -2551,33 +2551,33 @@ function makeTemplateCard(opts) {
   card.style.background = bg;
   card.style.color = text;
   card.style.border = `1.5px solid ${border}`;
-  card.style.borderRadius = exportMode ? "14px" : "14px";
-  card.style.padding = exportMode ? "22px" : "12px";
-  card.style.width = exportMode ? "820px" : "360px";
+  card.style.borderRadius = "14px";
+  card.style.padding = exportMode ? "24px" : "14px";
+  card.style.width = exportMode ? "860px" : "360px";
   card.style.maxWidth = "100%";
   card.style.boxSizing = "border-box";
   card.style.fontFamily = "Arial, sans-serif";
 
-  const logoSize = exportMode ? 62 : 34;
+  const logoSize = exportMode ? 88 : 54;
 
   card.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;gap:${exportMode ? "14px" : "8px"};margin-bottom:8px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:${exportMode ? "18px" : "10px"};margin-bottom:10px;">
       <img
         src="${typeof QUINIELA_LOGO_URL !== "undefined" ? QUINIELA_LOGO_URL : ""}"
         alt="Logo Quiniela"
-        style="width:${logoSize}px;height:${logoSize}px;object-fit:contain;${typeof QUINIELA_LOGO_URL !== "undefined" ? "" : "display:none;"}"
+        style="width:${logoSize}px;height:${logoSize}px;object-fit:contain;flex:0 0 auto;${typeof QUINIELA_LOGO_URL !== "undefined" ? "" : "display:none;"}"
       />
       <div style="text-align:center;">
-        <div style="font-weight:900;font-size:${exportMode ? "26px" : "16px"};color:${text};letter-spacing:.3px;line-height:1;">
+        <div style="font-weight:900;font-size:${exportMode ? "28px" : "17px"};color:${text};letter-spacing:.3px;line-height:1;">
           ${title}
         </div>
-        <div style="font-size:${exportMode ? "14px" : "11px"};color:${sub};margin-top:6px;">
+        <div style="font-size:${exportMode ? "15px" : "11px"};color:${sub};margin-top:6px;">
           ${subtitle}
         </div>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 120px;gap:10px;margin-top:14px;font-size:${exportMode ? "14px" : "12px"};">
+    <div style="display:grid;grid-template-columns:1fr 1fr 120px;gap:12px;margin-top:14px;font-size:${exportMode ? "14px" : "12px"};">
       <div style="border:1px solid ${border};border-radius:10px;padding:${exportMode ? "12px 10px" : "8px"};text-align:center;background:${innerBg};color:${text};">
         <div style="font-size:${exportMode ? "11px" : "10px"};color:${sub};text-transform:uppercase;letter-spacing:.5px;">Jornada</div>
         <div style="font-weight:800;font-size:${exportMode ? "16px" : "13px"};margin-top:6px;">${jornadaText}</div>
@@ -2594,17 +2594,17 @@ function makeTemplateCard(opts) {
       </div>
     </div>
 
-    <div style="text-align:center;margin-top:${exportMode ? "16px" : "10px"};font-size:${exportMode ? "12px" : "10px"};color:${sub};">
+    <div style="text-align:center;margin-top:${exportMode ? "18px" : "12px"};font-size:${exportMode ? "12px" : "10px"};color:${sub};">
       Marca una sola opción por partido
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:${exportMode ? "14px" : "8px"};margin-top:${exportMode ? "14px" : "10px"};">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:${exportMode ? "18px" : "10px"};margin-top:${exportMode ? "14px" : "10px"};">
       <div style="text-align:center;font-size:${exportMode ? "12px" : "10px"};font-weight:800;color:${sub};background:${softBg};padding:${exportMode ? "8px" : "6px"};border-radius:10px;">LOCAL</div>
       <div style="text-align:center;font-size:${exportMode ? "12px" : "10px"};font-weight:800;color:${sub};background:${softBg};padding:${exportMode ? "8px" : "6px"};border-radius:10px;">EMPATE</div>
       <div style="text-align:center;font-size:${exportMode ? "12px" : "10px"};font-weight:800;color:${sub};background:${softBg};padding:${exportMode ? "8px" : "6px"};border-radius:10px;">VISITA</div>
     </div>
 
-    <div class="qh-table" style="margin-top:${exportMode ? "14px" : "10px"};display:grid;gap:${exportMode ? "10px" : "7px"};"></div>
+    <div class="qh-table" style="margin-top:${exportMode ? "16px" : "10px"};display:grid;gap:${exportMode ? "12px" : "8px"};"></div>
 
     ${
       showFooterInfo
@@ -2623,50 +2623,58 @@ function makeTemplateCard(opts) {
   const table = card.querySelector(".qh-table");
 
   matches.forEach(function (m) {
-  const row = document.createElement("div");
-  row.style.display = "grid";
-  row.style.gridTemplateColumns = "1fr 1fr 1fr";
-  row.style.alignItems = "center";
-  row.style.gap = exportMode ? "14px" : "8px";
+    const row = document.createElement("div");
 
-  const boxW = exportMode ? 74 : 52;
-  const boxH = exportMode ? 42 : 30;
-  const teamFont = exportMode ? "16px" : "12px";
-  const logoSizeRow = exportMode ? 30 : 18;
+    const boxW = exportMode ? 84 : 52;
+    const boxH = exportMode ? 44 : 30;
+    const teamFont = exportMode ? "16px" : "12px";
+    const logoSizeRow = exportMode ? 30 : 18;
 
-  const homeLogo = getTeamLogo(m.home_team);
-  const awayLogo = getTeamLogo(m.away_team);
+    const homeLogo = getTeamLogo(m.home_team);
+    const awayLogo = getTeamLogo(m.away_team);
 
-  row.innerHTML = `
-    <div style="display:flex;align-items:center;gap:${exportMode ? "16px" : "10px"};">
-      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = exportMode
+      ? "96px 1.6fr 96px 1.6fr 96px"
+      : "58px 1.5fr 58px 1.5fr 58px";
+    row.style.alignItems = "center";
+    row.style.columnGap = exportMode ? "18px" : "10px";
 
-      <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;">
+    row.innerHTML = `
+      <!-- LOCAL -->
+      <div style="display:flex;justify-content:center;align-items:center;">
+        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
+      </div>
+
+      <!-- HOME TEAM -->
+      <div style="display:flex;align-items:center;justify-content:flex-start;gap:${exportMode ? "12px" : "8px"};min-width:0;">
         ${homeLogo ? `<img src="${homeLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">` : ""}
-        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;">
+        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;letter-spacing:.3px;white-space:nowrap;">
           ${m.home_team}
         </div>
       </div>
-    </div>
 
-    <div style="display:flex;justify-content:center;">
-      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
-    </div>
+      <!-- EMPATE -->
+      <div style="display:flex;justify-content:center;align-items:center;">
+        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
+      </div>
 
-    <div style="display:flex;align-items:center;justify-content:flex-end;gap:${exportMode ? "16px" : "10px"};">
-      <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};min-width:0;justify-content:flex-end;">
+      <!-- AWAY TEAM -->
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:${exportMode ? "12px" : "8px"};min-width:0;">
         ${awayLogo ? `<img src="${awayLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">` : ""}
-        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;white-space:nowrap;text-align:right;">
+        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;letter-spacing:.3px;white-space:nowrap;text-align:right;">
           ${m.away_team}
         </div>
       </div>
 
-      <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;"></div>
-    </div>
-  `;
+      <!-- VISITA -->
+      <div style="display:flex;justify-content:center;align-items:center;">
+        <div style="width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
+      </div>
+    `;
 
-  table.appendChild(row);
-});
+    table.appendChild(row);
+  });
 
   return card;
 }
