@@ -2529,6 +2529,9 @@ async function getMatches(pool_id){
   return data || [];
 }
 
+// ===================
+// Construcción Quiniela Herseg
+
 function makeTemplateCard(opts) {
   const title = opts.title;
   const subtitle = opts.subtitle;
@@ -2660,11 +2663,11 @@ function makeTemplateCard(opts) {
       </div>
 
       <!-- AWAY TEAM -->
-      <div style="display:flex;align-items:center;justify-content:flex-end;gap:${exportMode ? "12px" : "8px"};min-width:0;">
-        ${awayLogo ? `<img src="${awayLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">` : ""}
-        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;letter-spacing:.3px;white-space:nowrap;text-align:right;">
+      <div style="display:flex;align-items:center;justify-content:flex-start;padding-left:${exportMode ? "34px" : "12px"};gap:${exportMode ? "12px" : "8px"};min-width:0;">
+        <div style="font-weight:800;font-size:${teamFont};color:${text};line-height:1.1;letter-spacing:.3px;white-space:nowrap;">
           ${m.away_team}
         </div>
+        ${awayLogo ? `<img src="${awayLogo}" alt="" style="width:${logoSizeRow}px;height:${logoSizeRow}px;object-fit:contain;flex:0 0 auto;">` : ""}
       </div>
 
       <!-- VISITA -->
