@@ -2561,7 +2561,7 @@ function makeTemplateCard(opts) {
   card.style.boxSizing = "border-box";
   card.style.fontFamily = "Arial, sans-serif";
 
-  const logoSize = exportMode ? 88 : 54;
+  const logoSize = exportMode ? 100 : 100;
 
   card.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;gap:${exportMode ? "18px" : "10px"};margin-bottom:10px;">
