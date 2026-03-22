@@ -1255,7 +1255,7 @@ async function loadEntryForPick(poolId, partId) {
 
   const { data: entry, error: entryError } = await supabaseClient
     .from("entries")
-    .select("id, paid, created_at")
+    .select("id, paid, created_at, pool_id, participant_id")
     .eq("pool_id", pool_id)
     .eq("participant_id", participant_id)
     .order("created_at", { ascending: false })
@@ -1292,13 +1292,13 @@ async function loadEntryForPick(poolId, partId) {
 
   if (poolInfo && poolInfo.status === "closed") {
     $("pickEntryLabel").textContent =
-      (entry.paid ? "Pagado ✅" : "Pendiente") + " • Jornada cerrada 🔒";
+      (entry.paid ? "Pagado ✅" : "Pendiente ⏳") + " • Jornada cerrada 🔒";
 
     $("btnSavePicks").disabled = true;
     $("btnSavePicks").classList.add("opacity-50", "cursor-not-allowed");
   } else {
     $("pickEntryLabel").textContent =
-      entry.paid ? "Pagado ✅" : "Pendiente";
+      entry.paid ? "Pagado ✅" : "Pendiente ⏳";
 
     $("btnSavePicks").disabled = false;
     $("btnSavePicks").classList.remove("opacity-50", "cursor-not-allowed");
@@ -1330,6 +1330,7 @@ async function loadEntryForPick(poolId, partId) {
   }).join("");
 
   attachPickButtonsEvents();
+  showAlert("Boleto cargado ✅", "ok");
 }
 
 // Marcar Pagos Pendientes
@@ -2152,8 +2153,15 @@ async function addEntry() {
   $("entryPaid").checked = false;
 
   await loadEntriesAndStats();
+
+  // Refrescar módulo Picks y dejar misma jornada / participante seleccionados
   await fillPickPoolsSelect();
+  $("pickPool").value = pool_id;
+
   await fillPickParticipantsSelect();
+  $("pickParticipant").value = participant_id;
+
+  await loadPickStatusList();
   await loadDashboardSummary();
   await updateNavBadges();
 }
