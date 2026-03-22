@@ -900,11 +900,13 @@ function updateParticipantFilterCounts() {
   if ($("participantCountArchived")) $("participantCountArchived").textContent = counts.archived;
 }
 
+// =======================
 // Crear y Guardar Jornadas
+
 async function loadPools() {
   const { data, error } = await supabaseClient
     .from("pools")
-    .select("id, name, status, round, competition, season, price, commission_pct, date_label, mode_code,carryover_enabled, created_at")
+    .select("id, name, status, round, competition, season, price, commission_pct, date_label, mode_code, carryover_enabled, created_at")
     .order("created_at", { ascending: false });
 
   if (error) return showAlert(error.message, "error");
@@ -915,51 +917,77 @@ async function loadPools() {
 
   $("poolsList").innerHTML = rows.map(p => {
     const badge =
-      p.status === "open" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300" :
-      p.status === "closed" ? "bg-amber-500/10 border-amber-500/20 text-amber-300" :
-      "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
+      p.status === "open"
+        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+        : p.status === "draft"
+        ? "bg-sky-500/10 border-sky-500/20 text-sky-300"
+        : "bg-amber-500/10 border-amber-500/20 text-amber-300";
 
     const statusLabel =
-      p.status === "open" ? "Abierta" :
-      p.status === "closed" ? "Cerrada" : "Finalizada";
+      p.status === "open"
+        ? "Activa"
+        : p.status === "draft"
+        ? "Borrador"
+        : "Cerrada";
+
+    const actionBtn =
+      p.status === "draft"
+        ? `
+          <button data-open="${p.id}" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">
+            Activar
+          </button>
+        `
+        : p.status === "open"
+        ? `
+          <button data-close="${p.id}" class="px-3 py-2 rounded bg-rose-600 hover:bg-rose-500 text-xs">
+            Cerrar
+          </button>
+        `
+        : `
+          <button data-draft="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
+            Reabrir a borrador
+          </button>
+        `;
 
     return `
-      <div class="p-3 bg-zinc-950 border border-zinc-800 rounded">
+      <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
         <div class="flex items-center justify-between gap-2 flex-wrap">
           <div>
             <div class="font-semibold">${p.name}</div>
-            <div class="text-xs text-zinc-400"><div class="text-xs text-emerald-300 mt-1">
-Modo: ${p.mode_code}
-</div>
-  $${Number(p.price).toFixed(0)} • Comisión ${Number(p.commission_pct).toFixed(0)}% • ${p.competition} • ${p.season}
-</div>
-${p.date_label ? `<div class="text-xs text-emerald-300/90 mt-1">Fechas: ${p.date_label}</div>` : ""}
+
+            <div class="text-xs text-zinc-400 mt-1">
+              $${Number(p.price || 0).toFixed(0)} • Comisión ${Number(p.commission_pct || 0).toFixed(0)}% • ${p.competition || "—"} • ${p.season || "—"}
+            </div>
+
+            <div class="text-xs text-emerald-300 mt-1">
+              Modo: ${p.mode_code || "—"}
+            </div>
+
+            ${p.date_label ? `<div class="text-xs text-emerald-300/90 mt-1">Fechas: ${p.date_label}</div>` : ""}
+
+            ${p.carryover_enabled ? `<div class="text-xs text-sky-300/90 mt-1">Acumulado habilitado</div>` : ""}
           </div>
 
-          <div class="flex items-center gap-2">
-            <span class="text-xs px-2 py-1 rounded-full border ${badge}">${statusLabel}</span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs px-2 py-1 rounded-full border ${badge}">
+              ${statusLabel}
+            </span>
 
-<button data-dates="${p.id}" data-curdates="${(p.date_label || "").replace(/"/g, "&quot;")}"
-  class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-  Editar fechas
-</button>
+            <button
+              data-dates="${p.id}"
+              data-curdates="${(p.date_label || "").replace(/"/g, "&quot;")}"
+              class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
+              Editar fechas
+            </button>
 
-            ${p.status !== "open" ? `
-              <button data-open="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-                Marcar activa
-              </button>
-            ` : `
-              <button data-close="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-                Cerrar
-              </button>
-            `}
+            ${actionBtn}
           </div>
         </div>
       </div>
     `;
   }).join("");
 
-  // listeners botones
+  // Activar jornada
   document.querySelectorAll("[data-open]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-open");
@@ -967,6 +995,7 @@ ${p.date_label ? `<div class="text-xs text-emerald-300/90 mt-1">Fechas: ${p.date
     });
   });
 
+  // Cerrar jornada
   document.querySelectorAll("[data-close]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-close");
@@ -974,37 +1003,22 @@ ${p.date_label ? `<div class="text-xs text-emerald-300/90 mt-1">Fechas: ${p.date
     });
   });
 
-document.querySelectorAll("[data-dates]").forEach(btn => {
-  btn.addEventListener("click", async () => {
-    const id = btn.getAttribute("data-dates");
-    const cur = btn.getAttribute("data-curdates") || "";
-    await editPoolDates(id, cur);
+  // Reabrir a borrador
+  document.querySelectorAll("[data-draft]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-draft");
+      await setPoolDraft(id);
+    });
   });
-});
 
-
-
-document.querySelectorAll("[data-archive]").forEach(btn => {
-  btn.addEventListener("click", async () => {
-
-    const id = btn.getAttribute("data-archive");
-
-    if (!confirm("¿Eliminar participante? (Se ocultará del sistema)")) return;
-
-    const { error } = await supabaseClient
-      .from("participants")
-      .update({ is_active: false })
-      .eq("id", id);
-
-    if (error) return showAlert(error.message, "error");
-
-    showAlert("Participante eliminado ✅", "ok");
-
-    await loadParticipants();
-    await fillEntryParticipantsSelect();
+  // Editar fechas
+  document.querySelectorAll("[data-dates]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-dates");
+      const cur = btn.getAttribute("data-curdates") || "";
+      await editPoolDates(id, cur);
+    });
   });
-});
-
 }
 
 async function editPoolDates(poolId, currentDates) {
@@ -1037,10 +1051,14 @@ async function editPoolDates(poolId, currentDates) {
   await renderPreview();
 }
 
+// Abrir Jornada Activa
+
 async function setPoolOpen(poolId) {
   hideAlert();
 
-  // regla simple: solo 1 abierta
+  const ok = confirm("¿Activar esta jornada? La jornada activa actual se cerrará.");
+  if (!ok) return;
+
   const { error: closeErr } = await supabaseClient
     .from("pools")
     .update({ status: "closed" })
@@ -1055,12 +1073,21 @@ async function setPoolOpen(poolId) {
 
   if (error) return showAlert(error.message, "error");
 
-  showAlert("Jornada marcada como activa ✅", "ok");
-  loadPools();
+  showAlert("Jornada activada ✅", "ok");
+
+  await loadPools();
+  await fillTplPools();
+  await fillEntryPoolsSelect();
+  await fillPickPoolsSelect();
+  await loadDashboardSummary();
 }
 
+// Cerrar Jornada Activa
 async function setPoolClosed(poolId) {
   hideAlert();
+
+  const ok = confirm("¿Cerrar esta jornada?");
+  if (!ok) return;
 
   const { error } = await supabaseClient
     .from("pools")
@@ -1070,7 +1097,35 @@ async function setPoolClosed(poolId) {
   if (error) return showAlert(error.message, "error");
 
   showAlert("Jornada cerrada ✅", "ok");
-  loadPools();
+
+  await loadPools();
+  await fillTplPools();
+  await fillEntryPoolsSelect();
+  await fillPickPoolsSelect();
+  await loadDashboardSummary();
+}
+
+// Regresar Jornada Cerrada a Borrador
+async function setPoolDraft(poolId) {
+  hideAlert();
+
+  const ok = confirm("¿Mandar esta jornada a borrador?");
+  if (!ok) return;
+
+  const { error } = await supabaseClient
+    .from("pools")
+    .update({ status: "draft" })
+    .eq("id", poolId);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Jornada enviada a borrador ✅", "ok");
+
+  await loadPools();
+  await fillTplPools();
+  await fillEntryPoolsSelect();
+  await fillPickPoolsSelect();
+  await loadDashboardSummary();
 }
 
 function money(n) {
@@ -1078,24 +1133,23 @@ function money(n) {
   return "$" + x.toFixed(0);
 }
 
+// Selector Pagos Jornadas Activa
 async function fillEntryPoolsSelect() {
   const { data, error } = await supabaseClient
     .from("pools")
     .select("id, name, status, price, commission_pct, created_at")
+    .eq("status", "open")
     .order("created_at", { ascending: false })
     .limit(30);
 
   if (error) return showAlert(error.message, "error");
 
   const sel = $("entryPool");
-  sel.innerHTML = (data || []).map(p => {
-    const tag = p.status === "open" ? " (Activa)" : "";
-    return `<option value="${p.id}">${p.name}${tag}</option>`;
-  }).join("");
+  sel.innerHTML = (data || []).map(p =>
+    `<option value="${p.id}">${p.name} (Activa)</option>`
+  ).join("");
 
-  // Si hay activa, seleccionarla por defecto
-  const active = (data || []).find(p => p.status === "open");
-  if (active) sel.value = active.id;
+  if ((data || [])[0]) sel.value = data[0].id;
 }
 
 async function fillEntryParticipantsSelect() {
@@ -1118,22 +1172,18 @@ async function fillPickPoolsSelect() {
   const { data, error } = await supabaseClient
     .from("pools")
     .select("id, name, status, created_at")
+    .eq("status", "open")
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(30);
 
   if (error) return showAlert(error.message, "error");
 
   const sel = $("pickPool");
-  sel.innerHTML = (data || []).map(function(p) {
-    const tag = p.status === "open" ? " (Activa)" : "";
-    return `<option value="${p.id}">${p.name}${tag}</option>`;
-  }).join("");
+  sel.innerHTML = (data || []).map(p =>
+    `<option value="${p.id}">${p.name} (Activa)</option>`
+  ).join("");
 
-  const active = (data || []).find(function(p) {
-    return p.status === "open";
-  });
-
-  if (active) sel.value = active.id;
+  if ((data || [])[0]) sel.value = data[0].id;
 }
 
 async function fillPickParticipantsSelect() {
@@ -2358,6 +2408,9 @@ function updateEntriesFilterCounts() {
   if ($("entriesCountNoPicks")) $("entriesCountNoPicks").textContent = counts.nopicks;
 }
 
+// ========================
+// Selector Global Jornadas
+
 async function fillTplPools() {
   const { data, error } = await supabaseClient
     .from("pools")
@@ -2369,7 +2422,10 @@ async function fillTplPools() {
 
   const sel = $("tplPool");
   sel.innerHTML = (data || []).map(p => {
-    const tag = p.status === "open" ? " (Activa)" : "";
+    const tag =
+      p.status === "open" ? " (Activa)" :
+      p.status === "draft" ? " (Borrador)" :
+      " (Cerrada)";
     return `<option value="${p.id}">${p.name}${tag}</option>`;
   }).join("");
 }
@@ -4186,7 +4242,7 @@ $("formPool").addEventListener("submit", async (e) => {
       name,
       price,
       commission_pct,
-      status: "open",
+      status: "draft",
       date_label,
       mode_code,
       carryover_enabled
@@ -4194,7 +4250,7 @@ $("formPool").addEventListener("submit", async (e) => {
 
   if (error) return showAlert(error.message, "error");
 
-  showAlert("Jornada creada ✅", "ok");
+  showAlert("Jornada creada como borrador ✅", "ok");
 
   $("poolRound").value = "";
   $("poolCompetition").value = "";
@@ -4209,6 +4265,7 @@ $("formPool").addEventListener("submit", async (e) => {
   await fillPickPoolsSelect();
   await loadDashboardSummary();
 });
+
 $("btnCloseActivePool").addEventListener("click", closeActivePool);
 $("btnOpenActivePool").addEventListener("click", openLatestClosedPool);
 
