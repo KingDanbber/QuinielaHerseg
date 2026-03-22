@@ -3422,21 +3422,80 @@ async function loadStandings() {
   if (!pool_id) {
     $("standingsList").innerHTML = "";
     $("standingsGoalsTotal").textContent = "0";
+    $("standingsWinnerBox").innerHTML = "";
+    if ($("standingsInfoBox")) $("standingsInfoBox").innerHTML = "";
     return showAlert("Selecciona una jornada.", "error");
   }
 
-  // puntos por boleto
+  // Solo entries pagados de la jornada
+  const { data: paidEntries, error: paidErr } = await supabaseClient
+    .from("entries")
+    .select("id, participant_id, paid")
+    .eq("pool_id", pool_id)
+    .eq("paid", true);
+
+  if (paidErr) return showAlert(paidErr.message, "error");
+
+  const paidEntryIds = (paidEntries || []).map(function(e) {
+    return e.id;
+  });
+
+  const paidParticipantIds = (paidEntries || []).map(function(e) {
+    return e.participant_id;
+  });
+
+  // Si no hay pagados, limpiar y salir bonito
+  if (!paidEntryIds.length) {
+    const { data: goalsData, error: goalsErr } = await supabaseClient
+      .from("pool_goals_total")
+      .select("total_goals")
+      .eq("pool_id", pool_id)
+      .maybeSingle();
+
+    if (goalsErr) return showAlert(goalsErr.message, "error");
+
+    $("standingsGoalsTotal").textContent = String(goalsData?.total_goals || 0);
+
+    if ($("standingsInfoBox")) {
+      $("standingsInfoBox").innerHTML = `
+        <div class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-sm text-blue-300">
+          📊 Tabla oficial: solo participan boletos <strong>pagados</strong>.
+          <div class="text-xs mt-1 opacity-80">
+            💡 Tip: paga tu boleto antes del cierre para participar en la tabla oficial.
+          </div>
+        </div>
+      `;
+    }
+
+    $("standingsWinnerBox").innerHTML = `
+      <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
+        Todavía no hay boletos pagados para esta jornada.
+      </div>
+    `;
+
+    $("standingsList").innerHTML = `
+      <div class="text-sm text-zinc-400 p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
+        No hay boletos pagados para mostrar en la tabla oficial.
+      </div>
+    `;
+
+    return;
+  }
+
+  // Puntos por boleto, pero solo de entries pagados
   const { data: pointsRows, error: pointsErr } = await supabaseClient
     .from("entry_points")
     .select("entry_id, pool_id, participant_id, points, played_matches, captured_picks")
-    .eq("pool_id", pool_id);
+    .eq("pool_id", pool_id)
+    .in("entry_id", paidEntryIds);
 
   if (pointsErr) return showAlert(pointsErr.message, "error");
 
-  // participantes
+  // Participantes solo de entries pagados
   const { data: participants, error: partErr } = await supabaseClient
     .from("participants")
-    .select("id, name, area");
+    .select("id, name, area")
+    .in("id", paidParticipantIds);
 
   if (partErr) return showAlert(partErr.message, "error");
 
@@ -3446,7 +3505,7 @@ async function loadStandings() {
     })
   );
 
-  // total de goles jornada
+  // Total de goles jornada
   const { data: goalsData, error: goalsErr } = await supabaseClient
     .from("pool_goals_total")
     .select("total_goals")
@@ -3460,12 +3519,13 @@ async function loadStandings() {
   const rows = (pointsRows || []).map(function(r) {
     const p = partMap.get(r.participant_id) || {};
     return {
+      entry_id: r.entry_id,
       participant_id: r.participant_id,
       name: p.name || "Sin nombre",
       area: p.area || "",
-      points: r.points || 0,
-      played_matches: r.played_matches || 0,
-      captured_picks: r.captured_picks || 0
+      points: Number(r.points || 0),
+      played_matches: Number(r.played_matches || 0),
+      captured_picks: Number(r.captured_picks || 0)
     };
   });
 
@@ -3474,24 +3534,47 @@ async function loadStandings() {
     return a.name.localeCompare(b.name);
   });
 
-const { data: poolStats, error: statsErr } = await supabaseClient
-  .from("pool_stats")
-  .select("paid_count, total_collected, commission_amount, prize_pool")
-  .eq("pool_id", pool_id)
-  .maybeSingle();
+  // Stats de la jornada
+  const { data: poolStats, error: statsErr } = await supabaseClient
+    .from("pool_stats")
+    .select("paid_count, total_collected, commission_amount, prize_pool")
+    .eq("pool_id", pool_id)
+    .maybeSingle();
 
-if (statsErr) return showAlert(statsErr.message, "error");
+  if (statsErr) return showAlert(statsErr.message, "error");
 
-const completionInfo = await getPoolCompletionInfo(pool_id);
+  const completionInfo = await getPoolCompletionInfo(pool_id);
+  const winnerSummary = await loadSimpleWinnerSummary(pool_id);
 
-const winnerSummary = await loadSimpleWinnerSummary(pool_id);
+  const isFinished = completionInfo?.isFinished;
 
-$("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(
-  rows,
-  poolStats,
-  completionInfo,
-  winnerSummary
-);
+  if ($("standingsInfoBox")) {
+    $("standingsInfoBox").innerHTML = `
+      <div class="p-3 border rounded-xl text-sm ${
+        isFinished
+          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+          : "bg-blue-500/10 border-blue-500/20 text-blue-300"
+      }">
+        ${
+          isFinished
+            ? "🏁 Jornada finalizada. Resultados oficiales."
+            : "📊 Tabla en tiempo real (puede cambiar conforme se registren resultados)."
+        }
+        <br>
+        Solo participan boletos <strong>pagados</strong>.
+        <div class="text-xs mt-1 opacity-80">
+          💡 Tip: paga tu boleto antes del cierre para participar en la tabla oficial.
+        </div>
+      </div>
+    `;
+  }
+
+  $("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(
+    rows,
+    poolStats,
+    completionInfo,
+    winnerSummary
+  );
 
   $("standingsList").innerHTML = rows.length
     ? rows.map(function(r, index) {
@@ -3516,7 +3599,7 @@ $("standingsWinnerBox").innerHTML = renderSimpleWinnerBox(
       }).join("")
     : `
       <div class="text-sm text-zinc-400 p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
-        No hay boletos o pronósticos para esta jornada todavía.
+        No hay boletos pagados o pronósticos oficiales para esta jornada todavía.
       </div>
     `;
 }
@@ -3615,7 +3698,6 @@ async function exportStandingsImage() {
   const pool_id = $("standingsPool").value;
   if (!pool_id) return showAlert("Selecciona una jornada.", "error");
 
-  // pool
   const { data: pool, error: poolErr } = await supabaseClient
     .from("pools")
     .select("id, name")
@@ -3624,18 +3706,34 @@ async function exportStandingsImage() {
 
   if (poolErr) return showAlert(poolErr.message, "error");
 
-  // puntos
+  // Solo entries pagados
+  const { data: paidEntries, error: paidErr } = await supabaseClient
+    .from("entries")
+    .select("id, participant_id")
+    .eq("pool_id", pool_id)
+    .eq("paid", true);
+
+  if (paidErr) return showAlert(paidErr.message, "error");
+
+  const paidEntryIds = (paidEntries || []).map(function(e) { return e.id; });
+  const paidParticipantIds = (paidEntries || []).map(function(e) { return e.participant_id; });
+
+  if (!paidEntryIds.length) {
+    return showAlert("No hay boletos pagados para exportar la tabla oficial.", "error");
+  }
+
   const { data: pointsRows, error: pointsErr } = await supabaseClient
     .from("entry_points")
     .select("entry_id, pool_id, participant_id, points, played_matches, captured_picks")
-    .eq("pool_id", pool_id);
+    .eq("pool_id", pool_id)
+    .in("entry_id", paidEntryIds);
 
   if (pointsErr) return showAlert(pointsErr.message, "error");
 
-  // participantes
   const { data: participants, error: partErr } = await supabaseClient
     .from("participants")
-    .select("id, name, area");
+    .select("id, name, area")
+    .in("id", paidParticipantIds);
 
   if (partErr) return showAlert(partErr.message, "error");
 
@@ -3645,7 +3743,6 @@ async function exportStandingsImage() {
     })
   );
 
-  // goles jornada
   const { data: goalsData, error: goalsErr } = await supabaseClient
     .from("pool_goals_total")
     .select("total_goals")
@@ -3659,9 +3756,9 @@ async function exportStandingsImage() {
     return {
       name: p.name || "Sin nombre",
       area: p.area || "",
-      points: r.points || 0,
-      played_matches: r.played_matches || 0,
-      captured_picks: r.captured_picks || 0
+      points: Number(r.points || 0),
+      played_matches: Number(r.played_matches || 0),
+      captured_picks: Number(r.captured_picks || 0)
     };
   });
 
@@ -3671,7 +3768,7 @@ async function exportStandingsImage() {
   });
 
   if (!rows.length) {
-    return showAlert("No hay datos de aciertos para exportar.", "error");
+    return showAlert("No hay datos oficiales de aciertos para exportar.", "error");
   }
 
   const printArea = $("printArea");
