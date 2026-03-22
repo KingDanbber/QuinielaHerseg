@@ -3414,6 +3414,69 @@ async function fillStandingsPoolsSelect() {
   if (active) sel.value = active.id;
 }
 
+// Preview Podio Ganadores
+function renderStandingsPodium(rows) {
+  if (!rows || !rows.length) return "";
+
+  const top = rows.slice(0, 3);
+
+  const first = top[0] || null;
+  const second = top[1] || null;
+  const third = top[2] || null;
+
+  function makeCard(item, place) {
+    if (!item) {
+      return `
+        <div class="p-3 rounded-xl border bg-zinc-950 border-zinc-800 text-center opacity-50">
+          <div class="text-2xl mb-1">—</div>
+          <div class="text-sm text-zinc-500">Sin dato</div>
+        </div>
+      `;
+    }
+
+    let emoji = "🏅";
+    let title = "Lugar";
+    let boxClass = "bg-zinc-950 border-zinc-800";
+    let pointsClass = "text-white";
+
+    if (place === 1) {
+      emoji = "🥇";
+      title = "1er lugar";
+      boxClass = "bg-yellow-500/10 border-yellow-500/20";
+      pointsClass = "text-yellow-300";
+    } else if (place === 2) {
+      emoji = "🥈";
+      title = "2do lugar";
+      boxClass = "bg-slate-400/10 border-slate-400/20";
+      pointsClass = "text-slate-200";
+    } else if (place === 3) {
+      emoji = "🥉";
+      title = "3er lugar";
+      boxClass = "bg-amber-700/10 border-amber-700/20";
+      pointsClass = "text-amber-300";
+    }
+
+    return `
+      <div class="p-3 rounded-xl border ${boxClass} text-center">
+        <div class="text-3xl mb-1">${emoji}</div>
+        <div class="text-xs uppercase tracking-wide text-zinc-400">${title}</div>
+        <div class="mt-2 font-extrabold text-white truncate">${item.name}</div>
+        <div class="text-xs text-zinc-400 mt-1 truncate">${item.area || "Sin área"}</div>
+        <div class="mt-2 text-lg font-extrabold ${pointsClass}">${item.points}</div>
+        <div class="text-xs text-zinc-400">aciertos</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="grid grid-cols-3 gap-2">
+      ${makeCard(second, 2)}
+      ${makeCard(first, 1)}
+      ${makeCard(third, 3)}
+    </div>
+  `;
+}
+
 // Cargar Tabla Aciertos
 async function loadStandings() {
   hideAlert();
@@ -3424,6 +3487,7 @@ async function loadStandings() {
     $("standingsGoalsTotal").textContent = "0";
     $("standingsWinnerBox").innerHTML = "";
     if ($("standingsInfoBox")) $("standingsInfoBox").innerHTML = "";
+    if ($("standingsPodiumBox")) $("standingsPodiumBox").innerHTML = "";
     return showAlert("Selecciona una jornada.", "error");
   }
 
@@ -3466,6 +3530,8 @@ async function loadStandings() {
         </div>
       `;
     }
+
+    if ($("standingsPodiumBox")) $("standingsPodiumBox").innerHTML = "";
 
     $("standingsWinnerBox").innerHTML = `
       <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
@@ -3533,6 +3599,10 @@ async function loadStandings() {
     if (b.points !== a.points) return b.points - a.points;
     return a.name.localeCompare(b.name);
   });
+
+  if ($("standingsPodiumBox")) {
+    $("standingsPodiumBox").innerHTML = renderStandingsPodium(rows);
+  }
 
   // Stats de la jornada
   const { data: poolStats, error: statsErr } = await supabaseClient
