@@ -4396,49 +4396,76 @@ $("formPool").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
 
+  // ── Validación manual visible (no depende del tooltip nativo del browser) ──
+  const roundRaw = $("poolRound").value.trim();
+  if (!roundRaw || isNaN(Number(roundRaw)) || Number(roundRaw) < 1) {
+    showAlert("⚠️ Ingresa el número de jornada (campo obligatorio).", "error");
+    $("poolRound").focus();
+    // Scroll al alert para que se vea en móvil
+    $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+
+  const round = Number(roundRaw);
   const mode_code = $("poolMode").value;
   const carryover_enabled = (mode_code === "ACUMULADA" || mode_code === "GOLEO");
-
-  const round = Number($("poolRound").value);
   const competition = $("poolCompetition").value.trim() || "Liga MX";
   const season = $("poolSeason").value.trim() || "Clausura 2026";
   const date_label = $("poolDates").value.trim() || null;
   const price = Number($("poolPrice").value || 20);
   const commission_pct = Number($("poolCommission").value || 15);
-
   const name = `Jornada ${round} - ${competition} - ${season}`;
 
-  const { error } = await supabaseClient
-    .from("pools")
-    .insert({
-      round,
-      competition,
-      season,
-      name,
-      price,
-      commission_pct,
-      status: "draft",
-      date_label,
-      mode_code,
-      carryover_enabled
-    });
+  // ── Estado de carga en el botón ──
+  const btnCrear = $("formPool").querySelector("button[type=submit], button:not([type])");
+  setBusy(btnCrear, true, "Creando…");
 
-  if (error) return showAlert(error.message, "error");
+  try {
+    const { error } = await supabaseClient
+      .from("pools")
+      .insert({
+        round,
+        competition,
+        season,
+        name,
+        price,
+        commission_pct,
+        status: "draft",
+        date_label,
+        mode_code,
+        carryover_enabled
+      });
 
-  showAlert("Jornada creada como borrador ✅", "ok");
+    if (error) {
+      // Muestra el error exacto de Supabase y hace scroll para verlo
+      showAlert("❌ Error Supabase: " + error.message + (error.details ? " — " + error.details : ""), "error");
+      $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
 
-  $("poolRound").value = "";
-  $("poolCompetition").value = "";
-  $("poolSeason").value = "";
-  $("poolDates").value = "";
-  $("poolPrice").value = "";
-  $("poolCommission").value = "";
+    showAlert("✅ Jornada " + round + " creada como borrador.", "ok");
+    $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
 
-  await loadPools();
-  await fillTplPools();
-  await fillEntryPoolsSelect();
-  await fillPickPoolsSelect();
-  await loadDashboardSummary();
+    // Limpiar formulario
+    $("poolRound").value = "";
+    $("poolCompetition").value = "";
+    $("poolSeason").value = "";
+    $("poolDates").value = "";
+    $("poolPrice").value = "";
+    $("poolCommission").value = "";
+
+    await loadPools();
+    await fillTplPools();
+    await fillEntryPoolsSelect();
+    await fillPickPoolsSelect();
+    await loadDashboardSummary();
+
+  } catch (err) {
+    showAlert("❌ Error inesperado: " + (err?.message || String(err)), "error");
+    $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+  } finally {
+    setBusy(btnCrear, false);
+  }
 });
 
 $("btnCloseActivePool").addEventListener("click", closeActivePool);
