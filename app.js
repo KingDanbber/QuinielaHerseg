@@ -2540,17 +2540,32 @@ async function saveTemplateMatches() {
   }
 
   try {
-    // UPSERT: actualiza si ya existe (pool_id + match_no), inserta si no.
-    // Nunca borra — evita conflictos con FK de predictions_1x2.
-    const { error: upsErr } = await withTimeout(
-      supabaseClient
-        .from("matches")
-        .upsert(rows, { onConflict: "pool_id,match_no" }),
-      10000,
-      "UPSERT matches"
-    );
+    // Estrategia fila por fila: UPDATE si existe, INSERT si no.
+    // Evita locks de transacciones anteriores y no requiere unique constraint.
+    for (const row of rows) {
+      // 1) Intentar UPDATE
+      const { data: updated, error: updErr } = await withTimeout(
+        supabaseClient
+          .from("matches")
+          .update({ home_team: row.home_team, away_team: row.away_team })
+          .eq("pool_id", row.pool_id)
+          .eq("match_no", row.match_no)
+          .select("id"),
+        8000,
+        `UPDATE partido #${row.match_no}`
+      );
+      if (updErr) throw new Error(`UPDATE partido #${row.match_no}: ${updErr.message}`);
 
-    if (upsErr) throw new Error("Error guardando partidos: " + upsErr.message + " | Código: " + upsErr.code);
+      // 2) Si no actualizó ninguna fila, hacer INSERT
+      if (!updated || updated.length === 0) {
+        const { error: insErr } = await withTimeout(
+          supabaseClient.from("matches").insert(row),
+          8000,
+          `INSERT partido #${row.match_no}`
+        );
+        if (insErr) throw new Error(`INSERT partido #${row.match_no}: ${insErr.message}`);
+      }
+    }
 
     $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
     showAlert(`Plantilla de ${rows.length} partidos guardada ✅`, "ok");
