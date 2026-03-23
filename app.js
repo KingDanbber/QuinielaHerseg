@@ -34,7 +34,7 @@ const $ = (id) => document.getElementById(id);
 // =================
 // Variables Globales
 
-const QUINIELA_LOGO_URL = "./img/logo-herseg-quiniela.png";
+const QUINIELA_LOGO_URL = "./img/logo-arcangel-quiniela.png";
 let showArchivedParticipants = false;
 let currentPickEntryId = null;
 let currentPickPoolId = null;
@@ -1930,7 +1930,7 @@ function makePickedTicketCard(opts) {
   card.style.fontFamily = "Arial, sans-serif";
 
   card.innerHTML =
-    '<div style="font-size:30px;font-weight:900;text-align:center;">Quiniela Herseg MX</div>' +
+    '<div style="font-size:30px;font-weight:900;text-align:center;">Quiniela Arcángel</div>' +
     '<div style="font-size:16px;color:#555;text-align:center;margin-top:4px;">"Pasión X Ganar" ⚽ ' + (pool?.season || "") + '</div>' +
 
     '<div style="display:grid;grid-template-columns:1fr 1fr 110px;gap:10px;margin-top:16px;">' +
@@ -2594,7 +2594,7 @@ async function getMatches(pool_id){
 }
 
 // ===================
-// Construcción Quiniela Herseg
+// Construcción Quiniela Arcángel
 
 function makeTemplateCard(opts) {
   const title = opts.title;
@@ -2821,7 +2821,7 @@ async function renderPreview() {
   }
 
   const card = makeTemplateCard({
-  title: "Quiniela Herseg MX",
+  title: "Quiniela Arcángel",
   subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
   jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
   dateText: (pool?.date_label || "FECHAS"),
@@ -2853,7 +2853,7 @@ async function exportAllToPDF() {
     if (!ms.length) continue;
 
     cards.push(makeTemplateCard({
-      title: "Quiniela Herseg MX",
+      title: "Quiniela Arcángel",
       subtitle: `"Pasión X Ganar" ⚽ ${p.season || ""}`.trim(),
       jornadaText: p.round ? `Jornada ${p.round}` : p.name,
       dateText: (p.date_label || "FECHAS"),
@@ -2908,7 +2908,7 @@ exportMode: true
   }
 
   printArea.classList.add("hidden");
-  pdf.save("Plantillas-Quiniela-Herseg.pdf");
+  pdf.save("Plantillas-Quiniela-Arcangel.pdf");
   showAlert("PDF generado ✅", "ok");
 }
 
@@ -2943,7 +2943,7 @@ async function exportCurrentTemplatePNG() {
   sheet.style.boxSizing = "border-box";
 
   const card = makeTemplateCard({
-    title: "Quiniela Herseg MX",
+    title: "Quiniela Arcángel",
     subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
     jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
     dateText: (pool?.date_label || "FECHAS"),
@@ -3026,7 +3026,7 @@ async function exportStoryTemplatePNG() {
   topBadge.style.color = "#ffffff";
   topBadge.style.fontSize = "22px";
   topBadge.style.fontWeight = "700";
-  topBadge.innerHTML = "⚽ Quiniela Herseg MX";
+  topBadge.innerHTML = "⚽ Quiniela Arcángel";
 
   const header = document.createElement("div");
   header.style.textAlign = "center";
@@ -3051,7 +3051,7 @@ async function exportStoryTemplatePNG() {
     '</div>';
 
   const card = makeTemplateCard({
-    title: "Quiniela Herseg MX",
+    title: "Quiniela Arcángel",
     subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
     jornadaText: pool?.round ? `Jornada ${pool.round}` : (pool?.name || "Jornada"),
     dateText: (pool?.date_label || "FECHAS"),
@@ -3131,7 +3131,7 @@ async function exportAllToPNGs() {
     if (!ms.length) continue;
 
     const card = makeTemplateCard({
-      title: "Quiniela Herseg MX",
+      title: "Quiniela Arcángel",
       subtitle: `"Pasión X Ganar" ⚽ ${p.season || ""}`.trim(),
       jornadaText: p.round ? `Jornada ${p.round}` : p.name,
       dateText: (p.date_label || "FECHAS"),
@@ -3697,7 +3697,7 @@ function makeStandingsCard(opts) {
     '</div>' +
 
     '<div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:18px;">' +
-      '<div style="padding:10px 18px;border-radius:999px;background:#111111;color:#ffffff;font-size:18px;font-weight:800;">🏆 Quiniela Herseg MX</div>' +
+      '<div style="padding:10px 18px;border-radius:999px;background:#111111;color:#ffffff;font-size:18px;font-weight:800;">🏆 Quiniela Arcángel</div>' +
       '<div style="padding:10px 18px;border-radius:999px;background:#f4f4f5;border:1px solid #d4d4d8;font-size:18px;font-weight:800;color:#111111;">Goles jornada: ' + totalGoals + '</div>' +
     '</div>';
 
@@ -4143,7 +4143,7 @@ function makeWinnerCard(opts) {
 
   card.innerHTML =
     '<div style="text-align:center;">' +
-      '<div style="display:inline-flex;align-items:center;gap:10px;padding:12px 22px;border-radius:999px;background:#111111;color:#ffffff;font-size:22px;font-weight:800;">🏆 Quiniela Herseg MX</div>' +
+      '<div style="display:inline-flex;align-items:center;gap:10px;padding:12px 22px;border-radius:999px;background:#111111;color:#ffffff;font-size:22px;font-weight:800;">🏆 Quiniela Arcángel</div>' +
       '<div style="font-size:52px;font-weight:900;margin-top:26px;line-height:1.05;">' + title + '</div>' +
       '<div style="font-size:24px;color:#555;margin-top:12px;">' + poolName + '</div>' +
       '<div style="font-size:20px;color:#666;margin-top:8px;">' + season + '</div>' +
