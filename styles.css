@@ -1,210 +1,366 @@
-/* Aquí casi todo lo maneja Tailwind.
-   Este archivo es por si quieres meter ajustes globales. */
+/* ============================================================
+   QUINIELA ARCÁNGEL — PREMIUM DARK UI
+   Glassmorphism + Sports Dark Theme
+   ============================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
+
+/* ── Variables ── */
 :root {
   color-scheme: dark;
+
+  --bg-base:        #050810;
+  --bg-surface:     #0c1018;
+  --glass-bg:       rgba(255,255,255,0.04);
+  --glass-border:   rgba(255,255,255,0.08);
+  --glass-hover:    rgba(255,255,255,0.07);
+
+  --green:          #10b981;
+  --green-glow:     rgba(16,185,129,0.35);
+  --green-soft:     rgba(16,185,129,0.12);
+  --green-bright:   #34d399;
+
+  --text-primary:   #f0f4f8;
+  --text-secondary: #8a94a6;
+  --text-muted:     #4a5568;
+
+  --radius-card:    20px;
+  --radius-input:   14px;
+  --radius-btn:     14px;
+
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+
+  --nav-height: 72px;
+  --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
 }
 
-/* Opcional: que los inputs se vean uniformes */
-input::placeholder {
-  opacity: .85;
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
-/* ====== Plantilla tipo Excel ====== */
-.qh-card {
-  width: 360px;               /* tamaño visual similar a recuadro */
-  background: #0b0f14;
-  border: 1px solid #1f2937;
-  border-radius: 14px;
-  padding: 10px;
-  color: #e5e7eb;
-  font-family: ui-sans-serif, system-ui, -apple-system;
+/* Animated background mesh */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% 0%,   rgba(16,185,129,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 90% 100%,  rgba(6,182,212,0.05)  0%, transparent 60%),
+    radial-gradient(ellipse 100% 80% at 50% 50%,  rgba(5,8,16,1)        0%, transparent 100%);
+  pointer-events: none;
 }
 
-.qh-title { font-weight: 800; text-align: center; font-size: 16px; }
-.qh-sub   { text-align: center; font-size: 12px; color:#a1a1aa; margin-top:2px; }
-
-.qh-meta {
-  display:grid;
-  grid-template-columns: 1fr 1fr 60px;
-  gap:6px;
-  margin-top:8px;
-  font-size: 12px;
-}
-.qh-meta > div{
-  border:1px solid #2a3648;
-  border-radius:10px;
-  padding:6px;
-  text-align:center;
-  background:#0a0e13;
+/* Subtle field grid overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
 }
 
-.qh-table { margin-top:10px; display:grid; gap:6px; }
-
-.qh-match {
-  display:grid;
-  grid-template-columns: 36px 1fr 36px 1fr 36px;
-  align-items:center;
-  gap:8px;
+/* ── Typography ── */
+h1, h2, h3, .font-bold, .font-semibold, .font-black {
+  font-family: var(--font-body);
+  letter-spacing: -0.01em;
 }
 
-.qh-box {
-  width:36px; height:26px;
-  border:1.5px solid #94a3b8;
-  border-radius:6px;
-  background:#0a0e13;
+/* ── Tailwind overrides: layout wrapper ── */
+.max-w-4xl { padding-bottom: calc(var(--nav-height) + 16px); }
+
+/* ── HEADER ── */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(5,8,16,0.75);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 12px 16px !important;
+  margin: 0 -16px;
 }
 
-.qh-team{
-  text-align:center;
-  font-weight:700;
-  letter-spacing:.2px;
-  font-size:12px;
+header h1 {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  background: linear-gradient(135deg, #fff 40%, var(--green-bright));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.qh-foot{
-  margin-top:10px;
-  font-size:11px;
-  color:#cbd5e1;
+/* ── ALERT ── */
+#alert {
+  border-radius: var(--radius-card) !important;
+  backdrop-filter: blur(12px);
+  font-family: var(--font-body);
+  animation: slideDown 0.25s ease;
 }
-.qh-foot .line{ margin-top:4px; }
-
-/* ====== Layout de impresión (idéntico a tu hoja Excel: 5 arriba + 4 abajo) ====== */
-.sheet {
-  width: 1120px;              /* “canvas” ancho para landscape */
-  padding: 14px;
-  background: #0b0f14;
+@keyframes slideDown {
+  from { opacity:0; transform: translateY(-8px); }
+  to   { opacity:1; transform: translateY(0); }
 }
 
-.sheet-row{
-  display:grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap:12px;
-  margin-bottom:12px;
-}
-.sheet-row.second{
-  grid-template-columns: repeat(4, 1fr);
-}
-
-/* ===== Fix overflow móvil (Plantillas editor + preview) ===== */
-
-/* Filas editor */
-.tpl-row{
-  display:grid;
-  grid-template-columns: 58px 1fr 1fr;
-  gap:8px;
-  align-items:center;
+/* ============================================================
+   LOGIN SCREEN
+   ============================================================ */
+#viewLogin .bg-zinc-900 {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 28px !important;
+  box-shadow:
+    0 0 0 1px rgba(16,185,129,0.08),
+    0 32px 64px rgba(0,0,0,0.6),
+    0 0 80px rgba(16,185,129,0.04) inset;
+  position: relative;
+  overflow: hidden;
+  padding: 32px 28px !important;
 }
 
-.tpl-no{
-  padding:10px;
-  text-align:center;
-  font-size:14px;
-  border-radius:10px;
-  background:#0a0e13;
-  border:1px solid #1f2937;
-  color:#e5e7eb;
+/* Glow top accent */
+#viewLogin .bg-zinc-900::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: 10%; right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  border-radius: 0 0 4px 4px;
 }
 
-.tpl-in{
-  padding:10px;
-  border-radius:10px;
-  background:#0a0e13;
-  border:1px solid #1f2937;
-  color:#e5e7eb;
-  width:100%;
-  min-width:0; /* clave para que el input NO empuje el grid */
+#viewLogin h2 {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  background: linear-gradient(135deg, #fff 40%, var(--green-bright));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 4px;
 }
 
-/* En pantallas chicas, poner Local y Visita en 2 filas */
-@media (max-width: 420px){
-  .tpl-row{
-    grid-template-columns: 58px 1fr;
-    grid-template-rows: auto auto;
-  }
-  .tpl-row input[data-away]{
-    grid-column: 2 / 3;
-  }
+/* ============================================================
+   CARDS — glass surface
+   ============================================================ */
+.bg-zinc-900 {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.bg-zinc-900:hover {
+  border-color: rgba(255,255,255,0.12) !important;
 }
 
-/* Preview: que nunca se desborde */
-#tplPreviewWrap{
-  overflow-x:auto;
-  -webkit-overflow-scrolling: touch;
+/* Inner dark surfaces (inputs, KPI cells) */
+.bg-zinc-950 {
+  background: rgba(5,8,16,0.7) !important;
 }
 
-/* La tarjeta excel: permitir escalar en móvil */
-.qh-card{
-  max-width: 100%;
-  width: 360px;
+/* ── KPI GRID CARDS ── */
+#tab-home .grid > div.bg-zinc-900 {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 18px !important;
+  padding: 16px !important;
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+#tab-home .grid > div.bg-zinc-900:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5) !important;
+}
+#tab-home .grid > div.bg-zinc-900::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(16,185,129,0.5), transparent);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+#tab-home .grid > div.bg-zinc-900:hover::before { opacity: 1; }
+
+#tab-home .grid .text-xs { color: var(--text-secondary) !important; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+#tab-home .grid .text-sm.font-semibold { font-size: 1.1rem !important; font-weight: 700; margin-top: 6px; }
+
+/* ── TOP BAR "greeting" ── */
+#viewDash > .pb-28 > div:first-child {
+  background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(6,182,212,0.05) 100%) !important;
+  border: 1px solid rgba(16,185,129,0.2) !important;
+  border-radius: 24px !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
+}
+#viewDash > .pb-28 > div:first-child::after {
+  content: '⚽';
+  position: absolute;
+  right: -8px; bottom: -16px;
+  font-size: 80px;
+  opacity: 0.04;
+  pointer-events: none;
+  line-height: 1;
 }
 
-/* ==== Anti overflow global en móvil ==== */
-input, select, button {
+#greetingMain {
+  font-family: var(--font-display);
+  font-size: 1.4rem !important;
+  background: linear-gradient(135deg, #fff 50%, var(--green-bright));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   INPUTS & SELECTS
+   ============================================================ */
+input, select, textarea {
+  font-family: var(--font-body) !important;
+  background: rgba(5,8,16,0.6) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: var(--radius-input) !important;
+  color: var(--text-primary) !important;
+  transition: border-color var(--transition), box-shadow var(--transition);
   max-width: 100%;
   min-width: 0;
 }
 
-/* Selects: que el texto largo no rompa */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--green) !important;
+  box-shadow: 0 0 0 3px var(--green-soft), 0 0 16px var(--green-glow) !important;
+  background: rgba(5,8,16,0.8) !important;
+}
+
+input::placeholder { opacity: 0.45; }
+
 select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+select option { background: #0c1018; }
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+button {
+  font-family: var(--font-body) !important;
+  transition: all var(--transition) !important;
+  cursor: pointer;
+  max-width: 100%;
+  min-width: 0;
 }
 
-/* Botones en header de Plantillas: apilarlos en móvil */
-@media (max-width: 520px){
-  #btnExportPDF, #btnExportCurrentPNG{
-    width: 100%;
-  }
+/* Primary — emerald */
+.bg-emerald-600 {
+  background: linear-gradient(135deg, #059669 0%, #10b981 60%, #34d399 100%) !important;
+  border: 1px solid rgba(52,211,153,0.3) !important;
+  border-radius: var(--radius-btn) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+  box-shadow: 0 4px 16px rgba(16,185,129,0.3), 0 1px 0 rgba(255,255,255,0.1) inset !important;
+  position: relative;
+  overflow: hidden;
+}
+.bg-emerald-600::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.bg-emerald-600:hover:not(:disabled) {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%) !important;
+  box-shadow: 0 6px 24px rgba(16,185,129,0.5), 0 0 32px rgba(16,185,129,0.2) !important;
+  transform: translateY(-1px) !important;
+}
+.bg-emerald-600:active:not(:disabled) {
+  transform: translateY(0) scale(0.98) !important;
 }
 
-/* Suaviza sombras y bordes de cards */
-.bg-zinc-900 {
-  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+/* Hover state override */
+.hover\:bg-emerald-500:hover { background: transparent !important; }
+
+/* Secondary — glass dark */
+.bg-zinc-800 {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: var(--radius-btn) !important;
+  color: var(--text-primary) !important;
+}
+.bg-zinc-800:hover, .hover\:bg-zinc-700:hover {
+  background: rgba(255,255,255,0.1) !important;
+  border-color: rgba(255,255,255,0.14) !important;
 }
 
-.qh-card{
-  box-shadow: 0 10px 30px rgba(0,0,0,.30);
+/* Danger — rose */
+.bg-rose-600 {
+  background: linear-gradient(135deg, #be123c 0%, #e11d48 100%) !important;
+  border: 1px solid rgba(251,113,133,0.3) !important;
+  border-radius: var(--radius-btn) !important;
+  box-shadow: 0 4px 16px rgba(225,29,72,0.3) !important;
+}
+.bg-rose-600:hover:not(:disabled) {
+  box-shadow: 0 6px 24px rgba(225,29,72,0.5) !important;
+  transform: translateY(-1px) !important;
 }
 
-.pickbtn{
-  width:100%;
-  padding:14px 0;
-  border-radius:14px;
-  background:#0a0e13;
-  border:1px solid #1f2937;
-  color:#e5e7eb;
-  font-weight:800;
-  font-size:18px;
+/* Icon/Square buttons */
+.w-11.h-11 {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 14px !important;
+  transition: all var(--transition);
 }
-.pickbtn-on{
-  background: rgba(16,185,129,.15);
-  border-color: rgba(16,185,129,.45);
-  color:#34d399;
+.w-11.h-11:hover {
+  background: rgba(255,255,255,0.1) !important;
+  border-color: rgba(255,255,255,0.14) !important;
 }
 
-.app-tab {
-  display: block;
+/* Disabled state */
+button:disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
-.app-tab.hidden {
-  display: none;
-}
-
-.bottom-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 50;
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 0;
-  background: rgba(10, 14, 19, 0.96);
-  border-top: 1px solid #27272a;
-  backdrop-filter: blur(14px);
-  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+/* ============================================================
+   BOTTOM NAV
+   ============================================================ */
+#bottomNav {
+  background: rgba(5,8,16,0.85) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border-top: 1px solid rgba(255,255,255,0.07) !important;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom)) !important;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.4) !important;
 }
 
 .bottom-nav-btn {
@@ -213,24 +369,486 @@ select {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  color: #a1a1aa;
-  background: transparent;
-  border: 0;
+  color: var(--text-muted);
+  background: transparent !important;
+  border: 0 !important;
   padding: 8px 4px;
-  border-radius: 14px;
-  font-size: 12px;
+  border-radius: 16px !important;
+  font-size: 11px;
+  transition: all var(--transition) !important;
+  position: relative;
+  box-shadow: none !important;
 }
 
-.bottom-nav-btn span {
-  font-size: 20px;
-  line-height: 1;
-}
+.bottom-nav-btn span { font-size: 22px; line-height: 1; transition: transform var(--transition); }
+.bottom-nav-btn small { font-size: 10px; font-weight: 500; transition: color var(--transition); }
 
-.bottom-nav-btn small {
-  font-size: 10px;
+.bottom-nav-btn:hover {
+  color: var(--text-secondary) !important;
+  background: rgba(255,255,255,0.05) !important;
 }
+.bottom-nav-btn:hover span { transform: translateY(-2px); }
 
 .bottom-nav-btn.active {
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
+  color: var(--green-bright) !important;
+  background: var(--green-soft) !important;
 }
+.bottom-nav-btn.active small { color: var(--green-bright) !important; }
+.bottom-nav-btn.active span  { filter: drop-shadow(0 0 6px var(--green)); }
+
+/* Active glow dot */
+.bottom-nav-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--green-bright);
+  box-shadow: 0 0 6px var(--green);
+}
+
+/* More menu button */
+#btnMoreMenu {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 16px !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+#btnMoreMenu:hover {
+  background: rgba(255,255,255,0.08) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ============================================================
+   MORE MENU SHEET
+   ============================================================ */
+#moreMenuSheet > div:last-child {
+  background: rgba(8,12,20,0.95) !important;
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 28px 28px 0 0 !important;
+  box-shadow: 0 -24px 60px rgba(0,0,0,0.7) !important;
+}
+
+.more-menu-btn {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 20px !important;
+  transition: all var(--transition) !important;
+  box-shadow: none !important;
+}
+.more-menu-btn:hover {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(16,185,129,0.2) !important;
+  transform: scale(1.02) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+}
+.more-menu-btn .font-semibold { font-weight: 700 !important; }
+.more-menu-btn .text-xs { color: var(--text-secondary) !important; }
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+[class*="rounded-full"][class*="bg-rose"] {
+  background: linear-gradient(135deg, #be123c, #e11d48) !important;
+  box-shadow: 0 2px 8px rgba(225,29,72,0.5) !important;
+  font-weight: 800 !important;
+}
+[class*="rounded-full"][class*="bg-emerald"] {
+  background: linear-gradient(135deg, #059669, #10b981) !important;
+  box-shadow: 0 2px 8px rgba(16,185,129,0.5) !important;
+  font-weight: 800 !important;
+}
+
+/* ============================================================
+   SECTION HEADERS / PILLS
+   ============================================================ */
+.bg-emerald-500\/10 {
+  background: rgba(16,185,129,0.1) !important;
+  border: 1px solid rgba(16,185,129,0.2) !important;
+}
+.text-emerald-400 { color: var(--green-bright) !important; }
+
+/* Section card headings */
+h3.font-semibold {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   FILTER BUTTONS
+   ============================================================ */
+.participant-filter-btn,
+.entries-filter-btn,
+.pick-filter-btn {
+  border-radius: 14px !important;
+  transition: all var(--transition) !important;
+  font-size: 12px !important;
+}
+
+/* Active filter */
+.participant-filter-btn.bg-emerald-600,
+.entries-filter-btn.bg-emerald-600,
+.pick-filter-btn.bg-emerald-600 {
+  box-shadow: 0 4px 16px rgba(16,185,129,0.3) !important;
+}
+
+/* Inactive filter */
+.participant-filter-btn.bg-zinc-800,
+.entries-filter-btn.bg-zinc-800,
+.pick-filter-btn.bg-zinc-800 {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+}
+.participant-filter-btn.bg-zinc-800:hover,
+.entries-filter-btn.bg-zinc-800:hover,
+.pick-filter-btn.bg-zinc-800:hover {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+}
+
+/* ============================================================
+   PICK BUTTONS (L / E / V)
+   ============================================================ */
+.pickbtn {
+  width: 100%;
+  padding: 16px 0;
+  border-radius: 16px;
+  background: rgba(5,8,16,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-primary);
+  font-weight: 800;
+  font-size: 20px;
+  font-family: var(--font-display);
+  letter-spacing: 0.05em;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.pickbtn:hover {
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  transform: translateY(-1px);
+}
+.pickbtn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.pickbtn-on {
+  background: linear-gradient(135deg, rgba(5,150,105,0.25) 0%, rgba(16,185,129,0.15) 100%) !important;
+  border: 1.5px solid rgba(16,185,129,0.5) !important;
+  color: var(--green-bright) !important;
+  box-shadow: 0 0 20px rgba(16,185,129,0.2), 0 4px 12px rgba(0,0,0,0.3) !important;
+  transform: scale(1.03) !important;
+}
+.pickbtn-on::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: 10%; right: 10%;
+  height: 1.5px;
+  background: var(--green-bright);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 0 8px var(--green);
+}
+
+/* ============================================================
+   PARTICIPANT EDIT MODAL
+   ============================================================ */
+#participantEditModal > div:last-child {
+  background: rgba(8,12,20,0.95) !important;
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 28px !important;
+  box-shadow:
+    0 0 0 1px rgba(16,185,129,0.1),
+    0 32px 80px rgba(0,0,0,0.8) !important;
+}
+
+/* ============================================================
+   SCROLL AREAS
+   ============================================================ */
+#participantsListWrap,
+#entriesListWrap,
+#pickStatusListWrap {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+#participantsListWrap::-webkit-scrollbar,
+#entriesListWrap::-webkit-scrollbar,
+#pickStatusListWrap::-webkit-scrollbar { width: 4px; }
+#participantsListWrap::-webkit-scrollbar-track,
+#entriesListWrap::-webkit-scrollbar-track,
+#pickStatusListWrap::-webkit-scrollbar-track { background: transparent; }
+#participantsListWrap::-webkit-scrollbar-thumb,
+#entriesListWrap::-webkit-scrollbar-thumb,
+#pickStatusListWrap::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+/* ============================================================
+   PLANTILLA (TEMPLATE) — Excel-style card
+   ============================================================ */
+.qh-card {
+  width: 360px;
+  max-width: 100%;
+  background: rgba(8,12,20,0.95);
+  border: 1px solid rgba(16,185,129,0.15);
+  border-radius: 18px;
+  padding: 14px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  box-shadow:
+    0 0 0 1px rgba(16,185,129,0.05),
+    0 16px 48px rgba(0,0,0,0.6),
+    0 0 60px rgba(16,185,129,0.03) inset;
+  position: relative;
+  overflow: hidden;
+}
+.qh-card::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: 15%; right: 15%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+}
+
+.qh-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-align: center;
+  font-size: 15px;
+  background: linear-gradient(135deg, #fff, var(--green-bright));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.qh-sub { text-align: center; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+.qh-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr 60px;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+.qh-meta > div {
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 6px;
+  text-align: center;
+  background: rgba(5,8,16,0.6);
+}
+
+.qh-table { margin-top: 10px; display: grid; gap: 5px; }
+
+.qh-match {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px 1fr 36px;
+  align-items: center;
+  gap: 6px;
+}
+
+.qh-box {
+  width: 36px; height: 26px;
+  border: 1.5px solid rgba(148,163,184,0.3);
+  border-radius: 7px;
+  background: rgba(5,8,16,0.7);
+}
+
+.qh-team {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  font-size: 11px;
+}
+
+.qh-foot { margin-top: 10px; font-size: 10px; color: var(--text-secondary); }
+.qh-foot .line { margin-top: 4px; }
+
+/* Layout para exportación */
+.sheet {
+  width: 1120px;
+  padding: 14px;
+  background: #050810;
+}
+.sheet-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.sheet-row.second { grid-template-columns: repeat(4, 1fr); }
+
+/* ============================================================
+   TEMPLATE EDITOR ROWS
+   ============================================================ */
+.tpl-row {
+  display: grid;
+  grid-template-columns: 58px 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+@media (max-width: 420px) {
+  .tpl-row { grid-template-columns: 58px 1fr; grid-template-rows: auto auto; }
+  .tpl-row input[data-away] { grid-column: 2 / 3; }
+}
+
+.tpl-no {
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 10px;
+  background: rgba(5,8,16,0.7);
+  border: 1px solid rgba(255,255,255,0.07);
+  color: var(--green-bright);
+}
+
+.tpl-in {
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(5,8,16,0.6);
+  border: 1px solid rgba(255,255,255,0.07);
+  color: var(--text-primary);
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-body);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.tpl-in:focus {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 0 3px var(--green-soft);
+  outline: none;
+}
+
+#tplPreviewWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 14px !important;
+  background: rgba(5,8,16,0.7) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+}
+
+/* ============================================================
+   SECTION TABS
+   ============================================================ */
+.app-tab { display: block; animation: fadeInUp 0.2s ease; }
+.app-tab.hidden { display: none; animation: none; }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SIGN-OUT BUTTON
+   ============================================================ */
+#btnSignOut {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 12px !important;
+  font-size: 13px !important;
+  padding: 8px 14px !important;
+  box-shadow: none !important;
+}
+#btnSignOut:hover {
+  background: rgba(255,59,48,0.15) !important;
+  border-color: rgba(255,59,48,0.3) !important;
+}
+
+/* ============================================================
+   ACTIVE POOL BADGE
+   ============================================================ */
+#activePoolName {
+  font-weight: 700;
+  color: var(--green-bright);
+}
+
+/* ============================================================
+   DENY / PROFILE SCREENS
+   ============================================================ */
+#viewDenied .bg-zinc-900,
+#viewProfile .bg-zinc-900 {
+  padding: 32px 28px !important;
+}
+#viewDenied h2,
+#viewProfile h2 {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+
+/* ============================================================
+   DEBUG OVERLAY — hide in production look
+   ============================================================ */
+#jsok {
+  background: rgba(16,185,129,0.15) !important;
+  border: 1px solid rgba(16,185,129,0.3) !important;
+  color: var(--green-bright) !important;
+  font-family: var(--font-body) !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+}
+
+/* ============================================================
+   GLOBAL — anti overflow mobile
+   ============================================================ */
+input, select, button { max-width: 100%; min-width: 0; }
+
+/* ============================================================
+   RESPONSIVE TWEAKS
+   ============================================================ */
+@media (max-width: 520px) {
+  #btnExportPDF, #btnExportCurrentPNG { width: 100%; }
+}
+
+@media (max-width: 380px) {
+  #greetingMain { font-size: 1.15rem !important; }
+  .qh-card { width: 320px; }
+}
+
+/* ============================================================
+   CHECKBOX ACCENT
+   ============================================================ */
+input[type="checkbox"] { accent-color: var(--green); }
+
+/* ============================================================
+   LEGEND BOX
+   ============================================================ */
+#pickLegendBox {
+  background: rgba(5,8,16,0.8) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 14px !important;
+  backdrop-filter: blur(12px);
+}
+#pickLegendBox > div {
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+#pickLegendBox > div:last-child { border-bottom: none; }
+
+/* ============================================================
+   STANDINGS — table rows
+   ============================================================ */
+#standingsList > * {
+  border-radius: 14px !important;
+  transition: transform var(--transition);
+}
+#standingsList > *:hover { transform: translateX(3px); }
+
+/* ============================================================
+   GRADIENT ACCENTS on active jornada badge / pills
+   ============================================================ */
+.border-emerald-500\/20 { border-color: rgba(16,185,129,0.2) !important; }
+.bg-emerald-500\/10     { background: rgba(16,185,129,0.08) !important; }
