@@ -1166,18 +1166,26 @@ async function fillPickPoolsSelect() {
   const { data, error } = await supabaseClient
     .from("pools")
     .select("id, name, status, created_at")
-    .eq("status", "open")
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(50);
 
   if (error) return showAlert(error.message, "error");
 
   const sel = $("pickPool");
-  sel.innerHTML = (data || []).map(p =>
-    `<option value="${p.id}">${p.name} (Activa)</option>`
-  ).join("");
 
-  if ((data || [])[0]) sel.value = data[0].id;
+  // Build options: label by status
+  sel.innerHTML = (data || []).map(p => {
+    const label =
+      p.status === "open"   ? " ✅ Activa"  :
+      p.status === "draft"  ? " 📝 Borrador" :
+                              " 🔒 Cerrada";
+    return `<option value="${p.id}">${p.name}${label}</option>`;
+  }).join("");
+
+  // Auto-select the active (open) pool if present, otherwise first
+  const openPool = (data || []).find(p => p.status === "open");
+  const defaultPool = openPool || (data || [])[0];
+  if (defaultPool) sel.value = defaultPool.id;
 }
 
 async function fillPickParticipantsSelect() {
@@ -1527,7 +1535,10 @@ async function loadPickStatusList() {
 
   const pool_id = $("pickPool").value;
   if (!pool_id) {
-    $("pickStatusList").innerHTML = "";
+    $("pickStatusList").innerHTML = `
+      <div class="text-sm text-zinc-400 p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+        Selecciona una jornada para ver el estado de captura.
+      </div>`;
     return;
   }
 
@@ -2674,7 +2685,7 @@ function makeTemplateCard(opts) {
 
   // ── Dimensiones de casilla y logo según modo ──
   const boxW      = exportMode ? 80 : 50;
-  const boxH      = exportMode ? 42 : 28;
+  const boxH      = exportMode ? 48 : 32;
   const logoSzRow = exportMode ? 28 : 17;
   const teamFont  = exportMode ? "14px" : "11px";
   const colGap    = exportMode ? "10px" : "6px";
@@ -2686,7 +2697,7 @@ function makeTemplateCard(opts) {
     const boxStyle = `width:${boxW}px;height:${boxH}px;border:1.5px solid ${border};border-radius:8px;background:${innerBg};flex:0 0 auto;`;
 
     const row = document.createElement("div");
-    row.style.cssText = `display:grid;grid-template-columns:${boxW}px 1fr ${boxW}px 1fr ${boxW}px;align-items:center;column-gap:${colGap};`;
+    row.style.cssText = `display:grid;grid-template-columns:${boxW}px 1fr ${boxW}px 1fr ${boxW}px;align-items:center;column-gap:${colGap};min-height:${exportMode?52:36}px;`;
 
     row.innerHTML = `
       <div style="display:flex;justify-content:center;align-items:center;">
@@ -2695,7 +2706,7 @@ function makeTemplateCard(opts) {
 
       <div style="display:flex;align-items:center;gap:${exportMode?"8px":"5px"};min-width:0;overflow:hidden;">
         ${homeLogo?`<img src="${homeLogo}" crossorigin="anonymous" style="width:${logoSzRow}px;height:${logoSzRow}px;object-fit:contain;flex:0 0 auto;">`:""}
-        <span style="font-weight:800;font-size:${teamFont};color:${text};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px;">${m.home_team}</span>
+        <span style="font-weight:800;font-size:${teamFont};color:${text};white-space:nowrap;overflow:visible;letter-spacing:.2px;line-height:1.4;padding-bottom:2px;">${m.home_team}</span>
       </div>
 
       <div style="display:flex;justify-content:center;align-items:center;">
@@ -2703,7 +2714,7 @@ function makeTemplateCard(opts) {
       </div>
 
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:${exportMode?"8px":"5px"};min-width:0;overflow:hidden;">
-        <span style="font-weight:800;font-size:${teamFont};color:${text};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px;">${m.away_team}</span>
+        <span style="font-weight:800;font-size:${teamFont};color:${text};white-space:nowrap;overflow:visible;letter-spacing:.2px;line-height:1.4;padding-bottom:2px;">${m.away_team}</span>
         ${awayLogo?`<img src="${awayLogo}" crossorigin="anonymous" style="width:${logoSzRow}px;height:${logoSzRow}px;object-fit:contain;flex:0 0 auto;">`:""}
       </div>
 
