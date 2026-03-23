@@ -2511,33 +2511,68 @@ async function saveTemplateMatches() {
   setBusy(btn, true, "Guardando...");
   $("tplSavedStatus").textContent = `Guardando plantilla (${rows.length} partidos)...`;
 
+  // Helper: timeout para detectar Supabase colgado
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(
+          "⏱ Tiempo agotado en: " + label + ". Revisa RLS en Supabase → tabla matches → políticas DELETE e INSERT."
+        )), ms)
+      )
+    ]);
+  }
+
+  // Mensaje de error siempre visible (fijo en pantalla, sin depender del scroll)
+  function showFixedError(msg) {
+    let el = document.getElementById("tplFixedError");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "tplFixedError";
+      el.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;" +
+        "background:#7f1d1d;color:#fef2f2;padding:14px 16px;font:13px system-ui;" +
+        "line-height:1.5;border-bottom:2px solid #ef4444;";
+      document.body.appendChild(el);
+    }
+    el.innerHTML = msg + "<br><small style='opacity:.8'>Toca aquí para cerrar</small>";
+    el.style.display = "block";
+    el.onclick = () => { el.style.display = "none"; };
+  }
+
   try {
-    // Primero borrar los matches existentes de esta jornada para evitar duplicados
-    const { error: delErr } = await supabaseClient
-      .from("matches")
-      .delete()
-      .eq("pool_id", pool_id);
+    // 1) Borrar matches existentes (timeout 8s)
+    const { error: delErr } = await withTimeout(
+      supabaseClient.from("matches").delete().eq("pool_id", pool_id),
+      8000,
+      "DELETE matches"
+    );
 
-    if (delErr) throw new Error("Error limpiando partidos anteriores: " + delErr.message);
+    if (delErr) throw new Error("RLS/DELETE: " + delErr.message + " | Código: " + delErr.code);
 
-    // Ahora insertar los nuevos
-    const { error: insErr } = await supabaseClient
-      .from("matches")
-      .insert(rows);
+    // 2) Insertar nuevos (timeout 8s)
+    const { error: insErr } = await withTimeout(
+      supabaseClient.from("matches").insert(rows),
+      8000,
+      "INSERT matches"
+    );
 
-    if (insErr) throw new Error("Error insertando partidos: " + insErr.message);
+    if (insErr) throw new Error("RLS/INSERT: " + insErr.message + " | Código: " + insErr.code);
 
     $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
     showAlert(`Plantilla de ${rows.length} partidos guardada ✅`, "ok");
     $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
 
-    // Refrescar preview
+    // Quitar error fijo si estaba visible
+    const fixedErr = document.getElementById("tplFixedError");
+    if (fixedErr) fixedErr.style.display = "none";
+
     await renderPreview();
 
   } catch (err) {
+    const msg = err?.message || String(err);
     $("tplSavedStatus").textContent = "Error al guardar.";
-    showAlert("❌ " + (err?.message || String(err)), "error");
-    $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+    showAlert("❌ " + msg, "error");
+    showFixedError("❌ ERROR GUARDANDO PLANTILLA:<br>" + msg);
   } finally {
     setBusy(btn, false);
   }
