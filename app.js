@@ -2480,7 +2480,9 @@ async function saveTemplateMatches() {
 
   if (!pool_id) {
     $("tplSavedStatus").textContent = "Selecciona una jornada.";
-    return showAlert("Selecciona una jornada.", "error");
+    showAlert("Selecciona una jornada.", "error");
+    $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
   }
 
   const rows = [];
@@ -2491,7 +2493,9 @@ async function saveTemplateMatches() {
 
     if (!home || !away) {
       $("tplSavedStatus").textContent = `Falta capturar Local/Visita en partido #${i}`;
-      return showAlert(`Falta Local/Visita en partido #${i}`, "error");
+      showAlert(`Falta Local o Visita en partido #${i}`, "error");
+      $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
     }
 
     rows.push({
@@ -2502,25 +2506,40 @@ async function saveTemplateMatches() {
     });
   }
 
+  // Deshabilitar botón mientras guarda
+  const btn = $("btnSaveTemplate");
+  setBusy(btn, true, "Guardando...");
   $("tplSavedStatus").textContent = `Guardando plantilla (${rows.length} partidos)...`;
-  showAlert(`Guardando plantilla (${rows.length} partidos)...`, "ok");
 
   try {
-    const { data ,error } = await supabaseClient
+    // Primero borrar los matches existentes de esta jornada para evitar duplicados
+    const { error: delErr } = await supabaseClient
       .from("matches")
-      .insert(rows); // 👈 sin .select()
+      .delete()
+      .eq("pool_id", pool_id);
 
-    if (error) {
-      $("tplSavedStatus").textContent = "Error guardando plantilla.";
-      return showAlert("Error guardando plantilla: " + error.message, "error");
-    }
+    if (delErr) throw new Error("Error limpiando partidos anteriores: " + delErr.message);
+
+    // Ahora insertar los nuevos
+    const { error: insErr } = await supabaseClient
+      .from("matches")
+      .insert(rows);
+
+    if (insErr) throw new Error("Error insertando partidos: " + insErr.message);
 
     $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
-    showAlert(`Plantilla guardada ✅ (${rows.length} partidos)`, "ok");
-return;
+    showAlert(`Plantilla de ${rows.length} partidos guardada ✅`, "ok");
+    $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // Refrescar preview
+    await renderPreview();
+
   } catch (err) {
-    $("tplSavedStatus").textContent = "Error inesperado al guardar.";
-    showAlert("Error inesperado: " + (err?.message || err), "error");
+    $("tplSavedStatus").textContent = "Error al guardar.";
+    showAlert("❌ " + (err?.message || String(err)), "error");
+    $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
+  } finally {
+    setBusy(btn, false);
   }
 }
 
