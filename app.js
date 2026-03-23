@@ -2540,23 +2540,17 @@ async function saveTemplateMatches() {
   }
 
   try {
-    // 1) Borrar matches existentes (timeout 8s)
-    const { error: delErr } = await withTimeout(
-      supabaseClient.from("matches").delete().eq("pool_id", pool_id),
-      8000,
-      "DELETE matches"
+    // UPSERT: actualiza si ya existe (pool_id + match_no), inserta si no.
+    // Nunca borra — evita conflictos con FK de predictions_1x2.
+    const { error: upsErr } = await withTimeout(
+      supabaseClient
+        .from("matches")
+        .upsert(rows, { onConflict: "pool_id,match_no" }),
+      10000,
+      "UPSERT matches"
     );
 
-    if (delErr) throw new Error("RLS/DELETE: " + delErr.message + " | Código: " + delErr.code);
-
-    // 2) Insertar nuevos (timeout 8s)
-    const { error: insErr } = await withTimeout(
-      supabaseClient.from("matches").insert(rows),
-      8000,
-      "INSERT matches"
-    );
-
-    if (insErr) throw new Error("RLS/INSERT: " + insErr.message + " | Código: " + insErr.code);
+    if (upsErr) throw new Error("Error guardando partidos: " + upsErr.message + " | Código: " + upsErr.code);
 
     $("tplSavedStatus").textContent = `Plantilla guardada: ${rows.length} partidos ✅`;
     showAlert(`Plantilla de ${rows.length} partidos guardada ✅`, "ok");
