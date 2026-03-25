@@ -2279,33 +2279,18 @@ async function loadEntriesAndStats() {
   const matchesTotal = Number(totalMatches || 0);
 
   // Calcular número de boleta por participante (orden cronológico)
-  const ticketCounterMap = new Map();
+
+  // Calcular número de boleta por participante
+  const ticketTotalMap = new Map();
   (rows || []).slice().reverse().forEach(function(r) {
-    const pid = r.participant_id;
-    ticketCounterMap.set(pid, (ticketCounterMap.get(pid) || 0) + 1);
+    ticketTotalMap.set(r.participant_id, (ticketTotalMap.get(r.participant_id) || 0) + 1);
   });
-  // Asignar número en orden de aparición (rows ya viene desc por created_at)
   const ticketNumberMap = new Map();
   const ticketSeenMap = new Map();
   (rows || []).slice().reverse().forEach(function(r) {
     const pid = r.participant_id;
     const seq = (ticketSeenMap.get(pid) || 0) + 1;
     ticketSeenMap.set(pid, seq);
-    ticketNumberMap.set(r.id, { num: seq, total: ticketCounterMap.get(pid) });
-  });
-
-  // Calcular número de boleta por participante
-  const ticketSeenMap = new Map();
-  const ticketTotalMap = new Map();
-  (rows || []).slice().reverse().forEach(function(r) {
-    ticketTotalMap.set(r.participant_id, (ticketTotalMap.get(r.participant_id) || 0) + 1);
-  });
-  const ticketNumberMap = new Map();
-  const ticketSeenMap2 = new Map();
-  (rows || []).slice().reverse().forEach(function(r) {
-    const pid = r.participant_id;
-    const seq = (ticketSeenMap2.get(pid) || 0) + 1;
-    ticketSeenMap2.set(pid, seq);
     ticketNumberMap.set(r.id, { num: seq, total: ticketTotalMap.get(pid) });
   });
 
@@ -2315,10 +2300,6 @@ async function loadEntriesAndStats() {
     const tInfo = ticketNumberMap.get(r.id);
     const boleta = tInfo && tInfo.total > 1
       ? ` <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:rgba(6,182,212,.15);color:#67e8f9;border:1px solid rgba(6,182,212,.3);font-weight:700;">Boleta #${tInfo.num}</span>`
-      : "";
-    const ticketInfo = ticketNumberMap.get(r.id);
-    const boleta = ticketInfo && ticketInfo.total > 1
-      ? ` <span style="font-size:11px;padding:2px 7px;border-radius:99px;background:rgba(6,182,212,.15);color:#67e8f9;border:1px solid rgba(6,182,212,.3);font-weight:700;">Boleta #${ticketInfo.num}</span>`
       : "";
 
     let picksEmoji = "⏳";
