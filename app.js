@@ -1614,9 +1614,20 @@ const rowsHtml = (participants || []).map(function(participant) {
   if (entry) {
     const pickCount = picksCountByEntry.get(entry.id) || 0;
 
+    const participantEntries = (entries || []).filter(function(e) {
+      return e.participant_id === participant.id;
+    });
+    const numBoletas = participantEntries.length;
+    const boletaBadge = numBoletas > 1
+      ? `<span style="font-size:10px;padding:1px 6px;border-radius:99px;background:rgba(6,182,212,.15);color:#67e8f9;border:1px solid rgba(6,182,212,.3);font-weight:700;margin-left:4px;">${numBoletas} boletas</span>`
+      : "";
+
     progressHtml = `
-      <div class="text-xs mt-1 ${pickCount > 0 ? "text-zinc-300" : "text-zinc-500"}">
-        ${pickCount}/${totalMatchesInPool || 0}
+      <div class="text-xs mt-1 flex items-center gap-1 flex-wrap">
+        <span class="${pickCount > 0 ? "text-zinc-300" : "text-zinc-500"}">
+          ${pickCount}/${totalMatchesInPool || 0} picks
+        </span>
+        ${boletaBadge}
       </div>
     `;
 
@@ -1642,38 +1653,41 @@ const rowsHtml = (participants || []).map(function(participant) {
       iconWrapClass = "border-amber-500/30 bg-amber-500/10";
     }
 
-    if (pickCount > 0) {
-      actionBtn = `
-        <div class="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-            data-participant-id="${participant.id}"
-            title="Abrir boleto">
-            👁️
-          </button>
+    // Generar botones por cada boleta del participante
+    const pEntries = (entries || []).filter(function(e) {
+      return e.participant_id === participant.id;
+    });
+    const multiEntry = pEntries.length > 1;
 
-          <button
-            type="button"
+    if (pEntries.length > 0) {
+      const btns = pEntries.map(function(e, idx) {
+        const label = multiEntry ? (idx + 1) : "";
+        const pickCountE = picksCountByEntry.get(e.id) || 0;
+        const isComplete = totalMatchesInPool > 0 && pickCountE >= totalMatchesInPool;
+        const btnColor = isComplete
+          ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-300"
+          : "bg-zinc-800 hover:bg-zinc-700";
+        return `
+          <button type="button"
+            class="pick-status-open px-3 h-11 rounded-xl ${btnColor} text-sm font-bold"
+            data-participant-id="${participant.id}"
+            data-entry-id="${e.id}"
+            title="Abrir boleta ${multiEntry ? (idx+1) : ""}">
+            👁️${label ? `<span style="font-size:10px;margin-left:2px;">#${label}</span>` : ""}
+          </button>
+          ${pickCountE > 0 ? `
+          <button type="button"
             class="pick-status-export w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
             data-participant-id="${participant.id}"
-            title="Descargar imagen">
+            data-entry-id="${e.id}"
+            title="Descargar boleta ${multiEntry ? (idx+1) : ""}">
             🖼️
-          </button>
-        </div>
-      `;
+          </button>` : ""}
+        `;
+      }).join("");
+      actionBtn = `<div class="flex items-center gap-1 shrink-0 flex-wrap justify-end">${btns}</div>`;
     } else {
-      actionBtn = `
-        <div class="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            class="pick-status-open w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-            data-participant-id="${participant.id}"
-            title="Abrir boleto">
-            👁️
-          </button>
-        </div>
-      `;
+      actionBtn = "";
     }
   }
 
@@ -2264,9 +2278,48 @@ async function loadEntriesAndStats() {
   const isClosed = poolInfo?.status === "closed";
   const matchesTotal = Number(totalMatches || 0);
 
+  // Calcular número de boleta por participante (orden cronológico)
+  const ticketCounterMap = new Map();
+  (rows || []).slice().reverse().forEach(function(r) {
+    const pid = r.participant_id;
+    ticketCounterMap.set(pid, (ticketCounterMap.get(pid) || 0) + 1);
+  });
+  // Asignar número en orden de aparición (rows ya viene desc por created_at)
+  const ticketNumberMap = new Map();
+  const ticketSeenMap = new Map();
+  (rows || []).slice().reverse().forEach(function(r) {
+    const pid = r.participant_id;
+    const seq = (ticketSeenMap.get(pid) || 0) + 1;
+    ticketSeenMap.set(pid, seq);
+    ticketNumberMap.set(r.id, { num: seq, total: ticketCounterMap.get(pid) });
+  });
+
+  // Calcular número de boleta por participante
+  const ticketSeenMap = new Map();
+  const ticketTotalMap = new Map();
+  (rows || []).slice().reverse().forEach(function(r) {
+    ticketTotalMap.set(r.participant_id, (ticketTotalMap.get(r.participant_id) || 0) + 1);
+  });
+  const ticketNumberMap = new Map();
+  const ticketSeenMap2 = new Map();
+  (rows || []).slice().reverse().forEach(function(r) {
+    const pid = r.participant_id;
+    const seq = (ticketSeenMap2.get(pid) || 0) + 1;
+    ticketSeenMap2.set(pid, seq);
+    ticketNumberMap.set(r.id, { num: seq, total: ticketTotalMap.get(pid) });
+  });
+
   $("entriesList").innerHTML = (rows || []).map(function(r) {
     const paidStatus = r.paid ? "paid" : "pending";
     const pickCount = Number(picksCountByEntry.get(r.id) || 0);
+    const tInfo = ticketNumberMap.get(r.id);
+    const boleta = tInfo && tInfo.total > 1
+      ? ` <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:rgba(6,182,212,.15);color:#67e8f9;border:1px solid rgba(6,182,212,.3);font-weight:700;">Boleta #${tInfo.num}</span>`
+      : "";
+    const ticketInfo = ticketNumberMap.get(r.id);
+    const boleta = ticketInfo && ticketInfo.total > 1
+      ? ` <span style="font-size:11px;padding:2px 7px;border-radius:99px;background:rgba(6,182,212,.15);color:#67e8f9;border:1px solid rgba(6,182,212,.3);font-weight:700;">Boleta #${ticketInfo.num}</span>`
+      : "";
 
     let picksEmoji = "⏳";
     let picksTextClass = "text-zinc-400";
@@ -2323,7 +2376,7 @@ async function loadEntriesAndStats() {
   data-name="${String(r.participants?.name || "").toLowerCase()}">
 
         <div class="min-w-0">
-          <div class="font-semibold">${r.participants?.name || "—"}</div>
+          <div class="font-semibold flex items-center gap-2 flex-wrap">${r.participants?.name || "—"}${boleta}</div>
 
           <div class="text-xs text-zinc-400 mt-1">
             ${new Date(r.created_at).toLocaleString("es-MX")}
