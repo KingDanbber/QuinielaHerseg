@@ -1667,17 +1667,23 @@ const rowsHtml = (participants || []).map(function(participant) {
         const btnColor = isComplete
           ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-300"
           : "bg-zinc-800 hover:bg-zinc-700";
+        const boletaLabel = multiEntry
+          ? `<span style="font-size:10px;font-weight:700;margin-left:3px;opacity:.85;">#${idx+1}</span>`
+          : "";
+        const openBtnClass = isComplete
+          ? "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-sm font-semibold"
+          : "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-semibold";
         return `
           <button type="button"
-            class="pick-status-open px-3 h-11 rounded-xl ${btnColor} text-sm font-bold"
+            class="${openBtnClass}"
             data-participant-id="${participant.id}"
             data-entry-id="${e.id}"
             title="Abrir boleta ${multiEntry ? (idx+1) : ""}">
-            👁️${label ? `<span style="font-size:10px;margin-left:2px;">#${label}</span>` : ""}
+            👁️${boletaLabel}
           </button>
           ${pickCountE > 0 ? `
           <button type="button"
-            class="pick-status-export w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+            class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
             data-participant-id="${participant.id}"
             data-entry-id="${e.id}"
             title="Descargar boleta ${multiEntry ? (idx+1) : ""}">
@@ -1685,7 +1691,7 @@ const rowsHtml = (participants || []).map(function(participant) {
           </button>` : ""}
         `;
       }).join("");
-      actionBtn = `<div class="flex items-center gap-1 shrink-0 flex-wrap justify-end">${btns}</div>`;
+      actionBtn = btns;
     } else {
       actionBtn = "";
     }
@@ -1696,26 +1702,28 @@ const rowsHtml = (participants || []).map(function(participant) {
       ? "hidden"
       : "";
 
+  const isMulti = pEntries.length > 1;
+
   return `
     <div
-  class="pick-status-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass} ${hiddenByFilter}"
+  class="pick-status-card p-3 border rounded-xl ${cardClass} ${hiddenByFilter}"
   data-status="${statusKey}"
   data-name="${String(participant.name || "").toLowerCase()}"
   data-area="${String(area || "").toLowerCase()}">
-      <div class="min-w-0 flex-1">
-        <div class="font-semibold text-sm leading-tight break-words">${participant.name}</div>
-        <div class="text-xs text-zinc-400 mt-1 break-words">${area}</div>
-        ${progressHtml}
-      </div>
 
-      <div class="flex items-center gap-2 shrink-0">
-        <div
-          class="w-11 h-11 rounded-xl border flex items-center justify-center text-xl ${iconWrapClass}"
+      <div class="flex items-center justify-between gap-2 mb-${isMulti ? "2" : "0"}">
+        <div class="min-w-0 flex-1">
+          <div class="font-semibold text-sm leading-tight truncate">${participant.name}</div>
+          <div class="text-xs text-zinc-400 mt-1 truncate">${area}</div>
+          ${progressHtml}
+        </div>
+        <div class="w-10 h-10 rounded-xl border flex items-center justify-center text-lg shrink-0 ${iconWrapClass}"
           title="${statusTitle}">
           ${statusEmoji}
         </div>
-        ${actionBtn}
       </div>
+
+      ${actionBtn ? `<div class="flex items-center gap-1 flex-wrap mt-1">${actionBtn}</div>` : ""}
     </div>
   `;
 }).join("");
