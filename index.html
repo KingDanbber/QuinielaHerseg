@@ -119,44 +119,63 @@
 
     <!-- TAB: DASHBOARD -->
     <section id="tab-home" class="app-tab space-y-4">
+
+      <!-- KPIs jornada activa -->
       <div class="grid grid-cols-2 gap-3">
-  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-    <div class="text-xs text-zinc-400">Jornada activa</div>
-    <div id="dashActivePool" class="text-sm font-semibold mt-1">—</div>
-  </div>
-
-  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-    <div class="text-xs text-zinc-400">Bolsa actual</div>
-    <div id="dashPrize" class="text-sm font-semibold mt-1">$0</div>
-  </div>
-
-  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-    <div class="text-xs text-zinc-400">Participantes activos</div>
-    <div id="dashParticipants" class="text-sm font-semibold mt-1">0</div>
-  </div>
-
-  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-    <div class="text-xs text-zinc-400">Boletos pagados</div>
-    <div id="dashPaidEntries" class="text-sm font-semibold mt-1">0</div>
-  </div>
-
-  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-    <div class="text-xs text-zinc-400">Modo activo</div>
-    <div id="dashMode" class="text-sm font-semibold mt-1">—</div>
-  </div>
-
-  <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-    <div class="text-xs text-zinc-400">Acumulado</div>
-    <div id="dashCarryover" class="text-sm font-semibold mt-1">$0</div>
-  </div>
-</div>
-
-      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-        <div class="text-sm font-semibold mb-2">Resumen rápido</div>
-        <div class="text-sm text-zinc-400">
-          Usa el menú inferior para administrar participantes, jornadas, plantillas, pagos y pronósticos.
+        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+          <div class="text-xs text-zinc-400">Jornada activa</div>
+          <div id="dashActivePool" class="text-sm font-semibold mt-1">—</div>
+        </div>
+        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+          <div class="text-xs text-zinc-400">Bolsa actual</div>
+          <div id="dashPrize" class="text-sm font-semibold mt-1">$0</div>
+        </div>
+        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+          <div class="text-xs text-zinc-400">Participantes activos</div>
+          <div id="dashParticipants" class="text-sm font-semibold mt-1">0</div>
+        </div>
+        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+          <div class="text-xs text-zinc-400">Boletos pagados</div>
+          <div id="dashPaidEntries" class="text-sm font-semibold mt-1">0</div>
+        </div>
+        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+          <div class="text-xs text-zinc-400">Modo activo</div>
+          <div id="dashMode" class="text-sm font-semibold mt-1">—</div>
+        </div>
+        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+          <div class="text-xs text-zinc-400">Acumulado</div>
+          <div id="dashCarryover" class="text-sm font-semibold mt-1">$0</div>
         </div>
       </div>
+
+      <!-- KPIs históricos -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-zinc-900 p-3 rounded-2xl border border-zinc-800 text-center">
+          <div class="text-xs text-zinc-400">Jornadas</div>
+          <div id="dashClosedPools" class="text-xl font-black mt-1">—</div>
+        </div>
+        <div class="bg-zinc-900 p-3 rounded-2xl border border-zinc-800 text-center">
+          <div class="text-xs text-zinc-400">Recaudado</div>
+          <div id="dashTotalHistorico" class="text-xl font-black mt-1">—</div>
+        </div>
+        <div class="bg-zinc-900 p-3 rounded-2xl border border-zinc-800 text-center">
+          <div class="text-xs text-zinc-400">Boletos total</div>
+          <div id="dashTotalBoletos" class="text-xl font-black mt-1">—</div>
+        </div>
+      </div>
+
+      <!-- Tabla histórica de aciertos -->
+      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">🏅 Tabla Histórica de Aciertos</h3>
+          <button onclick="loadHistoricalStandings()" class="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">🔄</button>
+        </div>
+        <div class="text-xs text-zinc-500 mb-3">Mejor boleta por jornada · Solo jornadas con resultados capturados</div>
+        <div id="historicalStandingsList" class="space-y-2">
+          <div class="text-sm text-zinc-400">Cargando...</div>
+        </div>
+      </div>
+
     </section>
 
     <!-- TAB: PARTICIPANTES -->
@@ -395,6 +414,12 @@
             Actualizar
           </button>
         </div>
+
+        <!-- Boton cobrar pendientes -->
+        <button id="btnExportPending" type="button"
+          class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 mt-2 flex items-center justify-center gap-2">
+          📲 Enviar cobro por WhatsApp
+        </button>
 
         <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
           <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
