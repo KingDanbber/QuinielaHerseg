@@ -852,3 +852,30 @@ input[type="checkbox"] { accent-color: var(--green); }
    ============================================================ */
 .border-emerald-500\/20 { border-color: rgba(16,185,129,0.2) !important; }
 .bg-emerald-500\/10     { background: rgba(16,185,129,0.08) !important; }
+
+/* ── Participant cards: compact buttons ── */
+.participant-wa-btn,
+.participant-edit-btn,
+.participant-toggle-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 10px !important;
+  font-size: 15px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+}
+
+/* ── Historical standings: smooth scroll ── */
+#historicalStandingsList {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+#historicalStandingsList::-webkit-scrollbar { width: 3px; }
+#historicalStandingsList::-webkit-scrollbar-track { background: transparent; }
+#historicalStandingsList::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+}

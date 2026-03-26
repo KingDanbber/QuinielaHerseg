@@ -630,7 +630,7 @@ const whatsappBadge = hasWhatsapp
 
     return `
   <div
-  class="participant-card p-3 border rounded-xl flex items-center justify-between gap-3 ${cardClass}"
+  class="participant-card p-3 border rounded-xl flex items-center gap-2 ${cardClass}"
   data-status="${statusKey}"
   data-name="${String(p.name || "").toLowerCase()}"
   data-area="${String(area || "").toLowerCase()}"
@@ -638,48 +638,35 @@ const whatsappBadge = hasWhatsapp
   data-has-whatsapp="${p.whatsapp ? "1" : "0"}">
 
     <div class="min-w-0 flex-1">
-      <div class="font-semibold text-sm leading-tight break-words flex items-center gap-1">
-  ${p.name || "—"} ${whatsappBadge}
-</div>
-      <div class="text-xs text-zinc-400 mt-1 break-words">
-        ${area} &nbsp; • &nbsp; ${whatsapp}
+      <div class="font-semibold text-sm leading-tight truncate flex items-center gap-1">
+        ${p.name || "—"} ${whatsappBadge}
       </div>
+      <div class="text-xs text-zinc-400 mt-0.5 truncate">${area}</div>
+      <div class="text-xs text-zinc-500 truncate">${whatsapp !== "—" ? whatsapp : ""}</div>
     </div>
 
-    <div class="flex items-center gap-2 shrink-0">
-      <div class="w-11 h-11 rounded-xl border flex items-center justify-center text-xl ${isActive ? "border-emerald-500/30 bg-emerald-500/10" : "border-zinc-700 bg-zinc-900"}"
+    <div class="flex items-center gap-1 shrink-0">
+      <div class="w-8 h-8 rounded-lg border flex items-center justify-center text-base ${isActive ? "border-emerald-500/30 bg-emerald-500/10" : "border-zinc-700 bg-zinc-900"}"
            title="${isActive ? "Activo" : "Archivado"}">
         ${statusEmoji}
       </div>
-
-<button
-    type="button"
-    class="participant-wa-btn w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
-    onclick="openWhatsApp('${p.whatsapp || ""}')"
-    title="Abrir WhatsApp">
-    💬
-  </button>
-
-      <button
-        type="button"
-        class="participant-edit-btn w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+      <button type="button"
+        class="participant-wa-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
+        onclick="openWhatsApp('${p.whatsapp || ""}')"
+        title="Abrir WhatsApp">💬</button>
+      <button type="button"
+        class="participant-edit-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
         data-id="${p.id}"
         data-name="${p.name || ""}"
         data-area="${p.area || ""}"
         data-whatsapp="${p.whatsapp || ""}"
-        title="Editar">
-        ✏️
-      </button>
-
-      <button
-        type="button"
-        class="participant-toggle-btn w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg"
+        title="Editar">✏️</button>
+      <button type="button"
+        class="participant-toggle-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
         data-id="${p.id}"
         data-active="${isActive ? "1" : "0"}"
         data-name="${p.name || ""}"
-        title="${isActive ? "Archivar" : "Restaurar"}">
-        ${isActive ? "📦" : "♻️"}
-      </button>
+        title="${isActive ? "Archivar" : "Restaurar"}">${isActive ? "📦" : "♻️"}</button>
     </div>
   </div>
 `;
