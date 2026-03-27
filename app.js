@@ -3330,9 +3330,14 @@ async function fillResultsPoolsSelect() {
 
   const sel = $("resultsPool");
   sel.innerHTML = (data || []).map(function(p) {
-    const tag = p.status === "open" ? " (Activa)" : "";
+    const tag = p.status === "open" ? " ✅ Activa" : "";
     return `<option value="${p.id}">${p.name}${tag}</option>`;
   }).join("");
+
+  // Auto-seleccionar jornada activa, si no la primera
+  const active = (data || []).find(function(p) { return p.status === "open"; });
+  if (active) sel.value = active.id;
+  else if ((data || []).length) sel.value = data[0].id;
 }
 
 // Renders de Partidos
@@ -3356,38 +3361,26 @@ function renderResultRow(match) {
   return `
     <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
       <div class="text-xs text-zinc-400 mb-2">Partido #${match.match_no}</div>
-
-      <div class="grid grid-cols-[1fr_70px_40px_70px_1fr] gap-2 items-center">
-        <div class="text-sm font-semibold text-right">${match.home_team}</div>
-
-        <input
-          type="number"
-          min="0"
-          inputmode="numeric"
-          data-result-home="${match.id}"
-          value="${hg}"
-          class="p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center font-bold" />
-
-        <div class="text-center text-zinc-400 font-bold">vs</div>
-
-        <input
-          type="number"
-          min="0"
-          inputmode="numeric"
-          data-result-away="${match.id}"
-          value="${ag}"
-          class="p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center font-bold" />
-
-        <div class="text-sm font-semibold text-left">${match.away_team}</div>
+      <div class="flex items-center gap-2">
+        <div class="flex-1 min-w-0 text-right">
+          <div class="text-xs text-zinc-400 mb-0.5">Local</div>
+          <div class="text-sm font-bold truncate">${match.home_team}</div>
+        </div>
+        <input type="number" min="0" inputmode="numeric"
+          data-result-home="${match.id}" value="${hg}"
+          class="w-14 shrink-0 p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-lg font-black" />
+        <div class="text-zinc-500 font-bold text-xs shrink-0">vs</div>
+        <input type="number" min="0" inputmode="numeric"
+          data-result-away="${match.id}" value="${ag}"
+          class="w-14 shrink-0 p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-lg font-black" />
+        <div class="flex-1 min-w-0">
+          <div class="text-xs text-zinc-400 mb-0.5">Visita</div>
+          <div class="text-sm font-bold truncate">${match.away_team}</div>
+        </div>
       </div>
-
-      <div class="mt-3 flex items-center justify-between text-xs">
-        <div class="text-zinc-400">
-          Resultado: <span data-result-outcome="${match.id}" class="font-semibold text-zinc-200">${outcome}</span>
-        </div>
-        <div class="text-zinc-400">
-          Total goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span>
-        </div>
+      <div class="mt-2 flex items-center justify-between text-xs">
+        <div class="text-zinc-400">Resultado: <span data-result-outcome="${match.id}" class="font-semibold text-zinc-200">${outcome}</span></div>
+        <div class="text-zinc-400">Goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span></div>
       </div>
     </div>
   `;
@@ -3605,6 +3598,10 @@ function renderStandingsPodium(rows) {
       ${makeCard(third, 3)}
     </div>
   `;
+  // Auto-seleccionar jornada activa
+  const activePool = (data || []).find(function(p) { return p.status === "open"; });
+  if (activePool) sel.value = activePool.id;
+  else if ((data || []).length) sel.value = data[0].id;
 }
 
 // Cargar Tabla Aciertos
@@ -3784,7 +3781,7 @@ async function loadStandings() {
         return `
           <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
             <div class="min-w-0">
-              <div class="font-semibold truncate">${pos}. ${r.name}</div>
+              <div class="font-semibold">${pos}. ${r.name}</div>
               <div class="text-xs text-zinc-400 truncate">
                 ${area} • Picks: ${r.captured_picks} • Partidos jugados: ${r.played_matches}
               </div>
