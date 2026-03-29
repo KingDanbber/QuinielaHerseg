@@ -4495,6 +4495,112 @@ document.querySelectorAll(".more-menu-btn").forEach(function(btn) {
 });
 
 // Participantes: insertar
+
+// ═══════════════════════════════════════
+// WhatsApp Bienvenida Participante
+// ═══════════════════════════════════════
+function showWelcomeWaModal(name, whatsapp) {
+  // Si no tiene WhatsApp, mostrar solo alerta
+  if (!whatsapp) {
+    showAlert("Participante agregado. No tiene WhatsApp registrado.", "ok");
+    return;
+  }
+
+  // Crear modal
+  var modal = document.createElement("div");
+  modal.id = "welcomeWaModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="welcomeWaBackdrop"></div>',
+    '<div style="position:relative;width:100%;max-width:400px;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px;padding:24px;box-shadow:0 32px 80px rgba(0,0,0,.8);">',
+
+      // Top accent
+      '<div style="position:absolute;top:-1px;left:15%;right:15%;height:2px;',
+           'background:linear-gradient(90deg,transparent,#10b981,transparent);border-radius:0 0 4px 4px;"></div>',
+
+      // Icon + title
+      '<div style="text-align:center;margin-bottom:16px;">',
+        '<div style="font-size:44px;line-height:1;">📲</div>',
+        '<div style="font-size:18px;font-weight:800;color:#fff;margin-top:8px;">',
+          '\u00a1Participante agregado!',
+        '</div>',
+        '<div style="font-size:13px;color:#8a94a6;margin-top:4px;">',
+          '\u00bfEnviar WhatsApp de bienvenida a <strong style="color:#f0f4f8;">' + name + '</strong>?',
+        '</div>',
+      '</div>',
+
+      // Message preview
+      '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);',
+           'border-radius:14px;padding:12px 14px;font-size:12px;color:#a1a1aa;line-height:1.6;',
+           'max-height:140px;overflow-y:auto;margin-bottom:16px;white-space:pre-wrap;" id="welcomeMsgPreview">',
+      '</div>',
+
+      // Buttons
+      '<div style="display:grid;gap:10px;">',
+        '<button id="btnSendWelcomeWa" style="width:100%;padding:14px;border-radius:14px;',
+          'background:linear-gradient(135deg,#059669,#10b981);border:none;color:#fff;',
+          'font-size:15px;font-weight:700;cursor:pointer;">',
+          '\u2705 S\u00ed, enviar WhatsApp',
+        '</button>',
+        '<button id="btnSkipWelcomeWa" style="width:100%;padding:12px;border-radius:14px;',
+          'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);',
+          'color:#8a94a6;font-size:14px;cursor:pointer;">',
+          'Omitir por ahora',
+        '</button>',
+      '</div>',
+    '</div>'
+  ].join('');
+
+  document.body.appendChild(modal);
+
+  // Build message
+  var groupLink = "https://chat.whatsapp.com/Hb7rAWVOBzH3bSNxeCv15f?mode=gi_t";
+  var msgLines = [
+    "\uD83C\uDFC6 *\u00a1Bienvenido/a a Quiniela Arc\u00e1ngel, " + name + "!*",
+    "",
+    "Nos da mucho gusto tenerte en nuestra quiniela de f\u00fatbol.",
+    "Cada jornada podr\u00e1s participar con tus pron\u00f3sticos y competir por el premio.",
+    "",
+    "\uD83D\uDCF1 *\u00dale a unirte a nuestro grupo de WhatsApp:*",
+    groupLink,
+    "",
+    "En el grupo encontrar\u00e1s:",
+    "\u2022 Quinielas de cada jornada",
+    "\u2022 Resultados en tiempo real",
+    "\u2022 Tabla de posiciones",
+    "\u2022 Estad\u00edsticas e informaci\u00f3n",
+    "",
+    "\u23F0 *Registro:* Viernes 05:00 PM",
+    "\uD83D\uDCB3 *Pago:* S\u00e1bado 4:00 PM",
+    "\uD83D\uDCCA Boleto pagado, boleto jugado.",
+    "",
+    "\u26BD\uFE0F \u00a1Mucha suerte!"
+  ];
+  var msgText = msgLines.join("\n");
+
+  // Show preview
+  var preview = document.getElementById("welcomeMsgPreview");
+  if (preview) preview.textContent = msgText;
+
+  // Send button
+  document.getElementById("btnSendWelcomeWa").addEventListener("click", function() {
+    var clean = String(whatsapp).replace(/\D/g, "");
+    var url = "https://wa.me/52" + clean + "?text=" + encodeURIComponent(msgText);
+    window.open(url, "_blank");
+    closeWelcomeWaModal();
+  });
+
+  // Skip / backdrop
+  document.getElementById("btnSkipWelcomeWa").addEventListener("click", closeWelcomeWaModal);
+  document.getElementById("welcomeWaBackdrop").addEventListener("click", closeWelcomeWaModal);
+}
+
+function closeWelcomeWaModal() {
+  var modal = document.getElementById("welcomeWaModal");
+  if (modal) modal.remove();
+}
+
 $("formParticipant").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideAlert();
@@ -4502,6 +4608,8 @@ $("formParticipant").addEventListener("submit", async (e) => {
   const name = $("pName").value.trim();
   const area = $("pArea").value.trim();
   const whatsapp = $("pWhatsapp").value.trim();
+
+  if (!name) return showAlert("El nombre es obligatorio.", "error");
 
   const { error } = await supabaseClient
     .from("participants")
@@ -4517,6 +4625,9 @@ $("formParticipant").addEventListener("submit", async (e) => {
   await fillEntryParticipantsSelect();
   await fillPickParticipantsSelect();
   await loadDashboardSummary();
+
+  // Mostrar modal de bienvenida por WhatsApp
+  showWelcomeWaModal(name, whatsapp);
 });
 $("btnCloseParticipantEdit").addEventListener("click", closeParticipantEditModal);
 $("participantEditBackdrop").addEventListener("click", closeParticipantEditModal);
