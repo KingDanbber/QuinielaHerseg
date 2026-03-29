@@ -164,14 +164,26 @@
         </div>
       </div>
 
-      <!-- Tabla histórica de aciertos -->
+      <!-- Historial de Ganadores -->
+      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">🏆 Ganadores por Jornada</h3>
+          <button onclick="loadWinnersHistory()" class="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">🔄</button>
+        </div>
+        <div class="text-xs text-zinc-500 mb-3">Solo boletos pagados · Empates se reparten el premio</div>
+        <div id="winnersHistoryList" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <div class="text-sm text-zinc-400">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Tabla histórica de aciertos acumulados -->
       <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold">🏅 Tabla Histórica de Aciertos</h3>
           <button onclick="loadHistoricalStandings()" class="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">🔄</button>
         </div>
         <div class="text-xs text-zinc-500 mb-3">Mejor boleta por jornada · Solo jornadas con resultados capturados</div>
-        <div id="historicalStandingsList" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+        <div id="historicalStandingsList" class="space-y-2 max-h-64 overflow-y-auto pr-1">
           <div class="text-sm text-zinc-400">Cargando...</div>
         </div>
       </div>
@@ -293,8 +305,14 @@
           </button>
         </form>
 
-<!-- ACCIONES DE CIERRE -->
+<!-- ACCIONES DE CIERRE + WHATSAPP -->
     <div class="grid gap-2 mt-4">
+      <button id="btnWaJornada" type="button"
+        onclick="sendWhatsAppJornadaNotification()"
+        class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 flex items-center justify-center gap-2">
+        📲 Notificar jornada por WhatsApp
+      </button>
+
       <button id="btnCloseActivePool" type="button" class="w-full bg-rose-600 hover:bg-rose-500 rounded-xl font-semibold py-3">
         🔒 Cerrar jornada activa
       </button>

@@ -610,6 +610,8 @@ async function loadDashboardSummary() {
 
   // Dashboard mejorado (stats historicos)
   loadDashboardEnhanced();
+  // Historial de ganadores
+  loadWinnersHistory();
 }
 
 // Guardar Participantes 
@@ -4930,6 +4932,159 @@ async function loadDashboardEnhanced() {
     .select("id", { count: "exact", head: true });
   var elB = $("dashTotalBoletos");
   if (elB) elB.textContent = entRes.count || 0;
+}
+
+
+// ═══════════════════════════════════════
+// HISTORIAL DE GANADORES POR JORNADA
+// ═══════════════════════════════════════
+async function loadWinnersHistory() {
+  var wrap = $("winnersHistoryList");
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="text-sm text-zinc-400">Cargando...</div>';
+
+  // Todas las jornadas con resultados
+  var poolsRes = await supabaseClient.from("pools")
+    .select("id, round, name, season, competition, status")
+    .order("round", { ascending: false })
+    .limit(50);
+  if (poolsRes.error) { wrap.innerHTML = '<div class="text-xs text-red-400">Error cargando jornadas.</div>'; return; }
+
+  var pools = (poolsRes.data || []);
+
+  // Entry points de todas las jornadas
+  var poolIds = pools.map(function(p){ return p.id; });
+  if (!poolIds.length) { wrap.innerHTML = '<div class="text-sm text-zinc-400">Sin jornadas todavía.</div>'; return; }
+
+  var epRes = await supabaseClient.from("entry_points")
+    .select("entry_id, pool_id, participant_id, points")
+    .in("pool_id", poolIds)
+    .order("points", { ascending: false });
+  if (epRes.error) { wrap.innerHTML = '<div class="text-xs text-red-400">Error cargando aciertos.</div>'; return; }
+
+  // Solo entries pagados
+  var entRes = await supabaseClient.from("entries")
+    .select("id, pool_id, participant_id, paid")
+    .in("pool_id", poolIds)
+    .eq("paid", true);
+  if (entRes.error) { wrap.innerHTML = '<div class="text-xs text-red-400">Error cargando boletos.</div>'; return; }
+
+  var paidEntryIds = new Set((entRes.data || []).map(function(e){ return e.id; }));
+
+  // Participantes
+  var partIds = [...new Set((epRes.data || []).map(function(r){ return r.participant_id; }))];
+  var partRes = partIds.length
+    ? await supabaseClient.from("participants").select("id, name, area").in("id", partIds)
+    : { data: [] };
+  var partMap = {};
+  (partRes.data || []).forEach(function(p){ partMap[p.id] = p; });
+
+  // Ganador por jornada = max points entre entries pagados
+  var winnerByPool = {};
+  pools.forEach(function(pool) {
+    var poolRows = (epRes.data || []).filter(function(r){
+      return r.pool_id === pool.id && paidEntryIds.has(r.entry_id);
+    });
+    if (!poolRows.length) return;
+    var maxPts = Math.max.apply(null, poolRows.map(function(r){ return r.points; }));
+    if (maxPts < 0) return;
+    var winners = poolRows.filter(function(r){ return r.points === maxPts; });
+    // Agrupar por participante (puede tener 2 boletas)
+    var winnerNames = [...new Set(winners.map(function(r){
+      var p = partMap[r.participant_id];
+      return p ? p.name : "—";
+    }))];
+    winnerByPool[pool.id] = { names: winnerNames, points: maxPts, tie: winnerNames.length > 1 };
+  });
+
+  var hasAny = Object.keys(winnerByPool).length > 0;
+  if (!hasAny) {
+    wrap.innerHTML = '<div class="text-sm text-zinc-400">Aún no hay jornadas con resultados finalizados.</div>';
+    return;
+  }
+
+  wrap.innerHTML = pools.map(function(pool) {
+    var w = winnerByPool[pool.id];
+    if (!w) return ''; // jornada sin resultados
+    var jornada = pool.round ? 'J' + pool.round : pool.name;
+    var label = w.tie ? w.names.join(', ') : w.names[0];
+    var badgeClass = w.tie
+      ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300';
+    var icon = w.tie ? '🤝' : '🏆';
+    return [
+      '<div class="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-800 rounded-xl">',
+        '<div class="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-sm font-black text-zinc-300 shrink-0">' + jornada + '</div>',
+        '<div class="flex-1 min-w-0">',
+          '<div class="font-semibold text-sm truncate">' + label + '</div>',
+          '<div class="text-xs text-zinc-500">' + (pool.competition || 'Liga MX') + ' · ' + (pool.season || '') + '</div>',
+        '</div>',
+        '<div class="shrink-0 text-right">',
+          '<span class="text-xs px-2 py-1 rounded-full border ' + badgeClass + '">' + icon + ' ' + w.points + ' ac.</span>',
+        '</div>',
+      '</div>'
+    ].join('');
+  }).filter(Boolean).join('');
+}
+
+// ═══════════════════════════════════════
+// WHATSAPP: Notificación jornada nueva
+// ═══════════════════════════════════════
+async function sendWhatsAppJornadaNotification() {
+  hideAlert();
+
+  // Obtener jornada activa
+  var poolRes = await supabaseClient.from("pools")
+    .select("id, round, name, competition, season, date_label, price, status")
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (poolRes.error) return showAlert(poolRes.error.message, "error");
+
+  var pool = poolRes.data;
+  if (!pool) return showAlert("No hay jornada activa actualmente.", "error");
+
+  // Obtener partidos de esa jornada
+  var matchRes = await supabaseClient.from("matches")
+    .select("match_no, home_team, away_team")
+    .eq("pool_id", pool.id)
+    .order("match_no", { ascending: true });
+
+  if (matchRes.error) return showAlert(matchRes.error.message, "error");
+
+  var matches = matchRes.data || [];
+  var jornada = pool.round ? "Jornada " + pool.round : pool.name;
+  var precio   = pool.price ? "$" + pool.price : "";
+  var fechas   = pool.date_label ? pool.date_label : "";
+  var comp     = pool.competition || "Liga MX";
+  var season   = pool.season || "";
+
+  var lines = [];
+  lines.push("\u26bd\ufe0f *Quiniela Arc\u00e1ngel* \u2014 " + jornada);
+  lines.push(comp + " \u2022 " + season);
+  if (fechas) lines.push("\ud83d\udcc5 Fechas: " + fechas);
+  lines.push("\ud83d\udcb0 Costo: " + precio + " por boleto");
+  lines.push("");
+  lines.push("*Partidos:*");
+  if (matches.length) {
+    matches.forEach(function(m) {
+      lines.push((m.match_no) + ". " + m.home_team + " vs " + m.away_team);
+    });
+  } else {
+    lines.push("(Plantilla pendiente)");
+  }
+  lines.push("");
+  lines.push("\u23f0 *Registro:* Viernes 05:00 PM");
+  lines.push("\ud83d\udcb3 *Pago:* S\u00e1bado 4:00 PM");
+  lines.push("\ud83d\udcac Env\u00eda tus pron\u00f3sticos al: *8715118046*");
+  lines.push("");
+  lines.push("\ud83c\udfc6 \u00a1Mucha suerte a todos!");
+
+  var text = lines.join("\n");
+  var encoded = encodeURIComponent(text);
+  window.open("https://wa.me/?text=" + encoded, "_blank");
 }
 
 // =====================
