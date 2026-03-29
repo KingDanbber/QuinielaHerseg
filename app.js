@@ -26,9 +26,17 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const $ = (id) => document.getElementById(id);
 
 // Auto-refresh sesion cada 10 min para evitar token expirado
+// Usamos getSession primero para verificar si hay sesión activa
 setInterval(async function() {
-  try { await supabaseClient.auth.refreshSession(); }
-  catch(e) { console.warn("session refresh error", e); }
+  try {
+    var sess = await supabaseClient.auth.getSession();
+    if (sess && sess.data && sess.data.session) {
+      // Marcar que este refresh no debe reiniciar la app
+      var currentId = sess.data.session.user ? sess.data.session.user.id : null;
+      lastAuthUserId = currentId; // sincronizar para que onAuthStateChange no lo trate como nuevo login
+      await supabaseClient.auth.refreshSession();
+    }
+  } catch(e) { console.warn("session refresh error", e); }
 }, 10 * 60 * 1000);
 
 // =================
@@ -45,6 +53,10 @@ let currentParticipantFilter = "all";
 let currentParticipantSearch = "";
 let currentEntriesFilter = "all";
 let currentEntriesSearch = "";
+
+// ── Control de inicialización ──
+let appInitialized = false;  // true después del primer init completo
+let lastAuthUserId  = null;  // para detectar cambios reales de usuario
 
 // =================
 // Logos Equipos
@@ -4923,7 +4935,22 @@ async function loadDashboardEnhanced() {
 // =====================
 // Init
 // =====================
-supabaseClient.auth.onAuthStateChange(() => safeInit());
+supabaseClient.auth.onAuthStateChange(function(event, session) {
+  var newUserId = session && session.user ? session.user.id : null;
+
+  if (event === "SIGNED_IN") {
+    // Solo reiniciar si es un usuario diferente o la app aun no cargo
+    if (!appInitialized || newUserId !== lastAuthUserId) {
+      lastAuthUserId = newUserId;
+      safeInit();
+    }
+  } else if (event === "SIGNED_OUT") {
+    lastAuthUserId = null;
+    appInitialized = false;
+    safeInit();
+  }
+  // TOKEN_REFRESHED, USER_UPDATED, etc. → ignorar (no reiniciar la app)
+});
 
 async function init() {
   hideAlert();
@@ -4969,7 +4996,10 @@ async function init() {
     return;
   }
 
-  setView("viewDash");
+  // Solo redibujar la vista si no estamos ya en el dashboard
+  if (!appInitialized) {
+    setView("viewDash");
+  }
 
   const now = new Date();
   const saludo = getGreetingByHour(getMonterreyHour(now));
@@ -4994,23 +5024,20 @@ async function init() {
   await loadDashboardSummary();
 
   initBottomNav();
-  await showAppTab("tab-home");
-await updateNavBadges();
+
+  // Solo navegar a Inicio en el primer arranque
+  if (!appInitialized) {
+    await showAppTab("tab-home");
+  }
+
+  appInitialized = true;
+  await updateNavBadges();
 }
 
 // Arranque
 setView("viewLogin");
 safeInit();
 
-// Errores globales visibles
-window.addEventListener("error", (e) => showAlert("JS error: " + e.message, "error"));
-window.addEventListener("unhandledrejection", (e) => showAlert("Promise error: " + (e.reason?.message || e.reason), "error"));
+// Errores globales — ya registrados arriba (eliminado duplicado)
 
-// Errores init
-document.addEventListener("DOMContentLoaded", () => {
-  try {
-    init();
-  } catch (e) {
-    showFatal(e.message || String(e));
-  }
-});
+// DOMContentLoaded eliminado — safeInit() ya se llama en línea 'Arranque'
