@@ -1308,6 +1308,14 @@ async function loadEntryForPick(poolId, partId) {
       (entry.paid ? "Pagado ✅" : "Pendiente ⏳") + " • Jornada cerrada 🔒";
 
     $("btnSavePicks").disabled = true;
+    // Disable individual pick buttons visually
+    setTimeout(function() {
+      document.querySelectorAll(".pickbtn").forEach(function(b) {
+        b.disabled = true;
+        b.style.opacity = "0.4";
+        b.style.cursor = "not-allowed";
+      });
+    }, 300);
     $("btnSavePicks").classList.add("opacity-50", "cursor-not-allowed");
   } else {
     $("pickEntryLabel").textContent =
@@ -1375,6 +1383,14 @@ async function markEntryPaid(entryId) {
     return showAlert("Esta jornada ya está cerrada. No se puede registrar el pago.", "error");
   }
 
+  var cfmPaid = await showConfirmModal({
+    icon: "💰", title: "Registrar pago",
+    message: "Confirmas que este boleto fue pagado?",
+    confirmLabel: "Registrar pago",
+    confirmStyle: "background:linear-gradient(135deg,#059669,#10b981);"
+  });
+  if (!cfmPaid) return;
+
   const { error } = await supabaseClient
     .from("entries")
     .update({
@@ -1419,8 +1435,13 @@ async function markEntryPending(entryId) {
     return showAlert("Esta jornada ya está cerrada. No se puede cambiar el pago.", "error");
   }
 
-  const ok = confirm("¿Seguro que quieres marcar este boleto como pendiente?");
-  if (!ok) return;
+  var cfmPending = await showConfirmModal({
+    icon: "?", title: "Marcar pendiente",
+    message: "Revertir el pago de este boleto?",
+    confirmLabel: "Marcar pendiente",
+    confirmStyle: "background:linear-gradient(135deg,#b45309,#d97706);"
+  });
+  if (!cfmPending) return;
 
   const { error } = await supabaseClient
     .from("entries")
@@ -1438,6 +1459,37 @@ async function markEntryPending(entryId) {
   await loadDashboardSummary();
   await loadPickStatusList();
   await updateNavBadges();
+}
+
+// Confirm modal premium
+function showConfirmModal(opts) {
+  return new Promise(function(resolve) {
+    var existing = document.getElementById("confirmModal");
+    if (existing) existing.remove();
+    var modal = document.createElement("div");
+    modal.id = "confirmModal";
+    modal.style.cssText = "position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px;";
+    var confirmStyle = opts.confirmStyle || "background:linear-gradient(135deg,#059669,#10b981);";
+    modal.innerHTML = [
+      '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="confirmModalBg"></div>',
+      '<div style="position:relative;width:100%;max-width:340px;background:#0c1018;border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:24px;box-shadow:0 32px 80px rgba(0,0,0,.8);">',
+        '<div style="text-align:center;margin-bottom:20px;">',
+          '<div style="font-size:40px;line-height:1;margin-bottom:10px;">' + (opts.icon||"?") + '</div>',
+          '<div style="font-size:17px;font-weight:800;color:#f0f4f8;">' + (opts.title||"Confirmar") + '</div>',
+          '<div style="font-size:13px;color:#8a94a6;margin-top:6px;line-height:1.5;">' + (opts.message||"") + '</div>',
+        '</div>',
+        '<div style="display:grid;gap:10px;">',
+          '<button id="confirmModalYes" style="width:100%;padding:14px;border-radius:14px;border:none;' + confirmStyle + 'color:#fff;font-size:15px;font-weight:700;cursor:pointer;">' + (opts.confirmLabel||"Confirmar") + '</button>',
+          '<button id="confirmModalNo" style="width:100%;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#8a94a6;font-size:14px;cursor:pointer;">Cancelar</button>',
+        '</div>',
+      '</div>'
+    ].join("");
+    document.body.appendChild(modal);
+    function close(r) { modal.remove(); resolve(r); }
+    document.getElementById("confirmModalYes").addEventListener("click", function(){ close(true); });
+    document.getElementById("confirmModalNo").addEventListener("click", function(){ close(false); });
+    document.getElementById("confirmModalBg").addEventListener("click", function(){ close(false); });
+  });
 }
 
 // Activar Botones Pagos Pendientes
@@ -1694,7 +1746,8 @@ const rowsHtml = (participants || []).map(function(participant) {
             data-entry-id="${e.id}"
             title="Descargar boleta ${multiEntry ? (idx+1) : ""}">
             🖼️
-          </button>` : ""}
+          </button>
+          <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">\u{1F4F2}</button>` : ""}
         `;
       }).join("");
       actionBtn = btns;
@@ -1742,6 +1795,7 @@ const rowsHtml = (participants || []).map(function(participant) {
 
   attachPickStatusOpenEvents();
 attachPickStatusExportEvents();
+attachPickStatusWaEvents();
 attachPickStatusFilterEvents();
 attachPickStatusSearchEvent();
 applyPickStatusFilter(currentPickStatusFilter);
@@ -1848,6 +1902,17 @@ document.getElementById("pickMatches")?.scrollIntoView({
   behavior: "smooth",
   block: "start"
 });
+    });
+  });
+}
+
+function attachPickStatusWaEvents() {
+  document.querySelectorAll(".pick-status-wa").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      var participantId = btn.getAttribute("data-participant-id");
+      var entryId = btn.getAttribute("data-entry-id");
+      var poolId = $("pickPool").value;
+      await sendPicksViaWhatsApp(poolId, participantId, entryId);
     });
   });
 }
@@ -5201,6 +5266,75 @@ async function sendWhatsAppJornadaNotification() {
 // =====================
 // Init
 // =====================
+
+
+// ═══════════════════════════════════════
+// WhatsApp Pronóstico Individual
+// ═══════════════════════════════════════
+async function sendPicksViaWhatsApp(poolId, participantId, entryId) {
+  hideAlert();
+  if (!poolId || !participantId) return showAlert("Faltan datos.", "error");
+
+  var partRes = await supabaseClient.from("participants")
+    .select("id, name, area, whatsapp").eq("id", participantId).maybeSingle();
+  if (partRes.error || !partRes.data) return showAlert("Participante no encontrado.", "error");
+  var part = partRes.data;
+  if (!part.whatsapp) return showAlert(part.name + " no tiene WhatsApp registrado.", "error");
+
+  var poolRes = await supabaseClient.from("pools")
+    .select("id, round, name, date_label, price, season").eq("id", poolId).maybeSingle();
+  if (poolRes.error) return showAlert(poolRes.error.message, "error");
+  var pool = poolRes.data;
+
+  var eid = entryId;
+  if (!eid) {
+    var entRes = await supabaseClient.from("entries")
+      .select("id").eq("pool_id", poolId).eq("participant_id", participantId)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (entRes.error || !entRes.data) return showAlert("No tiene boleto en esta jornada.", "error");
+    eid = entRes.data.id;
+  }
+
+  var matchRes = await supabaseClient.from("matches")
+    .select("id, match_no, home_team, away_team")
+    .eq("pool_id", poolId).order("match_no", { ascending: true });
+  if (matchRes.error) return showAlert(matchRes.error.message, "error");
+  var matches = matchRes.data || [];
+
+  var picksRes = await supabaseClient.from("predictions_1x2")
+    .select("match_id, pick").eq("entry_id", eid);
+  if (picksRes.error) return showAlert(picksRes.error.message, "error");
+  var pickMap = {};
+  (picksRes.data || []).forEach(function(p) { pickMap[p.match_id] = p.pick; });
+
+  if (!Object.keys(pickMap).length) return showAlert("Sin pronosticos capturados.", "error");
+
+  function pickLabel(c) { return c === "H" ? "LOCAL" : c === "D" ? "EMPATE" : c === "A" ? "VISITA" : "?"; }
+  function pickArrow(c) { return c === "H" ? "->" : c === "A" ? "<-" : c === "D" ? "=" : "?"; }
+
+  var jornada = pool && pool.round ? "Jornada " + pool.round : (pool && pool.name ? pool.name : "Jornada");
+  var fechas  = pool && pool.date_label ? pool.date_label : "";
+
+  var lines = [
+    "Quiniela Arcangel - " + jornada,
+    "Pronostico de: " + part.name + (part.area ? " (" + part.area + ")" : ""),
+  ];
+  if (fechas) lines.push("Fechas: " + fechas);
+  lines.push("");
+  matches.forEach(function(m) {
+    var pick = pickMap[m.id];
+    lines.push(m.match_no + ". " + m.home_team + " vs " + m.away_team);
+    lines.push("   " + pickArrow(pick) + " " + (pick ? pickLabel(pick) : "Sin pick"));
+  });
+  lines.push("");
+  lines.push("Boleto pagado, boleto jugado. Suerte!");
+
+  var text = lines.join("\n");
+  var clean = String(part.whatsapp).replace(/\D/g, "");
+  window.open("https://wa.me/52" + clean + "?text=" + encodeURIComponent(text), "_blank");
+}
+
+
 supabaseClient.auth.onAuthStateChange(function(event, session) {
   var newUserId = session && session.user ? session.user.id : null;
 
