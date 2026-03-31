@@ -603,9 +603,22 @@ async function loadDashboardSummary() {
 
     $("dashPaidEntries").textContent = stats?.paid_count || 0;
     $("dashPrize").textContent = money(stats?.prize_pool || 0);
+
+    // Participantes jugando esta jornada (con boleto registrado)
+    const { count: jugandoCount, error: jugandoErr } = await supabaseClient
+      .from("entries")
+      .select("participant_id", { count: "exact", head: true })
+      .eq("pool_id", activePool.id);
+
+    if (!jugandoErr) {
+      const elJ = $("dashJugandoJornada");
+      if (elJ) elJ.textContent = jugandoCount || 0;
+    }
   } else {
     $("dashPaidEntries").textContent = "0";
     $("dashPrize").textContent = "$0";
+    const elJ = $("dashJugandoJornada");
+    if (elJ) elJ.textContent = "0";
   }
 
   // Dashboard mejorado (stats historicos)
@@ -1200,11 +1213,49 @@ async function fillPickPoolsSelect() {
 }
 
 async function fillPickParticipantsSelect() {
+  const pool_id = $("pickPool").value;
+
+  // Si hay jornada seleccionada, solo participantes con boleto en ella
+  if (pool_id) {
+    const { data: entries, error: entErr } = await supabaseClient
+      .from("entries")
+      .select("participant_id")
+      .eq("pool_id", pool_id);
+
+    if (entErr) return showAlert(entErr.message, "error");
+
+    const partIds = [...new Set((entries || []).map(function(e) {
+      return e.participant_id;
+    }))];
+
+    if (!partIds.length) {
+      $("pickParticipant").innerHTML =
+        '<option value="">Sin boletos en esta jornada</option>';
+      return;
+    }
+
+    const { data, error } = await supabaseClient
+      .from("participants")
+      .select("id, name, area")
+      .in("id", partIds)
+      .order("name", { ascending: true });
+
+    if (error) return showAlert(error.message, "error");
+
+    const sel = $("pickParticipant");
+    sel.innerHTML = (data || []).map(function(p) {
+      const area = p.area ? " • " + p.area : "";
+      return `<option value="${p.id}">${p.name}${area}</option>`;
+    }).join("");
+    return;
+  }
+
+  // Fallback: todos los activos si no hay jornada seleccionada
   const { data, error } = await supabaseClient
     .from("participants")
     .select("id, name, area, is_active")
     .eq("is_active", true)
-    .order("created_at", { ascending: false })
+    .order("name", { ascending: true })
     .limit(200);
 
   if (error) return showAlert(error.message, "error");
@@ -1605,22 +1656,35 @@ async function loadPickStatusList() {
     return;
   }
 
-  // Participantes activos
-  const { data: participants, error: pErr } = await supabaseClient
-    .from("participants")
-    .select("id, name, area")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
-
-  if (pErr) return showAlert(pErr.message, "error");
-
-  // Boletos de esa jornada
+  // Boletos de esa jornada (fuente de verdad)
   const { data: entries, error: eErr } = await supabaseClient
     .from("entries")
     .select("id, participant_id, paid")
     .eq("pool_id", pool_id);
 
   if (eErr) return showAlert(eErr.message, "error");
+
+  // Solo participantes con boleto en esta jornada
+  const participantIdsInPool = [...new Set((entries || []).map(function(e) {
+    return e.participant_id;
+  }))];
+
+  if (!participantIdsInPool.length) {
+    $("pickStatusList").innerHTML = `
+      <div class="text-sm text-zinc-400 p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
+        No hay boletos registrados en esta jornada todavía.
+      </div>`;
+    updatePickStatusFilterCounts();
+    return;
+  }
+
+  const { data: participants, error: pErr } = await supabaseClient
+    .from("participants")
+    .select("id, name, area")
+    .in("id", participantIdsInPool)
+    .order("name", { ascending: true });
+
+  if (pErr) return showAlert(pErr.message, "error");
 
   const entryByParticipant = new Map();
   (entries || []).forEach(function(entry) {
@@ -4838,7 +4902,7 @@ $("btnLoadEntryForPick").addEventListener("click", async () => {
   await loadEntryForPick(poolId, partId);
 });
 
-$("btnSavePicks").addEventListener("click", savePicks);
+$("btnSavePicks").addEventListener("click", previewAndSavePicks);
 $("btnClearPicks").addEventListener("click", clearPicksSelection);
 
 $("btnRefreshPickStatus").addEventListener("click", loadPickStatusList);
@@ -5262,6 +5326,272 @@ async function sendWhatsAppJornadaNotification() {
   var encoded = encodeURIComponent(text);
   window.open("https://wa.me/?text=" + encoded, "_blank");
 }
+
+
+// ═══════════════════════════════════════════════
+// FEATURE 1: Exportar tabla de aciertos por WhatsApp
+// ═══════════════════════════════════════════════
+async function exportStandingsWhatsApp() {
+  hideAlert();
+  var pool_id = $("standingsPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
+
+  var poolRes = await supabaseClient.from("pools")
+    .select("id, name, round, season, competition, date_label").eq("id", pool_id).maybeSingle();
+  if (poolRes.error) return showAlert(poolRes.error.message, "error");
+  var pool = poolRes.data;
+
+  // Leer las filas ya calculadas del DOM (standigsList ya esta cargado)
+  var cards = Array.from(document.querySelectorAll("#standingsList > div"));
+  if (!cards.length) return showAlert("Primero carga la tabla de aciertos.", "error");
+
+  var jornada = pool && pool.round ? "Jornada " + pool.round : (pool && pool.name ? pool.name : "Jornada");
+  var goles   = $("standingsGoalsTotal") ? $("standingsGoalsTotal").textContent : "0";
+
+  var lines = [
+    "Quiniela Arcangel - " + jornada,
+    (pool && pool.competition ? pool.competition : "Liga MX") + " - " + (pool && pool.season ? pool.season : ""),
+    "Goles de la jornada: " + goles,
+    ""
+  ];
+
+  // Extraer posicion, nombre y aciertos de cada card del DOM
+  var cardList = document.querySelectorAll("#standingsList > div");
+  cardList.forEach(function(card, i) {
+    var nameEl  = card.querySelector(".font-semibold");
+    var ptsEl   = card.querySelector(".text-emerald-300");
+    var name    = nameEl ? nameEl.textContent.trim() : ("Pos " + (i+1));
+    var pts     = ptsEl  ? ptsEl.textContent.trim()  : "0";
+    var medal   = i === 0 ? "1." : i === 1 ? "2." : i === 2 ? "3." : (i+1) + ".";
+    lines.push(medal + " " + name + " - " + pts + " aciertos");
+  });
+
+  lines.push("");
+  lines.push("Quiniela Arcangel - Pasion x Ganar");
+
+  var text = lines.join("\n");
+  window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
+}
+
+// ═══════════════════════════════════════════════
+// FEATURE 2: Vista previa antes de guardar picks
+// ═══════════════════════════════════════════════
+async function previewAndSavePicks() {
+  hideAlert();
+
+  if (!currentPickEntryId) return showAlert("Primero carga un boleto.", "error");
+
+  var pool_id = currentPickPoolId || $("pickPool").value;
+
+  var poolRes = await supabaseClient.from("pools")
+    .select("id, status, name, round").eq("id", pool_id).maybeSingle();
+  if (poolRes.error) return showAlert(poolRes.error.message, "error");
+  if (!poolRes.data || poolRes.data.status !== "open")
+    return showAlert("Esta jornada ya esta cerrada.", "error");
+
+  // Recolectar seleccion actual
+  var selected = {};
+  document.querySelectorAll(".pick-btn[data-selected='1'], .pick-btn.bg-emerald-600").forEach(function(btn) {
+    selected[btn.getAttribute("data-match-id")] = btn.getAttribute("data-pick");
+  });
+
+  if (!Object.keys(selected).length) return showAlert("No seleccionaste pronosticos.", "error");
+
+  // Construir preview con los partidos del DOM
+  var matchDivs = document.querySelectorAll("#pickMatches > div[class*='p-3']");
+  var previewLines = [];
+  function pickLabel(c) { return c === "H" ? "LOCAL" : c === "D" ? "EMPATE" : c === "A" ? "VISITA" : "?"; }
+
+  matchDivs.forEach(function(div, i) {
+    // Get match name from the div
+    var matchName = div.querySelector(".text-sm.font-semibold, .font-semibold");
+    var label = matchName ? matchName.textContent.trim() : ("Partido " + (i+1));
+    // Find selected pick for this match's buttons
+    var btns = div.querySelectorAll(".pick-btn, .pickbtn");
+    var pick = null;
+    btns.forEach(function(b) {
+      if (b.dataset.selected === "1" || b.classList.contains("bg-emerald-600") || b.classList.contains("pickbtn-on")) {
+        pick = b.getAttribute("data-pick") || b.getAttribute("data-pickbtn");
+      }
+    });
+    if (!pick) {
+      // Try from selected map using match_id
+      btns.forEach(function(b) {
+        var mid = b.getAttribute("data-match-id") || b.getAttribute("data-mid");
+        if (mid && selected[mid]) pick = selected[mid];
+      });
+    }
+    var arrow = pick === "H" ? "->" : pick === "A" ? "<-" : pick === "D" ? "=" : "?";
+    previewLines.push((i+1) + ". " + label + "  " + arrow + " " + (pick ? pickLabel(pick) : "Sin pick"));
+  });
+
+  // Show preview modal
+  var jornada = poolRes.data.round ? "Jornada " + poolRes.data.round : poolRes.data.name;
+  var partName = $("pickEntryLabel") ? $("pickEntryLabel").textContent.split("•")[0].trim() : "";
+
+  var modal = document.createElement("div");
+  modal.id = "picksPreviewModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9998;display:flex;align-items:flex-end;padding:0;";
+
+  var previewHtml = previewLines.map(function(l) {
+    return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;color:#e5e7eb;">' + l + '</div>';
+  }).join("");
+
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="picksPreviewBg"></div>',
+    '<div style="position:relative;width:100%;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px 24px 0 0;padding:24px;max-height:80vh;overflow-y:auto;">',
+      '<div style="width:48px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 18px;"></div>',
+      '<div style="font-size:17px;font-weight:800;color:#f0f4f8;margin-bottom:4px;">Vista previa</div>',
+      '<div style="font-size:13px;color:#8a94a6;margin-bottom:16px;">' + jornada + (partName ? " - " + partName : "") + '</div>',
+      '<div style="margin-bottom:16px;">' + previewHtml + '</div>',
+      '<div style="display:grid;gap:10px;">',
+        '<button id="picksPreviewConfirm" style="width:100%;padding:14px;border-radius:14px;border:none;',
+          'background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:15px;font-weight:700;cursor:pointer;">',
+          'Confirmar y guardar',
+        '</button>',
+        '<button id="picksPreviewCancel" style="width:100%;padding:12px;border-radius:14px;',
+          'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);',
+          'color:#8a94a6;font-size:14px;cursor:pointer;">Corregir</button>',
+      '</div>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+
+  document.getElementById("picksPreviewBg").addEventListener("click", function() { modal.remove(); });
+  document.getElementById("picksPreviewCancel").addEventListener("click", function() { modal.remove(); });
+  document.getElementById("picksPreviewConfirm").addEventListener("click", async function() {
+    modal.remove();
+    await savePicks();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// FEATURE 3: Recordatorio WhatsApp a sin picks
+// ═══════════════════════════════════════════════
+async function sendPicksReminder() {
+  hideAlert();
+  var pool_id = $("pickPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
+
+  var poolRes = await supabaseClient.from("pools")
+    .select("id, name, round, date_label, status").eq("id", pool_id).maybeSingle();
+  if (poolRes.error) return showAlert(poolRes.error.message, "error");
+  var pool = poolRes.data;
+
+  // Entries de la jornada
+  var entRes = await supabaseClient.from("entries")
+    .select("id, participant_id, paid").eq("pool_id", pool_id);
+  if (entRes.error) return showAlert(entRes.error.message, "error");
+  var entries = entRes.data || [];
+
+  if (!entries.length) return showAlert("No hay boletos registrados en esta jornada.", "error");
+
+  var entryIds = entries.map(function(e) { return e.id; });
+
+  // Picks existentes
+  var picksRes = await supabaseClient.from("predictions_1x2")
+    .select("entry_id").in("entry_id", entryIds);
+  if (picksRes.error) return showAlert(picksRes.error.message, "error");
+
+  var picksCountMap = {};
+  (picksRes.data || []).forEach(function(p) {
+    picksCountMap[p.entry_id] = (picksCountMap[p.entry_id] || 0) + 1;
+  });
+
+  // Total partidos
+  var matchRes = await supabaseClient.from("matches")
+    .select("id", { count: "exact", head: true }).eq("pool_id", pool_id);
+  var totalMatches = matchRes.count || 0;
+
+  // Entries sin picks completos (< totalMatches)
+  var pendingEntries = entries.filter(function(e) {
+    return (picksCountMap[e.id] || 0) < totalMatches;
+  });
+
+  if (!pendingEntries.length) return showAlert("Todos tienen sus pronosticos completos.", "ok");
+
+  // Participantes de esos entries
+  var partIds = [...new Set(pendingEntries.map(function(e) { return e.participant_id; }))];
+  var partRes = await supabaseClient.from("participants")
+    .select("id, name, area, whatsapp").in("id", partIds);
+  if (partRes.error) return showAlert(partRes.error.message, "error");
+
+  var participants = partRes.data || [];
+  var conWa = participants.filter(function(p) { return p.whatsapp; });
+  var sinWa = participants.filter(function(p) { return !p.whatsapp; });
+
+  var jornada = pool && pool.round ? "Jornada " + pool.round : (pool && pool.name ? pool.name : "Jornada");
+  var fechas  = pool && pool.date_label ? pool.date_label : "";
+
+  // Show modal to choose who to remind
+  var modal = document.createElement("div");
+  modal.id = "reminderModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9998;display:flex;align-items:flex-end;";
+
+  var listHtml = conWa.map(function(p) {
+    return [
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;',
+           'border-bottom:1px solid rgba(255,255,255,.06);">',
+        '<div>',
+          '<div style="font-size:14px;font-weight:600;color:#f0f4f8;">' + p.name + '</div>',
+          '<div style="font-size:12px;color:#8a94a6;">' + (p.area || "") + '</div>',
+        '</div>',
+        '<button class="reminder-send-btn" data-name="' + p.name + '" data-wa="' + p.whatsapp + '"',
+          'style="padding:8px 14px;border-radius:10px;border:none;',
+          'background:linear-gradient(135deg,#059669,#10b981);',
+          'color:#fff;font-size:13px;font-weight:700;cursor:pointer;">',
+          'Recordar',
+        '</button>',
+      '</div>'
+    ].join("");
+  }).join("");
+
+  var sinWaHtml = sinWa.length
+    ? '<div style="font-size:12px;color:#6b7280;margin-top:12px;">Sin WhatsApp: ' + sinWa.map(function(p){return p.name;}).join(", ") + '</div>'
+    : "";
+
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="reminderBg"></div>',
+    '<div style="position:relative;width:100%;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px 24px 0 0;padding:24px;max-height:75vh;overflow-y:auto;">',
+      '<div style="width:48px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 16px;"></div>',
+      '<div style="font-size:17px;font-weight:800;color:#f0f4f8;margin-bottom:4px;">Recordatorio de picks</div>',
+      '<div style="font-size:13px;color:#8a94a6;margin-bottom:16px;">' + jornada + (fechas ? " - " + fechas : "") + " - " + pendingEntries.length + " boletos pendientes</div>",
+      conWa.length ? listHtml : '<div style="font-size:13px;color:#6b7280;">Nadie con WhatsApp pendiente.</div>',
+      sinWaHtml,
+      '<button id="reminderClose" style="width:100%;margin-top:16px;padding:12px;border-radius:14px;',
+        'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);',
+        'color:#8a94a6;font-size:14px;cursor:pointer;">Cerrar</button>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+
+  document.getElementById("reminderBg").addEventListener("click", function() { modal.remove(); });
+  document.getElementById("reminderClose").addEventListener("click", function() { modal.remove(); });
+
+  // Individual send buttons
+  modal.querySelectorAll(".reminder-send-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var name = btn.getAttribute("data-name");
+      var wa   = btn.getAttribute("data-wa");
+      var clean = String(wa).replace(/\D/g, "");
+      var lines = [
+        "Quiniela Arcangel - " + jornada,
+        "Hola " + name + "! Te recordamos que aun no has enviado tus pronosticos.",
+        (fechas ? "Fechas: " + fechas : ""),
+        "",
+        "Recuerda enviar tus picks antes del cierre: Viernes 05:00 PM",
+        "Boleto pagado, boleto jugado.",
+        "Suerte!"
+      ].filter(Boolean);
+      window.open("https://wa.me/52" + clean + "?text=" + encodeURIComponent(lines.join("\n")), "_blank");
+    });
+  });
+}
+
 
 // =====================
 // Init

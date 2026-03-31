@@ -131,12 +131,17 @@
           <div id="dashPrize" class="text-sm font-semibold mt-1">$0</div>
         </div>
         <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-          <div class="text-xs text-zinc-400">Participantes activos</div>
+          <div class="text-xs text-zinc-400">En BD (activos)</div>
           <div id="dashParticipants" class="text-sm font-semibold mt-1">0</div>
         </div>
         <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
           <div class="text-xs text-zinc-400">Boletos pagados</div>
           <div id="dashPaidEntries" class="text-sm font-semibold mt-1">0</div>
+        </div>
+        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 col-span-2">
+          <div class="text-xs text-zinc-400">⚽ Jugando esta jornada</div>
+          <div id="dashJugandoJornada" class="text-xl font-black mt-1 text-emerald-400">0</div>
+          <div class="text-xs text-zinc-500 mt-1">Participantes con boleto registrado</div>
         </div>
         <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
           <div class="text-xs text-zinc-400">Modo activo</div>
@@ -548,6 +553,10 @@
 <button id="btnRefreshPickStatus" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
   🔄
 </button>
+
+<button onclick="sendPicksReminder()" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Recordatorio a pendientes">
+  ⏰
+</button>
     </div>
   </div>
 
@@ -674,6 +683,10 @@
 
   <button id="btnExportWinnerCard" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
     Exportar cartel del ganador
+  </button>
+
+  <button onclick="exportStandingsWhatsApp()" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 flex items-center justify-center gap-2">
+    📲 Compartir tabla por WhatsApp
   </button>
 </div>
 
