@@ -3944,506 +3944,295 @@ async function loadStandings() {
     `;
 }
 
-//Construcción Imagen Ranking
+// ═══════════════════════════════════════════════════
+// CARTEL TABLA DE ACIERTOS — DARK PREMIUM
+// ═══════════════════════════════════════════════════
 function makeStandingsCard(opts) {
-  var poolName = opts.poolName || "Jornada";
-  var totalGoals = opts.totalGoals || 0;
-  var rows = opts.rows || [];
+  var poolName    = opts.poolName    || "Jornada";
+  var totalGoals  = opts.totalGoals  || 0;
+  var rows        = opts.rows        || [];
+  var logoUrl     = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
 
   var card = document.createElement("div");
-  card.style.width = "900px";
-  card.style.background = "#ffffff";
-  card.style.color = "#111111";
-  card.style.border = "1.5px solid #222222";
-  card.style.borderRadius = "20px";
-  card.style.padding = "26px";
-  card.style.boxSizing = "border-box";
-  card.style.fontFamily = "Arial, sans-serif";
+  card.style.cssText = [
+    "width:900px", "box-sizing:border-box",
+    "background:linear-gradient(160deg,#050810 0%,#071220 50%,#040c10 100%)",
+    "color:#f0f4f8", "border-radius:24px",
+    "padding:40px 36px", "font-family:Arial,sans-serif",
+    "position:relative", "overflow:hidden"
+  ].join(";");
 
-  card.innerHTML =
-    '<div style="text-align:center;">' +
-      '<div style="font-size:34px;font-weight:900;">Tabla de Aciertos</div>' +
-      '<div style="font-size:18px;color:#555;margin-top:6px;">' + poolName + '</div>' +
-    '</div>' +
+  // Glow blobs decorativos
+  var glow1 = document.createElement("div");
+  glow1.style.cssText = "position:absolute;top:-80px;left:-80px;width:320px;height:320px;" +
+    "border-radius:50%;background:radial-gradient(circle,rgba(16,185,129,.15) 0%,transparent 70%);pointer-events:none;";
+  var glow2 = document.createElement("div");
+  glow2.style.cssText = "position:absolute;bottom:-60px;right:-60px;width:260px;height:260px;" +
+    "border-radius:50%;background:radial-gradient(circle,rgba(6,182,212,.1) 0%,transparent 70%);pointer-events:none;";
+  card.appendChild(glow1);
+  card.appendChild(glow2);
 
-    '<div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:18px;">' +
-      '<div style="padding:10px 18px;border-radius:999px;background:#111111;color:#ffffff;font-size:18px;font-weight:800;">🏆 Quiniela Arcángel</div>' +
-      '<div style="padding:10px 18px;border-radius:999px;background:#f4f4f5;border:1px solid #d4d4d8;font-size:18px;font-weight:800;color:#111111;">Goles jornada: ' + totalGoals + '</div>' +
-    '</div>';
+  // Grid overlay sutil
+  var grid = document.createElement("div");
+  grid.style.cssText = "position:absolute;inset:0;pointer-events:none;" +
+    "background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px)," +
+    "linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);" +
+    "background-size:40px 40px;";
+  card.appendChild(grid);
 
+  // Línea acento top
+  var topLine = document.createElement("div");
+  topLine.style.cssText = "position:absolute;top:0;left:15%;right:15%;height:2px;" +
+    "background:linear-gradient(90deg,transparent,#10b981,transparent);border-radius:0 0 4px 4px;";
+  card.appendChild(topLine);
+
+  // ── HEADER ──
+  var header = document.createElement("div");
+  header.style.cssText = "display:flex;align-items:center;justify-content:space-between;" +
+    "margin-bottom:28px;position:relative;";
+  header.innerHTML = [
+    // Logo + nombre
+    '<div style="display:flex;align-items:center;gap:16px;">',
+      '<img src="' + logoUrl + '" crossorigin="anonymous"',
+        ' style="width:64px;height:64px;object-fit:contain;border-radius:12px;',
+        'box-shadow:0 0 24px rgba(16,185,129,.4);" />',
+      '<div>',
+        '<div style="font-size:22px;font-weight:900;color:#fff;line-height:1.1;">Quiniela Arc\u00e1ngel</div>',
+        '<div style="font-size:13px;color:#34d399;margin-top:3px;">&#34;Pasi\u00f3n X Ganar&#34;</div>',
+      '</div>',
+    '</div>',
+    // Goles badge
+    '<div style="padding:10px 20px;border-radius:999px;',
+      'background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);',
+      'font-size:15px;font-weight:700;color:#34d399;">',
+      '\u26bd\ufe0f ' + totalGoals + ' goles',
+    '</div>'
+  ].join("");
+  card.appendChild(header);
+
+  // Separador
+  var sep = document.createElement("div");
+  sep.style.cssText = "height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);margin-bottom:20px;";
+  card.appendChild(sep);
+
+  // Título + jornada
+  var titleWrap = document.createElement("div");
+  titleWrap.style.cssText = "text-align:center;margin-bottom:28px;";
+  titleWrap.innerHTML = [
+    '<div style="font-size:38px;font-weight:900;color:#fff;line-height:1;">Tabla de Aciertos</div>',
+    '<div style="font-size:17px;color:#8a94a6;margin-top:8px;">' + poolName + '</div>'
+  ].join("");
+  card.appendChild(titleWrap);
+
+  // ── LISTA ──
   var list = document.createElement("div");
-  list.style.display = "grid";
-  list.style.gap = "10px";
-  list.style.marginTop = "24px";
+  list.style.cssText = "display:grid;gap:10px;position:relative;";
 
-  rows.forEach(function(r, index) {
-    var pos = index + 1;
-    var badgeBg = "#f4f4f5";
-    var badgeColor = "#111111";
+  var medals = ["#f59e0b","#9ca3af","#b45309"];
+  var medalEmojis = ["🥇","🥈","🥉"];
 
-    if (pos === 1) {
-      badgeBg = "#111111";
-      badgeColor = "#ffffff";
-    }
+  rows.forEach(function(r, i) {
+    var pos = i + 1;
+    var isFirst = pos === 1;
+    var isTop3  = pos <= 3;
+
+    var rowBg = isFirst
+      ? "background:linear-gradient(135deg,rgba(16,185,129,.18) 0%,rgba(6,182,212,.08) 100%);border:1px solid rgba(16,185,129,.35);"
+      : isTop3
+        ? "background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);"
+        : "background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);";
+
+    var medalColor  = medals[i]  || "#4a5568";
+    var medalEmoji  = medalEmojis[i] || "";
+    var posDisplay  = medalEmoji
+      ? '<div style="font-size:28px;line-height:1;">' + medalEmoji + '</div>'
+      : '<div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);' +
+          'display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#6b7280;">' + pos + '</div>';
+
+    var ptsColor = isFirst ? "#34d399" : isTop3 ? "#a3e635" : "#f0f4f8";
 
     var item = document.createElement("div");
-    item.style.display = "flex";
-    item.style.alignItems = "center";
-    item.style.justifyContent = "space-between";
-    item.style.gap = "16px";
-    item.style.padding = "14px 16px";
-    item.style.border = "1px solid #d4d4d8";
-    item.style.borderRadius = "14px";
-    item.style.background = "#ffffff";
+    item.style.cssText = "display:flex;align-items:center;justify-content:space-between;" +
+      "gap:16px;padding:16px 20px;border-radius:16px;" + rowBg;
 
-    item.innerHTML =
-      '<div style="display:flex;align-items:center;gap:14px;min-width:0;">' +
-        '<div style="width:42px;height:42px;border-radius:999px;background:' + badgeBg + ';color:' + badgeColor + ';display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;">' +
-          pos +
-        '</div>' +
-        '<div style="min-width:0;">' +
-          '<div style="font-size:20px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.name + '</div>' +
-          '<div style="font-size:14px;color:#666;">' + (r.area || "Sin área") + ' • Picks: ' + r.captured_picks + ' • Jugados: ' + r.played_matches + '</div>' +
-        '</div>' +
-      '</div>' +
-
-      '<div style="text-align:right;flex-shrink:0;">' +
-        '<div style="font-size:26px;font-weight:900;color:#111111;">' + r.points + '</div>' +
-        '<div style="font-size:13px;color:#666;">aciertos</div>' +
-      '</div>';
+    item.innerHTML = [
+      '<div style="display:flex;align-items:center;gap:16px;min-width:0;">',
+        posDisplay,
+        '<div style="min-width:0;">',
+          '<div style="font-size:22px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.name + '</div>',
+          '<div style="font-size:13px;color:#8a94a6;margin-top:2px;">' + (r.area||"Sin área") + ' &bull; ' + r.captured_picks + ' picks &bull; ' + r.played_matches + ' jugados</div>',
+        '</div>',
+      '</div>',
+      '<div style="text-align:right;flex-shrink:0;">',
+        '<div style="font-size:32px;font-weight:900;color:' + ptsColor + ';line-height:1;">' + r.points + '</div>',
+        '<div style="font-size:12px;color:#6b7280;margin-top:2px;">aciertos</div>',
+      '</div>'
+    ].join("");
 
     list.appendChild(item);
   });
 
   card.appendChild(list);
 
+  // ── FOOTER ──
   var footer = document.createElement("div");
-  footer.style.marginTop = "24px";
-  footer.style.textAlign = "center";
-  footer.style.fontSize = "16px";
-  footer.style.color = "#444444";
-  footer.innerHTML =
-    '<div style="font-weight:800;color:#111111;">Gracias por Participar 🏆</div>' +
-    '<div style="margin-top:4px;color:#555;">\u00a1Mucha suerte a todos!</div>';
-
+  footer.style.cssText = "margin-top:28px;text-align:center;";
+  footer.innerHTML = [
+    '<div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);margin-bottom:18px;"></div>',
+    '<div style="font-size:18px;font-weight:800;color:#fff;">\u00a1Gracias por participar! \uD83C\uDFC6</div>',
+    '<div style="font-size:14px;color:#8a94a6;margin-top:4px;">Quiniela Arc\u00e1ngel &mdash; Pasi\u00f3n X Ganar</div>'
+  ].join("");
   card.appendChild(footer);
 
   return card;
 }
 
-// Funcion Exportar Imagen
-async function exportStandingsImage() {
-  hideAlert();
-
-  const pool_id = $("standingsPool").value;
-  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
-
-  const { data: pool, error: poolErr } = await supabaseClient
-    .from("pools")
-    .select("id, name")
-    .eq("id", pool_id)
-    .maybeSingle();
-
-  if (poolErr) return showAlert(poolErr.message, "error");
-
-  // Solo entries pagados
-  const { data: paidEntries, error: paidErr } = await supabaseClient
-    .from("entries")
-    .select("id, participant_id")
-    .eq("pool_id", pool_id)
-    .eq("paid", true);
-
-  if (paidErr) return showAlert(paidErr.message, "error");
-
-  const paidEntryIds = (paidEntries || []).map(function(e) { return e.id; });
-  const paidParticipantIds = (paidEntries || []).map(function(e) { return e.participant_id; });
-
-  if (!paidEntryIds.length) {
-    return showAlert("No hay boletos pagados para exportar la tabla oficial.", "error");
-  }
-
-  const { data: pointsRows, error: pointsErr } = await supabaseClient
-    .from("entry_points")
-    .select("entry_id, pool_id, participant_id, points, played_matches, captured_picks")
-    .eq("pool_id", pool_id)
-    .in("entry_id", paidEntryIds);
-
-  if (pointsErr) return showAlert(pointsErr.message, "error");
-
-  const { data: participants, error: partErr } = await supabaseClient
-    .from("participants")
-    .select("id, name, area")
-    .in("id", paidParticipantIds);
-
-  if (partErr) return showAlert(partErr.message, "error");
-
-  const partMap = new Map(
-    (participants || []).map(function(p) {
-      return [p.id, p];
-    })
-  );
-
-  const { data: goalsData, error: goalsErr } = await supabaseClient
-    .from("pool_goals_total")
-    .select("total_goals")
-    .eq("pool_id", pool_id)
-    .maybeSingle();
-
-  if (goalsErr) return showAlert(goalsErr.message, "error");
-
-  const rows = (pointsRows || []).map(function(r) {
-    const p = partMap.get(r.participant_id) || {};
-    return {
-      name: p.name || "Sin nombre",
-      area: p.area || "",
-      points: Number(r.points || 0),
-      played_matches: Number(r.played_matches || 0),
-      captured_picks: Number(r.captured_picks || 0)
-    };
-  });
-
-  rows.sort(function(a, b) {
-    if (b.points !== a.points) return b.points - a.points;
-    return a.name.localeCompare(b.name);
-  });
-
-  if (!rows.length) {
-    return showAlert("No hay datos oficiales de aciertos para exportar.", "error");
-  }
-
-  const printArea = $("printArea");
-  printArea.classList.remove("hidden");
-  printArea.innerHTML = "";
-
-  const card = makeStandingsCard({
-    poolName: pool?.name || "Jornada",
-    totalGoals: goalsData?.total_goals || 0,
-    rows: rows
-  });
-
-  printArea.appendChild(card);
-
-  try {
-    const canvas = await html2canvas(card, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true
-    });
-
-    const a = document.createElement("a");
-    const safeName = (pool?.name || "tabla-aciertos")
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-");
-
-    a.download = safeName + "-aciertos.png";
-    a.href = canvas.toDataURL("image/png");
-    a.click();
-
-    showAlert("Imagen de tabla generada ✅", "ok");
-  } catch (err) {
-    showAlert("Error generando imagen: " + (err?.message || err), "error");
-  } finally {
-    printArea.innerHTML = "";
-    printArea.classList.add("hidden");
-  }
-}
-
-// Función Automática Ganadores Quin Sencilla
-async function loadSimpleWinnerSummary(poolId) {
-  const pool_id = poolId || $("standingsPool").value;
-  if (!pool_id) return null;
-
-  const { data: winners, error } = await supabaseClient
-    .from("pool_simple_winner")
-    .select("pool_id, entry_id, participant_id, winning_points, winners_count, prize_pool, commission_amount, total_collected, prize_per_winner")
-    .eq("pool_id", pool_id);
-
-  if (error) {
-    showAlert(error.message, "error");
-    return null;
-  }
-
-  if (!winners || !winners.length) return null;
-
-  const participantIds = winners.map(function(w) { return w.participant_id; });
-
-  const { data: participants, error: partErr } = await supabaseClient
-    .from("participants")
-    .select("id, name, area")
-    .in("id", participantIds);
-
-  if (partErr) {
-    showAlert(partErr.message, "error");
-    return null;
-  }
-
-  const partMap = new Map(
-    (participants || []).map(function(p) {
-      return [p.id, p];
-    })
-  );
-
-  return {
-    winners: winners.map(function(w) {
-      const p = partMap.get(w.participant_id) || {};
-      return {
-        participant_id: w.participant_id,
-        name: p.name || "Sin nombre",
-        area: p.area || "",
-        winning_points: Number(w.winning_points || 0)
-      };
-    }),
-    winners_count: Number(winners[0].winners_count || 0),
-    prize_pool: Number(winners[0].prize_pool || 0),
-    commission_amount: Number(winners[0].commission_amount || 0),
-    total_collected: Number(winners[0].total_collected || 0),
-    prize_per_winner: Number(winners[0].prize_per_winner || 0),
-    winning_points: Number(winners[0].winning_points || 0)
-  };
-}
-
-//Funcion Resultado Ganador Quin Sencilla
-function renderSimpleWinnerBox(rows, poolStats, completionInfo, winnerSummary) {
-  if (!rows || !rows.length) {
-    return `
-      <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">
-        Aún no hay datos suficientes para determinar líder o ganador.
-      </div>
-    `;
-  }
-
-  const prizePool = Number(poolStats?.prize_pool || 0);
-  const paidCount = Number(poolStats?.paid_count || 0);
-  const totalCollected = Number(poolStats?.total_collected || 0);
-  const commissionAmount = Number(poolStats?.commission_amount || 0);
-
-  const isFinished = !!(completionInfo && completionInfo.isFinished);
-  const totalMatches = Number(completionInfo?.totalMatches || 0);
-  const completedMatches = Number(completionInfo?.completedMatches || 0);
-
-  const progressText = totalMatches
-    ? `Partidos con resultado: ${completedMatches}/${totalMatches}`
-    : "Sin partidos cargados";
-
-  if (!winnerSummary || !winnerSummary.winners || !winnerSummary.winners.length) {
-    return `
-      <div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
-        <div class="text-xs uppercase tracking-wide text-zinc-400">Quiniela Sencilla</div>
-        <div class="mt-2 text-sm text-zinc-300">Todavía no hay ganador calculado para esta jornada.</div>
-        <div class="text-xs text-zinc-500 mt-2">${progressText}</div>
-
-        <div class="grid grid-cols-3 gap-2 mt-4 text-sm">
-          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Pagados</div>
-            <div class="font-bold text-white">${paidCount}</div>
-          </div>
-          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Total</div>
-            <div class="font-bold text-white">${money(totalCollected)}</div>
-          </div>
-          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Bolsa</div>
-            <div class="font-bold text-white">${money(prizePool)}</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  const winners = winnerSummary.winners;
-  const winnersCount = Number(winnerSummary.winners_count || 0);
-  const winningPoints = Number(winnerSummary.winning_points || 0);
-  const prizePerWinner = Number(winnerSummary.prize_per_winner || 0);
-
-  const titleSingle = isFinished
-    ? "Ganador final • Quiniela Sencilla"
-    : "Ganador provisional • Quiniela Sencilla";
-
-  const titleTie = isFinished
-    ? "Empate final • Quiniela Sencilla"
-    : "Empate provisional • Quiniela Sencilla";
-
-  if (winnersCount === 1) {
-    const winner = winners[0];
-    const boxClass = isFinished
-      ? "bg-sky-500/10 border-sky-500/20"
-      : "bg-emerald-500/10 border-emerald-500/20";
-    const titleClass = isFinished
-      ? "text-sky-300"
-      : "text-emerald-300";
-    const prizeClass = isFinished
-      ? "text-sky-300"
-      : "text-emerald-300";
-
-    return `
-      <div class="p-4 ${boxClass} border rounded-xl">
-        <div class="text-xs uppercase tracking-wide ${titleClass}">${titleSingle}</div>
-
-        <div class="mt-2 text-xl font-extrabold text-white">${winner.name}</div>
-        <div class="text-sm text-zinc-300 mt-1">
-          ${winner.area || "Sin área"} • ${winningPoints} aciertos
-        </div>
-        <div class="text-xs text-zinc-400 mt-2">${progressText}</div>
-
-        <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
-          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Bolsa actual</div>
-            <div class="font-bold text-white">${money(prizePool)}</div>
-          </div>
-          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Premio automático</div>
-            <div class="font-bold ${prizeClass}">${money(prizePerWinner)}</div>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2 mt-2 text-sm">
-          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Pagados</div>
-            <div class="font-bold text-white">${paidCount}</div>
-          </div>
-          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Total</div>
-            <div class="font-bold text-white">${money(totalCollected)}</div>
-          </div>
-          <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-            <div class="text-xs text-zinc-400">Comisión</div>
-            <div class="font-bold text-white">${money(commissionAmount)}</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-      <div class="text-xs uppercase tracking-wide text-amber-300">${titleTie}</div>
-
-      <div class="mt-2 text-base font-extrabold text-white">
-        ${winners.map(function(x) { return x.name; }).join(", ")}
-      </div>
-      <div class="text-sm text-zinc-300 mt-1">
-        Todos llevan ${winningPoints} aciertos
-      </div>
-      <div class="text-xs text-zinc-400 mt-2">${progressText}</div>
-
-      <div class="grid grid-cols-2 gap-2 mt-4 text-sm">
-        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-          <div class="text-xs text-zinc-400">Bolsa actual</div>
-          <div class="font-bold text-white">${money(prizePool)}</div>
-        </div>
-        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-          <div class="text-xs text-zinc-400">Premio automático por persona</div>
-          <div class="font-bold text-amber-300">${money(prizePerWinner)}</div>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-3 gap-2 mt-2 text-sm">
-        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-          <div class="text-xs text-zinc-400">Pagados</div>
-          <div class="font-bold text-white">${paidCount}</div>
-        </div>
-        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-          <div class="text-xs text-zinc-400">Total</div>
-          <div class="font-bold text-white">${money(totalCollected)}</div>
-        </div>
-        <div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl">
-          <div class="text-xs text-zinc-400">Comisión</div>
-          <div class="font-bold text-white">${money(commissionAmount)}</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-//Funcion Detección Automático Cierre Jornada
-async function getPoolCompletionInfo(poolId) {
-  const { data, error } = await supabaseClient
-    .from("matches")
-    .select("id, home_goals, away_goals")
-    .eq("pool_id", poolId);
-
-  if (error) throw error;
-
-  const rows = data || [];
-  const totalMatches = rows.length;
-
-  const completedMatches = rows.filter(function(m) {
-    return m.home_goals !== null && m.away_goals !== null;
-  }).length;
-
-  return {
-    totalMatches: totalMatches,
-    completedMatches: completedMatches,
-    isFinished: totalMatches > 0 && completedMatches === totalMatches
-  };
-}
-
-//  Construcción Cartel Ganador
+// ═══════════════════════════════════════════════════
+// CARTEL GANADOR — DARK PREMIUM
+// ═══════════════════════════════════════════════════
 function makeWinnerCard(opts) {
-  var poolName = opts.poolName || "Jornada";
-  var season = opts.season || "";
-  var isFinished = !!opts.isFinished;
-  var winners = opts.winners || [];
-  var winningPoints = Number(opts.winningPoints || 0);
-  var prizePool = Number(opts.prizePool || 0);
+  var poolName       = opts.poolName       || "Jornada";
+  var season         = opts.season         || "";
+  var isFinished     = !!opts.isFinished;
+  var winners        = opts.winners        || [];
+  var winningPoints  = Number(opts.winningPoints  || 0);
+  var prizePool      = Number(opts.prizePool      || 0);
   var prizePerWinner = Number(opts.prizePerWinner || 0);
-  var winnersCount = Number(opts.winnersCount || 0);
+  var winnersCount   = Number(opts.winnersCount   || 0);
+  var logoUrl        = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
 
-  var title = winnersCount > 1
+  var isTie  = winnersCount > 1;
+  var names  = winners.map(function(w){ return w.name; }).join(" & ");
+  var title  = isTie
     ? (isFinished ? "Empate Final" : "Empate Provisional")
     : (isFinished ? "Ganador Final" : "Ganador Provisional");
-
-  var names = winners.map(function(w) {
-    return w.name;
-  }).join(", ");
-
-  var subtitle = winnersCount > 1
+  var subtitle = isTie
     ? "Premio dividido entre " + winnersCount + " participantes"
     : "Resultado oficial de la Quiniela Sencilla";
 
+  var accentStart = isTie ? "#f59e0b" : "#10b981";
+  var accentEnd   = isTie ? "#d97706" : "#059669";
+  var accentGlow  = isTie ? "rgba(245,158,11,.3)" : "rgba(16,185,129,.3)";
+  var accentLight = isTie ? "#fbbf24" : "#34d399";
+
   var card = document.createElement("div");
-  card.style.width = "1080px";
-  card.style.background = "linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%)";
-  card.style.color = "#111111";
-  card.style.border = "1.5px solid #d4d4d8";
-  card.style.borderRadius = "28px";
-  card.style.padding = "60px";
-  card.style.boxSizing = "border-box";
-  card.style.fontFamily = "Arial, sans-serif";
+  card.style.cssText = [
+    "width:1080px", "box-sizing:border-box",
+    "background:linear-gradient(160deg,#050810 0%,#071220 50%,#040c10 100%)",
+    "color:#f0f4f8", "border-radius:28px",
+    "padding:60px 56px", "font-family:Arial,sans-serif",
+    "position:relative", "overflow:hidden"
+  ].join(";");
 
-  card.innerHTML =
-    '<div style="text-align:center;">' +
-      '<div style="display:inline-flex;align-items:center;gap:10px;padding:12px 22px;border-radius:999px;background:#111111;color:#ffffff;font-size:22px;font-weight:800;">🏆 Quiniela Arcángel</div>' +
-      '<div style="font-size:52px;font-weight:900;margin-top:26px;line-height:1.05;">' + title + '</div>' +
-      '<div style="font-size:24px;color:#555;margin-top:12px;">' + poolName + '</div>' +
-      '<div style="font-size:20px;color:#666;margin-top:8px;">' + season + '</div>' +
-    '</div>' +
+  // Glow blobs
+  [
+    "position:absolute;top:-100px;left:-100px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle," + accentGlow + " 0%,transparent 70%);pointer-events:none;",
+    "position:absolute;bottom:-80px;right:-80px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(6,182,212,.1) 0%,transparent 70%);pointer-events:none;"
+  ].forEach(function(css) {
+    var el = document.createElement("div");
+    el.style.cssText = css;
+    card.appendChild(el);
+  });
 
-    '<div style="margin-top:38px;padding:28px;border-radius:24px;background:#ffffff;border:1px solid #d4d4d8;box-shadow:0 18px 50px rgba(0,0,0,.08);text-align:center;">' +
-      '<div style="font-size:20px;color:#555;text-transform:uppercase;letter-spacing:.6px;">' + subtitle + '</div>' +
-      '<div style="font-size:48px;font-weight:900;margin-top:18px;line-height:1.15;">' + names + '</div>' +
-      '<div style="font-size:24px;color:#444;margin-top:14px;">' + winningPoints + ' aciertos</div>' +
-    '</div>' +
+  // Grid overlay
+  var grid = document.createElement("div");
+  grid.style.cssText = "position:absolute;inset:0;pointer-events:none;" +
+    "background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px)," +
+    "linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);" +
+    "background-size:50px 50px;";
+  card.appendChild(grid);
 
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:30px;">' +
-      '<div style="padding:22px;border-radius:22px;background:#ffffff;border:1px solid #d4d4d8;text-align:center;">' +
-        '<div style="font-size:16px;color:#666;text-transform:uppercase;">Bolsa</div>' +
-        '<div style="font-size:34px;font-weight:900;margin-top:8px;">' + money(prizePool) + '</div>' +
-      '</div>' +
+  // Top accent line
+  var topLine = document.createElement("div");
+  topLine.style.cssText = "position:absolute;top:0;left:10%;right:10%;height:3px;" +
+    "background:linear-gradient(90deg,transparent," + accentStart + "," + accentEnd + ",transparent);border-radius:0 0 6px 6px;";
+  card.appendChild(topLine);
 
-      '<div style="padding:22px;border-radius:22px;background:#111111;color:#ffffff;border:1px solid #111111;text-align:center;">' +
-        '<div style="font-size:16px;color:#d4d4d8;text-transform:uppercase;">Premio</div>' +
-        '<div style="font-size:34px;font-weight:900;margin-top:8px;">' + money(prizePerWinner) + '</div>' +
-      '</div>' +
+  // ── HEADER: logo + quiniela ──
+  var header = document.createElement("div");
+  header.style.cssText = "display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:40px;position:relative;";
+  header.innerHTML = [
+    '<img src="' + logoUrl + '" crossorigin="anonymous"',
+      ' style="width:80px;height:80px;object-fit:contain;border-radius:16px;',
+      'box-shadow:0 0 32px ' + accentGlow + ';" />',
+    '<div>',
+      '<div style="font-size:28px;font-weight:900;color:#fff;line-height:1.1;">Quiniela Arc\u00e1ngel</div>',
+      '<div style="font-size:15px;color:' + accentLight + ';margin-top:4px;">&#34;Pasi\u00f3n X Ganar&#34; &bull; ' + (season||"Clausura 2026") + '</div>',
+    '</div>'
+  ].join("");
+  card.appendChild(header);
 
-      '<div style="padding:22px;border-radius:22px;background:#ffffff;border:1px solid #d4d4d8;text-align:center;">' +
-        '<div style="font-size:16px;color:#666;text-transform:uppercase;">Ganadores</div>' +
-        '<div style="font-size:34px;font-weight:900;margin-top:8px;">' + winnersCount + '</div>' +
-      '</div>' +
-    '</div>' +
+  // ── TÍTULO ──
+  var titleEl = document.createElement("div");
+  titleEl.style.cssText = "text-align:center;margin-bottom:36px;";
+  titleEl.innerHTML = [
+    '<div style="font-size:58px;font-weight:900;color:#fff;line-height:1.05;letter-spacing:-1px;">' + title + '</div>',
+    '<div style="font-size:20px;color:#8a94a6;margin-top:10px;">' + poolName + '</div>'
+  ].join("");
+  card.appendChild(titleEl);
 
-    '<div style="margin-top:34px;text-align:center;font-size:24px;font-weight:800;color:#111111;">Gracias por Participar 🏆</div>' +
-    '<div style="margin-top:10px;text-align:center;font-size:20px;color:#555;">\u00a1Mucha suerte a todos!</div>';
+  // ── WINNER BOX ──
+  var winnerBox = document.createElement("div");
+  winnerBox.style.cssText = [
+    "margin-bottom:32px",
+    "padding:32px",
+    "border-radius:24px",
+    "background:rgba(255,255,255,.05)",
+    "border:1px solid rgba(255,255,255,.1)",
+    "text-align:center",
+    "position:relative",
+    "overflow:hidden"
+  ].join(";");
+
+  // Inner glow
+  var innerGlow = document.createElement("div");
+  innerGlow.style.cssText = "position:absolute;top:-40px;left:50%;transform:translateX(-50%);" +
+    "width:300px;height:150px;border-radius:50%;" +
+    "background:radial-gradient(circle," + accentGlow + " 0%,transparent 70%);pointer-events:none;";
+  winnerBox.appendChild(innerGlow);
+
+  var winnerContent = document.createElement("div");
+  winnerContent.style.cssText = "position:relative;";
+  winnerContent.innerHTML = [
+    '<div style="font-size:16px;color:#8a94a6;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">' + subtitle + '</div>',
+    '<div style="font-size:' + (isTie ? "36px" : "52px") + ';font-weight:900;color:#fff;line-height:1.1;">' + names + '</div>',
+    '<div style="margin-top:16px;display:inline-block;padding:8px 24px;border-radius:999px;' +
+      'background:linear-gradient(135deg,' + accentStart + ',' + accentEnd + ');' +
+      'font-size:18px;font-weight:800;color:#fff;">' +
+      winningPoints + ' aciertos',
+    '</div>'
+  ].join("");
+  winnerBox.appendChild(winnerContent);
+  card.appendChild(winnerBox);
+
+  // ── STATS GRID ──
+  var stats = document.createElement("div");
+  stats.style.cssText = "display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:36px;";
+  stats.innerHTML = [
+    '<div style="padding:24px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);text-align:center;">',
+      '<div style="font-size:13px;color:#8a94a6;text-transform:uppercase;letter-spacing:.6px;">Bolsa</div>',
+      '<div style="font-size:36px;font-weight:900;color:#fff;margin-top:8px;">' + money(prizePool) + '</div>',
+    '</div>',
+    '<div style="padding:24px;border-radius:20px;background:linear-gradient(135deg,' + accentStart + ',' + accentEnd + ');text-align:center;box-shadow:0 8px 32px ' + accentGlow + ';">',
+      '<div style="font-size:13px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.6px;">Premio</div>',
+      '<div style="font-size:36px;font-weight:900;color:#fff;margin-top:8px;">' + money(prizePerWinner) + '</div>',
+    '</div>',
+    '<div style="padding:24px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);text-align:center;">',
+      '<div style="font-size:13px;color:#8a94a6;text-transform:uppercase;letter-spacing:.6px;">Ganadores</div>',
+      '<div style="font-size:36px;font-weight:900;color:#fff;margin-top:8px;">' + winnersCount + '</div>',
+    '</div>'
+  ].join("");
+  card.appendChild(stats);
+
+  // ── FOOTER ──
+  var footer = document.createElement("div");
+  footer.style.cssText = "text-align:center;";
+  footer.innerHTML = [
+    '<div style="width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);margin-bottom:22px;"></div>',
+    '<div style="font-size:22px;font-weight:800;color:#fff;">\u00a1Gracias por participar! \uD83C\uDFC6</div>',
+    '<div style="font-size:16px;color:#8a94a6;margin-top:6px;">Quiniela Arc\u00e1ngel &mdash; Pasi\u00f3n X Ganar</div>'
+  ].join("");
+  card.appendChild(footer);
 
   return card;
 }
