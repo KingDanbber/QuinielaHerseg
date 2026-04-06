@@ -689,6 +689,11 @@ const whatsappBadge = hasWhatsapp
         data-whatsapp="${p.whatsapp || ""}"
         title="Editar">✏️</button>
       <button type="button"
+        class="participant-history-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
+        data-id="${p.id}"
+        data-name="${p.name || ""}"
+        title="Ver historial">📋</button>
+      <button type="button"
         class="participant-toggle-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
         data-id="${p.id}"
         data-active="${isActive ? "1" : "0"}"
@@ -700,6 +705,7 @@ const whatsappBadge = hasWhatsapp
   }).join("");
 
   attachParticipantEditEvents();
+attachParticipantHistoryEvents();
 attachParticipantToggleEvents();
 attachParticipantFilterEvents();
 attachParticipantSearchEvent();
@@ -831,6 +837,16 @@ function attachParticipantEditEvents() {
         area: btn.getAttribute("data-area"),
         whatsapp: btn.getAttribute("data-whatsapp")
       });
+    });
+  });
+}
+
+function attachParticipantHistoryEvents() {
+  document.querySelectorAll(".participant-history-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var id   = btn.getAttribute("data-id");
+      var name = btn.getAttribute("data-name") || "Participante";
+      showParticipantHistory(id, name);
     });
   });
 }
@@ -4087,6 +4103,71 @@ function makeStandingsCard(opts) {
   return card;
 }
 
+
+// Funcion Exportar Imagen Tabla de Aciertos
+async function exportStandingsImage() {
+  hideAlert();
+  const pool_id = $("standingsPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada.", "error");
+
+  const { data: pool } = await supabaseClient.from("pools")
+    .select("id, name").eq("id", pool_id).maybeSingle();
+
+  const { data: paidEntries } = await supabaseClient.from("entries")
+    .select("id, participant_id").eq("pool_id", pool_id).eq("paid", true);
+
+  if (!paidEntries || !paidEntries.length)
+    return showAlert("No hay boletos pagados para exportar.", "error");
+
+  const paidEntryIds    = paidEntries.map(function(e){ return e.id; });
+  const paidPartIds     = paidEntries.map(function(e){ return e.participant_id; });
+
+  const { data: pointsRows } = await supabaseClient.from("entry_points")
+    .select("entry_id, participant_id, points, played_matches, captured_picks")
+    .eq("pool_id", pool_id).in("entry_id", paidEntryIds);
+
+  const { data: participants } = await supabaseClient.from("participants")
+    .select("id, name, area").in("id", paidPartIds);
+
+  const { data: goalsData } = await supabaseClient.from("pool_goals_total")
+    .select("total_goals").eq("pool_id", pool_id).maybeSingle();
+
+  const partMap = new Map((participants||[]).map(function(p){ return [p.id, p]; }));
+
+  const rows = (pointsRows||[]).map(function(r) {
+    const p = partMap.get(r.participant_id) || {};
+    return { name: p.name||"Sin nombre", area: p.area||"", points: Number(r.points||0),
+             played_matches: Number(r.played_matches||0), captured_picks: Number(r.captured_picks||0) };
+  }).sort(function(a,b){ return b.points - a.points || a.name.localeCompare(b.name); });
+
+  const printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  const card = makeStandingsCard({
+    poolName: pool?.name || "Jornada",
+    totalGoals: goalsData?.total_goals || 0,
+    rows: rows
+  });
+
+  printArea.appendChild(card);
+
+  try {
+    const canvas = await html2canvas(card, { scale: 2, backgroundColor: "#050810", useCORS: true });
+    const a = document.createElement("a");
+    const safeName = (pool?.name||"tabla").replace(/[^\w\s-]/g,"").replace(/\s+/g,"-");
+    a.download = safeName + "-tabla-aciertos.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+    showAlert("Tabla de aciertos exportada ✅", "ok");
+  } catch(err) {
+    showAlert("Error: " + (err?.message||err), "error");
+  } finally {
+    printArea.innerHTML = "";
+    printArea.classList.add("hidden");
+  }
+}
+
 // ═══════════════════════════════════════════════════
 // CARTEL GANADOR — DARK PREMIUM
 // ═══════════════════════════════════════════════════
@@ -4489,7 +4570,7 @@ function showWelcomeWaModal(name, whatsapp) {
     "\u2022 Tabla de posiciones",
     "\u2022 Estad\u00edsticas e informaci\u00f3n",
     "",
-    "\u23F0 *Registro:* Viernes 05:00 PM",
+    "Registro: " + getPicksDeadline(),
     "\uD83D\uDCB3 *Pago:* S\u00e1bado 4:00 PM",
     "\uD83D\uDCCA Boleto pagado, boleto jugado.",
     "",
@@ -5106,8 +5187,8 @@ async function sendWhatsAppJornadaNotification() {
   }
   lines.push("");
   lines.push("\u23f0 *Registro:* Viernes 05:00 PM");
-  lines.push("\ud83d\udcb3 *Pago:* S\u00e1bado 4:00 PM");
-  lines.push("\ud83d\udcac Env\u00eda tus pron\u00f3sticos al: *8715118046*");
+  lines.push("Pago: " + getPaymentDeadline());
+  lines.push("Envia tus pronosticos al: " + getAdminWhatsapp());
   lines.push("");
   lines.push("\ud83c\udfc6 \u00a1Mucha suerte a todos!");
 
@@ -5372,13 +5453,252 @@ async function sendPicksReminder() {
         "Hola " + name + "! Te recordamos que aun no has enviado tus pronosticos.",
         (fechas ? "Fechas: " + fechas : ""),
         "",
-        "Recuerda enviar tus picks antes del cierre: Viernes 05:00 PM",
+        "Recuerda enviar tus picks antes del cierre: " + getPicksDeadline(),
         "Boleto pagado, boleto jugado.",
         "Suerte!"
       ].filter(Boolean);
       window.open("https://wa.me/52" + clean + "?text=" + encodeURIComponent(lines.join("\n")), "_blank");
     });
   });
+}
+
+
+
+// ═══════════════════════════════════════════════════
+// CONFIGURACIÓN: Horarios límite editables
+// ═══════════════════════════════════════════════════
+const DEFAULT_SETTINGS = {
+  picksDeadline: "Viernes 05:00 PM",
+  paymentDeadline: "Sábado 04:00 PM",
+  adminWhatsapp: "8715118046"
+};
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem("qa_settings") || "null") || DEFAULT_SETTINGS;
+  } catch(e) { return DEFAULT_SETTINGS; }
+}
+
+function saveSettings(s) {
+  localStorage.setItem("qa_settings", JSON.stringify(s));
+}
+
+function openSettingsModal() {
+  var s = loadSettings();
+  var existing = document.getElementById("settingsModal");
+  if (existing) existing.remove();
+
+  var modal = document.createElement("div");
+  modal.id = "settingsModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;";
+
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="settingsBg"></div>',
+    '<div style="position:relative;width:100%;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px 24px 0 0;padding:24px;max-height:80vh;overflow-y:auto;">',
+      '<div style="width:48px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 18px;"></div>',
+      '<div style="font-size:18px;font-weight:800;color:#f0f4f8;margin-bottom:4px;">Configuración</div>',
+      '<div style="font-size:13px;color:#8a94a6;margin-bottom:20px;">Ajustes de la quiniela</div>',
+
+      '<div style="display:grid;gap:14px;">',
+        '<div>',
+          '<div style="font-size:12px;color:#8a94a6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Fecha límite de picks</div>',
+          '<input id="settingPicksDeadline" value="' + s.picksDeadline + '"',
+            ' style="width:100%;padding:12px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);',
+            'border-radius:12px;color:#f0f4f8;font-size:15px;box-sizing:border-box;" placeholder="Ej: Viernes 05:00 PM" />',
+        '</div>',
+        '<div>',
+          '<div style="font-size:12px;color:#8a94a6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Fecha límite de pago</div>',
+          '<input id="settingPaymentDeadline" value="' + s.paymentDeadline + '"',
+            ' style="width:100%;padding:12px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);',
+            'border-radius:12px;color:#f0f4f8;font-size:15px;box-sizing:border-box;" placeholder="Ej: Sábado 04:00 PM" />',
+        '</div>',
+        '<div>',
+          '<div style="font-size:12px;color:#8a94a6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">WhatsApp admin</div>',
+          '<input id="settingAdminWa" value="' + s.adminWhatsapp + '"',
+            ' style="width:100%;padding:12px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);',
+            'border-radius:12px;color:#f0f4f8;font-size:15px;box-sizing:border-box;" placeholder="10 dígitos" />',
+        '</div>',
+      '</div>',
+
+      '<div style="display:grid;gap:10px;margin-top:20px;">',
+        '<button id="settingsSave" style="width:100%;padding:14px;border-radius:14px;border:none;',
+          'background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:15px;font-weight:700;cursor:pointer;">',
+          'Guardar cambios',
+        '</button>',
+        '<button id="settingsClose" style="width:100%;padding:12px;border-radius:14px;',
+          'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);',
+          'color:#8a94a6;font-size:14px;cursor:pointer;">Cancelar</button>',
+      '</div>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+
+  document.getElementById("settingsBg").addEventListener("click", function(){ modal.remove(); });
+  document.getElementById("settingsClose").addEventListener("click", function(){ modal.remove(); });
+  document.getElementById("settingsSave").addEventListener("click", function() {
+    var newSettings = {
+      picksDeadline:   document.getElementById("settingPicksDeadline").value.trim()   || DEFAULT_SETTINGS.picksDeadline,
+      paymentDeadline: document.getElementById("settingPaymentDeadline").value.trim() || DEFAULT_SETTINGS.paymentDeadline,
+      adminWhatsapp:   document.getElementById("settingAdminWa").value.trim()         || DEFAULT_SETTINGS.adminWhatsapp
+    };
+    saveSettings(newSettings);
+    modal.remove();
+    showAlert("Configuración guardada ✅", "ok");
+  });
+}
+
+// Helper para usar en mensajes
+function getPicksDeadline()   { return loadSettings().picksDeadline; }
+function getPaymentDeadline() { return loadSettings().paymentDeadline; }
+function getAdminWhatsapp()   { return loadSettings().adminWhatsapp; }
+
+// ═══════════════════════════════════════════════════
+// HISTORIAL DE PRONÓSTICOS POR PARTICIPANTE
+// ═══════════════════════════════════════════════════
+async function showParticipantHistory(participantId, participantName) {
+  hideAlert();
+  if (!participantId) return;
+
+  var modal = document.createElement("div");
+  modal.id = "historyModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;";
+
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="historyBg"></div>',
+    '<div style="position:relative;width:100%;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px 24px 0 0;padding:24px;max-height:85vh;overflow-y:auto;">',
+      '<div style="width:48px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 16px;"></div>',
+      '<div style="font-size:18px;font-weight:800;color:#f0f4f8;margin-bottom:4px;">Historial de ' + participantName + '</div>',
+      '<div style="font-size:13px;color:#8a94a6;margin-bottom:16px;">Pronósticos por jornada</div>',
+      '<div id="historyContent" style="display:grid;gap:12px;">',
+        '<div style="text-align:center;color:#8a94a6;padding:20px;">Cargando...</div>',
+      '</div>',
+      '<button id="historyClose" style="width:100%;margin-top:16px;padding:12px;border-radius:14px;',
+        'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);',
+        'color:#8a94a6;font-size:14px;cursor:pointer;">Cerrar</button>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+  document.getElementById("historyBg").addEventListener("click", function(){ modal.remove(); });
+  document.getElementById("historyClose").addEventListener("click", function(){ modal.remove(); });
+
+  // Load data
+  var [entriesRes, poolsRes] = await Promise.all([
+    supabaseClient.from("entries")
+      .select("id, pool_id, paid, created_at")
+      .eq("participant_id", participantId)
+      .order("created_at", { ascending: false }),
+    supabaseClient.from("pools")
+      .select("id, name, round, competition, season, status")
+      .order("round", { ascending: false })
+  ]);
+
+  var entries = entriesRes.data || [];
+  var pools   = poolsRes.data  || [];
+  var poolMap = {};
+  pools.forEach(function(p){ poolMap[p.id] = p; });
+
+  if (!entries.length) {
+    document.getElementById("historyContent").innerHTML =
+      '<div style="text-align:center;color:#8a94a6;padding:20px;">Sin boletos registrados.</div>';
+    return;
+  }
+
+  var entryIds = entries.map(function(e){ return e.id; });
+
+  var [picksRes, pointsRes, matchRes] = await Promise.all([
+    supabaseClient.from("predictions_1x2")
+      .select("entry_id, match_id, pick").in("entry_id", entryIds),
+    supabaseClient.from("entry_points")
+      .select("entry_id, pool_id, points, played_matches").in("entry_id", entryIds),
+    supabaseClient.from("matches")
+      .select("id, pool_id, match_no, home_team, away_team, home_goals, away_goals")
+      .in("pool_id", entries.map(function(e){ return e.pool_id; }))
+      .order("match_no", { ascending: true })
+  ]);
+
+  var allPicks  = picksRes.data  || [];
+  var allPoints = pointsRes.data || [];
+  var allMatches= matchRes.data  || [];
+
+  var picksByEntry  = {};
+  allPicks.forEach(function(p) {
+    if (!picksByEntry[p.entry_id]) picksByEntry[p.entry_id] = {};
+    picksByEntry[p.entry_id][p.match_id] = p.pick;
+  });
+
+  var pointsByEntry = {};
+  allPoints.forEach(function(p){ pointsByEntry[p.entry_id] = p; });
+
+  var matchesByPool = {};
+  allMatches.forEach(function(m) {
+    if (!matchesByPool[m.pool_id]) matchesByPool[m.pool_id] = [];
+    matchesByPool[m.pool_id].push(m);
+  });
+
+  function pickLabel(c) { return c === "H" ? "L" : c === "D" ? "E" : c === "A" ? "V" : "—"; }
+  function pickColor(c) { return c === "H" ? "#34d399" : c === "D" ? "#fbbf24" : c === "A" ? "#60a5fa" : "#4a5568"; }
+
+  var html = entries.map(function(entry) {
+    var pool    = poolMap[entry.pool_id] || {};
+    var pts     = pointsByEntry[entry.id];
+    var picks   = picksByEntry[entry.id] || {};
+    var matches = matchesByPool[entry.pool_id] || [];
+    var jornada = pool.round ? "J" + pool.round : (pool.name || "Jornada");
+    var statusEmoji = entry.paid ? "✅" : "⏳";
+    var aciertos = pts ? pts.points : "—";
+    var aciertoColor = typeof aciertos === "number" && aciertos > 0 ? "#34d399" : "#8a94a6";
+
+    var matchRows = matches.map(function(m) {
+      var pick     = picks[m.id] || null;
+      var hasGoals = m.home_goals !== null && m.away_goals !== null;
+      var result   = null;
+      if (hasGoals) {
+        result = m.home_goals > m.away_goals ? "H" : m.home_goals < m.away_goals ? "A" : "D";
+      }
+      var correct = pick && result && pick === result;
+      var bg = correct ? "rgba(16,185,129,.15)" : "rgba(255,255,255,.04)";
+      var pickClr = pick ? pickColor(pick) : "#4a5568";
+
+      return [
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;',
+             'border-radius:8px;background:' + bg + ';margin-bottom:4px;">',
+          '<div style="font-size:12px;color:#e5e7eb;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">',
+            m.home_team + ' vs ' + m.away_team,
+          '</div>',
+          '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;margin-left:8px;">',
+            pick ? '<span style="font-size:11px;font-weight:800;color:' + pickClr + ';background:rgba(255,255,255,.08);padding:2px 7px;border-radius:6px;">' + pickLabel(pick) + '</span>' : '',
+            hasGoals ? '<span style="font-size:11px;color:#6b7280;">' + m.home_goals + '-' + m.away_goals + '</span>' : '',
+            correct  ? '<span style="font-size:11px;">✅</span>' : (hasGoals && pick ? '<span style="font-size:11px;">❌</span>' : ''),
+          '</div>',
+        '</div>'
+      ].join("");
+    }).join("");
+
+    return [
+      '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;">',
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;',
+             'background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.07);">',
+          '<div>',
+            '<div style="font-size:14px;font-weight:800;color:#fff;">' + jornada + ' ' + statusEmoji + '</div>',
+            '<div style="font-size:12px;color:#8a94a6;">' + (pool.competition || "Liga MX") + '</div>',
+          '</div>',
+          '<div style="text-align:right;">',
+            '<div style="font-size:22px;font-weight:900;color:' + aciertoColor + ';">' + aciertos + '</div>',
+            '<div style="font-size:11px;color:#6b7280;">aciertos</div>',
+          '</div>',
+        '</div>',
+        matches.length ? '<div style="padding:10px 12px;">' + matchRows + '</div>'
+          : '<div style="padding:12px;font-size:12px;color:#6b7280;">Sin plantilla guardada</div>',
+      '</div>'
+    ].join("");
+  }).join("");
+
+  var content = document.getElementById("historyContent");
+  if (content) content.innerHTML = html;
 }
 
 
@@ -5518,6 +5838,10 @@ async function init() {
   // Solo redibujar la vista si no estamos ya en el dashboard
   if (!appInitialized) {
     setView("viewDash");
+    // Solicitar permisos de notificación al primer login
+    if (typeof requestPushPermission === "function") {
+      setTimeout(requestPushPermission, 2000);
+    }
   }
 
   const now = new Date();

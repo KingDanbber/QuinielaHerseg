@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin Quiniela Arcángel</title>
 
+  <!-- PWA -->
+  <meta name="theme-color" content="#050810">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Q. Arcángel">
+  <link rel="manifest" href="./manifest.json">
+
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -27,6 +35,7 @@
         <h1 class="text-xl font-bold"><span style="-webkit-text-fill-color:initial;background:none;">⚽</span> Admin Quiniela Arcángel</h1>
         <p class="text-sm text-zinc-400">Panel privado (solo administradores)</p>
       </div>
+      <button onclick="openSettingsModal()" class="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-lg shrink-0" title="Configuración">⚙️</button>
     </header>
 
     <div id="alert" class="hidden mb-4 p-3 rounded border text-sm"></div>
@@ -814,7 +823,38 @@
   </div>
 </div>
 
-<script src="./app.js?v=777"></script>
+<script>
+// Register Service Worker
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function() {
+    navigator.serviceWorker.register("./sw.js")
+      .then(function(reg) { console.log("SW registered:", reg.scope); })
+      .catch(function(err) { console.warn("SW error:", err); });
+  });
+}
+// Push notification permission request
+async function requestPushPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    var perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      showLocalNotification("Notificaciones activadas", "Recibirás recordatorios de la Quiniela Arcángel");
+    }
+  }
+}
+function showLocalNotification(title, body) {
+  if (Notification.permission === "granted") {
+    new Notification(title, {
+      body: body,
+      icon: "./img/logo-arcangel-quiniela.png",
+      badge: "./img/logo-arcangel-quiniela.png"
+    });
+  }
+}
+window.requestPushPermission = requestPushPermission;
+window.showLocalNotification = showLocalNotification;
+</script>
+<script src="./app.js?v=778"></script>
 
   <!--script src="./app.js"></script-->
 </body>

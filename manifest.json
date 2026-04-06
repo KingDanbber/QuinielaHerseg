@@ -1,0 +1,36 @@
+{
+  "name": "Admin Quiniela Arcángel",
+  "short_name": "Q. Arcángel",
+  "description": "Panel de administración Quiniela Arcángel",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#050810",
+  "theme_color": "#10b981",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./img/logo-arcangel-quiniela.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./img/logo-arcangel-quiniela.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Picks",
+      "url": "./index.html#picks",
+      "description": "Capturar pronósticos"
+    },
+    {
+      "name": "Pagos",
+      "url": "./index.html#payments",
+      "description": "Registrar pagos"
+    }
+  ]
+}
