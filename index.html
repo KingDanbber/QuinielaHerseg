@@ -225,6 +225,9 @@
       <button id="btnToggleArchived" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" type="button" title="Ver archivados">
         👁️
       </button>
+      <button onclick="deleteTestParticipants()" class="px-3 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold" type="button" title="Borrar participantes de prueba">
+        🗑️ Pruebas
+      </button>
     </div>
 
 <div class="grid grid-cols-2 gap-2 mb-3">
@@ -406,8 +409,8 @@
     Exportar historia 9:16
   </button>
 
-  <button type="button" id="btnExportPDF" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-    Exportar PDF
+  <button type="button" onclick="printTemplateCopiesPage()" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+    🖨️ Imprimir copias en A4 (8 por hoja)
   </button>
 </div>
 
@@ -843,12 +846,22 @@ async function requestPushPermission() {
   }
 }
 function showLocalNotification(title, body) {
-  if (Notification.permission === "granted") {
-    new Notification(title, {
-      body: body,
-      icon: "./img/logo-arcangel-quiniela.png",
-      badge: "./img/logo-arcangel-quiniela.png"
+  if (Notification.permission !== "granted") return;
+  // Use SW registration on Android (required when SW is active)
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.ready.then(function(reg) {
+      reg.showNotification(title, {
+        body: body,
+        icon: "./img/logo-arcangel-quiniela.png",
+        badge: "./img/logo-arcangel-quiniela.png",
+        vibrate: [200, 100, 200]
+      });
+    }).catch(function() {
+      // Fallback for non-SW contexts
+      try { new Notification(title, { body: body }); } catch(e) {}
     });
+  } else {
+    try { new Notification(title, { body: body }); } catch(e) {}
   }
 }
 window.requestPushPermission = requestPushPermission;

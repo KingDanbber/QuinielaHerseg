@@ -497,19 +497,10 @@ async function updateNavBadges() {
       }
     });
 
-    // 7) Badge Pagos: participantes activos sin boleto pagado
-    const paidParticipants = new Set(
-      (entries || [])
-        .filter(function(e) { return e.paid === true; })
-        .map(function(e) { return e.participant_id; })
-    );
-
-    let paymentsPendingCount = 0;
-    (participants || []).forEach(function(p) {
-      if (!paidParticipants.has(p.id)) {
-        paymentsPendingCount++;
-      }
-    });
+    // 7) Badge Pagos: boletos registrados pero NO pagados en la jornada activa
+    const paymentsPendingCount = (entries || []).filter(function(e) {
+      return e.paid !== true;
+    }).length;
 
     // 8) Badge Resultados: partidos sin goles capturados
     const resultsPendingCount = (matches || []).filter(function(m) {
@@ -1014,6 +1005,15 @@ async function loadPools() {
               Editar fechas
             </button>
 
+            ${(p.status === "open" || p.status === "draft") ? `
+            <button
+              data-editprice="${p.id}"
+              data-curprice="${p.price || 20}"
+              data-curcomm="${p.commission_pct || 15}"
+              class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
+              💲 Precio/Comisión
+            </button>` : ""}
+
             ${actionBtn}
           </div>
         </div>
@@ -1053,6 +1053,16 @@ async function loadPools() {
       await editPoolDates(id, cur);
     });
   });
+
+  // Editar precio y comisión
+  document.querySelectorAll("[data-editprice]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id   = btn.getAttribute("data-editprice");
+      const price = btn.getAttribute("data-curprice") || "20";
+      const comm  = btn.getAttribute("data-curcomm")  || "15";
+      await editPoolPrice(id, price, comm);
+    });
+  });
 }
 
 async function editPoolDates(poolId, currentDates) {
@@ -1083,6 +1093,28 @@ async function editPoolDates(poolId, currentDates) {
   await loadPools();
   await fillTplPools();
   await renderPreview();
+}
+
+async function editPoolPrice(poolId, currentPrice, currentComm) {
+  hideAlert();
+  var newPrice = prompt("Precio del boleto (actual: $" + currentPrice + "):", currentPrice);
+  if (newPrice === null) return;
+  newPrice = Number(newPrice);
+  if (isNaN(newPrice) || newPrice < 1) return showAlert("Precio inválido.", "error");
+
+  var newComm = prompt("% comisión (actual: " + currentComm + "%):", currentComm);
+  if (newComm === null) return;
+  newComm = Number(newComm);
+  if (isNaN(newComm) || newComm < 0) return showAlert("Comisión inválida.", "error");
+
+  const { error } = await supabaseClient.from("pools")
+    .update({ price: newPrice, commission_pct: newComm })
+    .eq("id", poolId);
+
+  if (error) return showAlert(error.message, "error");
+  showAlert("Precio y comisión actualizados ✅", "ok");
+  await loadPools();
+  await loadDashboardSummary();
 }
 
 // Abrir Jornada Activa
@@ -3763,6 +3795,26 @@ function renderStandingsPodium(rows) {
   else if ((data || []).length) sel.value = data[0].id;
 }
 
+
+// Función completion info (requerida por loadStandings y exportWinnerCard)
+async function getPoolCompletionInfo(poolId) {
+  const { data, error } = await supabaseClient
+    .from("matches")
+    .select("id, home_goals, away_goals")
+    .eq("pool_id", poolId);
+  if (error) throw error;
+  const rows = data || [];
+  const totalMatches = rows.length;
+  const completedMatches = rows.filter(function(m) {
+    return m.home_goals !== null && m.away_goals !== null;
+  }).length;
+  return {
+    totalMatches: totalMatches,
+    completedMatches: completedMatches,
+    isFinished: totalMatches > 0 && completedMatches === totalMatches
+  };
+}
+
 // Cargar Tabla Aciertos
 async function loadStandings() {
   hideAlert();
@@ -5701,6 +5753,193 @@ async function showParticipantHistory(participantId, participantName) {
   if (content) content.innerHTML = html;
 }
 
+
+
+// ═══════════════════════════════════════════════════
+// BORRAR PARTICIPANTES DE PRUEBA
+// ═══════════════════════════════════════════════════
+async function deleteTestParticipants() {
+  hideAlert();
+
+  // Buscar participantes cuyo nombre empiece con "Prueba" o "prueba" o "TEST"
+  var { data: tests, error } = await supabaseClient.from("participants")
+    .select("id, name, is_active")
+    .ilike("name", "prueba%");
+
+  if (error) return showAlert(error.message, "error");
+  if (!tests || !tests.length) return showAlert("No se encontraron participantes de prueba.", "info");
+
+  var names = tests.map(function(p){ return p.name; }).join(", ");
+
+  var confirmed = await showConfirmModal({
+    icon: "🗑️",
+    title: "Borrar participantes de prueba",
+    message: "Se eliminarán: " + names + ". Esta acción NO se puede deshacer.",
+    confirmLabel: "Sí, eliminar",
+    confirmStyle: "background:linear-gradient(135deg,#be123c,#e11d48);"
+  });
+  if (!confirmed) return;
+
+  var ids = tests.map(function(p){ return p.id; });
+
+  // Intentar archivar primero (más seguro — no rompe FK)
+  var { error: archErr } = await supabaseClient.from("participants")
+    .update({ is_active: false })
+    .in("id", ids);
+
+  if (archErr) return showAlert("Error archivando: " + archErr.message, "error");
+
+  showAlert("Participantes de prueba archivados (" + ids.length + ") ✅", "ok");
+  await loadParticipants();
+  await loadDashboardSummary();
+}
+
+// ═══════════════════════════════════════════════════
+// PDF PLANTILLA: múltiples copias en una sola hoja
+// para imprimir y repartir físicamente
+// ═══════════════════════════════════════════════════
+async function printTemplateCopiesPage() {
+  hideAlert();
+
+  var pool_id = $("tplPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
+
+  var pool, matches;
+  try {
+    pool    = await getPoolInfo(pool_id);
+    matches = await getMatches(pool_id);
+  } catch(e) { return showAlert(e.message, "error"); }
+
+  if (!matches || !matches.length)
+    return showAlert("Esta jornada no tiene plantilla guardada.", "error");
+
+  // ── Configuración de impresión ──
+  // Una hoja A4 a 150dpi → ~794x1123px
+  // Plantilla pequeña: 380px wide → caben 2 por fila → ~6 por página
+  var COPIES    = 8;   // total de copias (2 columnas × 4 filas)
+  var CARD_W    = 380;
+  var PAGE_W    = 794;
+  var PAGE_H    = 1123;
+
+  var printArea = $("printArea");
+  printArea.classList.remove("hidden");
+  printArea.innerHTML = "";
+
+  var page = document.createElement("div");
+  page.style.cssText = [
+    "width:" + PAGE_W + "px",
+    "min-height:" + PAGE_H + "px",
+    "background:#ffffff",
+    "display:grid",
+    "grid-template-columns:1fr 1fr",
+    "gap:8px",
+    "padding:12px",
+    "box-sizing:border-box",
+    "font-family:Arial,sans-serif"
+  ].join(";");
+
+  for (var i = 0; i < COPIES; i++) {
+    // Each copy: compact card
+    var copy = document.createElement("div");
+    copy.style.cssText = [
+      "border:1px solid #d4d4d8",
+      "border-radius:10px",
+      "padding:10px 8px",
+      "background:#ffffff",
+      "box-sizing:border-box",
+      "font-size:10px",
+      "color:#111"
+    ].join(";");
+
+    // Header
+    var logoUrl = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
+    var jornada = pool && pool.round ? "Jornada " + pool.round : (pool && pool.name ? pool.name : "Jornada");
+    var fechas  = pool && pool.date_label ? pool.date_label : "";
+    var precio  = pool && pool.price ? "$" + pool.price : "";
+
+    copy.innerHTML = [
+      // Mini header
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">',
+        '<img src="' + logoUrl + '" crossorigin="anonymous" style="width:28px;height:28px;object-fit:contain;border-radius:4px;" />',
+        '<div>',
+          '<div style="font-weight:900;font-size:11px;line-height:1.1;">Quiniela Arc\u00e1ngel</div>',
+          '<div style="font-size:9px;color:#555;">' + jornada + (fechas ? " \u2022 " + fechas : "") + ' \u2022 ' + precio + '</div>',
+        '</div>',
+      '</div>',
+      // Info line
+      '<div style="font-size:9px;color:#666;margin-bottom:4px;text-align:center;">Marca una opción por partido (L=Local E=Empate V=Visita)</div>',
+      // Column headers
+      '<div style="display:grid;grid-template-columns:26px 1fr 18px 1fr 26px;gap:3px;margin-bottom:3px;font-size:8px;font-weight:800;color:#666;">',
+        '<div style="text-align:center;">L</div>',
+        '<div></div>',
+        '<div style="text-align:center;">E</div>',
+        '<div></div>',
+        '<div style="text-align:center;">V</div>',
+      '</div>',
+    ].join("");
+
+    // Match rows
+    var matchesHtml = matches.map(function(m) {
+      var hLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.home_team||"").toUpperCase()]) || "";
+      var aLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.away_team||"").toUpperCase()]) || "";
+      return [
+        '<div style="display:grid;grid-template-columns:26px 1fr 18px 1fr 26px;gap:3px;align-items:center;margin-bottom:3px;">',
+          '<div style="width:22px;height:14px;border:1px solid #222;border-radius:3px;"></div>',
+          '<div style="display:flex;align-items:center;gap:3px;min-width:0;">',
+            hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:12px;height:12px;object-fit:contain;flex-shrink:0;" />' : '',
+            '<span style="font-weight:700;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.home_team + '</span>',
+          '</div>',
+          '<div style="width:14px;height:14px;border:1px solid #222;border-radius:3px;margin:0 auto;"></div>',
+          '<div style="display:flex;align-items:center;justify-content:flex-end;gap:3px;min-width:0;">',
+            '<span style="font-weight:700;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;">' + m.away_team + '</span>',
+            aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:12px;height:12px;object-fit:contain;flex-shrink:0;" />' : '',
+          '</div>',
+          '<div style="width:22px;height:14px;border:1px solid #222;border-radius:3px;"></div>',
+        '</div>'
+      ].join("");
+    }).join("");
+
+    copy.innerHTML += matchesHtml;
+
+    // Footer lines
+    copy.innerHTML += [
+      '<div style="margin-top:6px;border-top:1px solid #e4e4e7;padding-top:5px;font-size:8px;color:#555;">',
+        '<div>Nombre: ___________________________</div>',
+        '<div style="margin-top:3px;">Área: _________________ Tel: ____________</div>',
+      '</div>'
+    ].join("");
+
+    page.appendChild(copy);
+  }
+
+  printArea.appendChild(page);
+
+  try {
+    var { jsPDF } = window.jspdf;
+    var pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+
+    var canvas = await html2canvas(page, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true
+    });
+
+    var imgData = canvas.toDataURL("image/png");
+    // A4 in pts: 595 x 842
+    pdf.addImage(imgData, "PNG", 4, 4, 587, 834);
+
+    var safeName = (pool && pool.name ? pool.name : "Plantilla")
+      .replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+    pdf.save(safeName + "-copias-imprimir.pdf");
+
+    showAlert("PDF generado (8 copias en A4) ✅", "ok");
+  } catch(err) {
+    showAlert("Error: " + (err && err.message ? err.message : String(err)), "error");
+  } finally {
+    printArea.innerHTML = "";
+    printArea.classList.add("hidden");
+  }
+}
 
 // =====================
 // Init
