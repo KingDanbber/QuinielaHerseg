@@ -4813,9 +4813,9 @@ $("btnClearTemplateEditor").addEventListener("click", clearTemplateEditor);
 $("btnDeleteTemplate").addEventListener("click", deleteCurrentTemplate);
 
 // PDF PNG
-$("btnExportPDF").addEventListener("click", exportAllToPDF);
-$("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
-$("btnExportStoryPNG").addEventListener("click", exportStoryTemplatePNG);
+if ($("btnExportPDF")) $("btnExportPDF").addEventListener("click", exportAllToPDF);
+if ($("btnExportCurrentPNG")) $("btnExportCurrentPNG").addEventListener("click", exportCurrentTemplatePNG);
+if ($("btnExportStoryPNG")) $("btnExportStoryPNG").addEventListener("click", exportStoryTemplatePNG);
 
 // Captura Pronósticos 1X2
 $("btnLoadEntryForPick").addEventListener("click", async () => {
