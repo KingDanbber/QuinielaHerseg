@@ -5813,13 +5813,10 @@ async function printTemplateCopiesPage() {
   if (!matches || !matches.length)
     return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
-  // ── Configuración de impresión ──
-  // Una hoja A4 a 150dpi → ~794x1123px
-  // Plantilla pequeña: 380px wide → caben 2 por fila → ~6 por página
-  var COPIES    = 8;   // total de copias (2 columnas × 4 filas)
-  var CARD_W    = 380;
-  var PAGE_W    = 794;
-  var PAGE_H    = 1123;
+  // ── Página A4 → 794×1123px. 3 cols × 4 filas = 12 copias ──
+  var COPIES = 12;
+  var PAGE_W = 794;
+  var PAGE_H = 1123;
 
   var printArea = $("printArea");
   printArea.classList.remove("hidden");
@@ -5827,88 +5824,104 @@ async function printTemplateCopiesPage() {
 
   var page = document.createElement("div");
   page.style.cssText = [
-    "width:" + PAGE_W + "px",
-    "min-height:" + PAGE_H + "px",
+    "width:"      + PAGE_W + "px",
+    "height:"     + PAGE_H + "px",
     "background:#ffffff",
     "display:grid",
-    "grid-template-columns:1fr 1fr",
-    "gap:8px",
-    "padding:12px",
+    "grid-template-columns:1fr 1fr 1fr",
+    "grid-template-rows:repeat(4,1fr)",
+    "gap:5px",
+    "padding:8px",
     "box-sizing:border-box",
     "font-family:Arial,sans-serif"
   ].join(";");
 
+  var logoUrl = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
+  var jornada = pool && pool.round ? "J" + pool.round : (pool && pool.name ? pool.name : "J?");
+  var fechas  = pool && pool.date_label ? pool.date_label : "";
+  var precio  = pool && pool.price ? "$" + pool.price : "";
+  var subtitulo = jornada + (fechas ? " \u2022 " + fechas : "") + (precio ? " \u2022 " + precio : "");
+
   for (var i = 0; i < COPIES; i++) {
-    // Each copy: compact card
     var copy = document.createElement("div");
     copy.style.cssText = [
-      "border:1px solid #d4d4d8",
-      "border-radius:10px",
-      "padding:10px 8px",
-      "background:#ffffff",
+      "border:1px solid #b0b0b0",
+      "border-radius:6px",
+      "padding:5px 6px",
+      "background:#fff",
       "box-sizing:border-box",
-      "font-size:10px",
-      "color:#111"
+      "overflow:hidden",
+      "display:flex",
+      "flex-direction:column"
     ].join(";");
 
-    // Header
-    var logoUrl = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
-    var jornada = pool && pool.round ? "Jornada " + pool.round : (pool && pool.name ? pool.name : "Jornada");
-    var fechas  = pool && pool.date_label ? pool.date_label : "";
-    var precio  = pool && pool.price ? "$" + pool.price : "";
+    // ── HEADER ──
+    var header = '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">' +
+      '<img src="' + logoUrl + '" crossorigin="anonymous" ' +
+        'style="width:20px;height:20px;object-fit:contain;border-radius:3px;flex-shrink:0;" />' +
+      '<div style="min-width:0;">' +
+        '<div style="font-weight:900;font-size:8.5px;line-height:1.1;white-space:nowrap;">Quiniela Arc\u00e1ngel</div>' +
+        '<div style="font-size:7px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + subtitulo + '</div>' +
+      '</div>' +
+    '</div>';
 
-    copy.innerHTML = [
-      // Mini header
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">',
-        '<img src="' + logoUrl + '" crossorigin="anonymous" style="width:28px;height:28px;object-fit:contain;border-radius:4px;" />',
-        '<div>',
-          '<div style="font-weight:900;font-size:11px;line-height:1.1;">Quiniela Arc\u00e1ngel</div>',
-          '<div style="font-size:9px;color:#555;">' + jornada + (fechas ? " \u2022 " + fechas : "") + ' \u2022 ' + precio + '</div>',
-        '</div>',
-      '</div>',
-      // Info line
-      '<div style="font-size:9px;color:#666;margin-bottom:4px;text-align:center;">Marca una opción por partido (L=Local E=Empate V=Visita)</div>',
-      // Column headers
-      '<div style="display:grid;grid-template-columns:26px 1fr 18px 1fr 26px;gap:3px;margin-bottom:3px;font-size:8px;font-weight:800;color:#666;">',
-        '<div style="text-align:center;">L</div>',
-        '<div></div>',
-        '<div style="text-align:center;">E</div>',
-        '<div></div>',
-        '<div style="text-align:center;">V</div>',
-      '</div>',
-    ].join("");
+    // ── INSTRUCTION + COLUMN HEADERS ──
+    var instrRow =
+      '<div style="font-size:7px;color:#444;text-align:center;margin-bottom:2px;font-style:italic;">' +
+        'Marca una opci\u00f3n por partido' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:16px 1fr 14px 1fr 16px;gap:1px;' +
+           'margin-bottom:2px;font-size:7px;font-weight:900;color:#333;text-align:center;">' +
+        '<div>L</div><div></div><div>E</div><div></div><div>V</div>' +
+      '</div>';
 
-    // Match rows
-    var matchesHtml = matches.map(function(m) {
+    // ── MATCH ROWS ──
+    var matchRows = matches.map(function(m) {
       var hLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.home_team||"").toUpperCase()]) || "";
       var aLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.away_team||"").toUpperCase()]) || "";
-      return [
-        '<div style="display:grid;grid-template-columns:26px 1fr 18px 1fr 26px;gap:3px;align-items:center;margin-bottom:3px;">',
-          '<div style="width:22px;height:14px;border:1px solid #222;border-radius:3px;"></div>',
-          '<div style="display:flex;align-items:center;gap:3px;min-width:0;">',
-            hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:12px;height:12px;object-fit:contain;flex-shrink:0;" />' : '',
-            '<span style="font-weight:700;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + m.home_team + '</span>',
-          '</div>',
-          '<div style="width:14px;height:14px;border:1px solid #222;border-radius:3px;margin:0 auto;"></div>',
-          '<div style="display:flex;align-items:center;justify-content:flex-end;gap:3px;min-width:0;">',
-            '<span style="font-weight:700;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;">' + m.away_team + '</span>',
-            aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:12px;height:12px;object-fit:contain;flex-shrink:0;" />' : '',
-          '</div>',
-          '<div style="width:22px;height:14px;border:1px solid #222;border-radius:3px;"></div>',
-        '</div>'
-      ].join("");
+
+      var BOX = '<div style="width:13px;height:11px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;"></div>';
+      var EBOX= '<div style="width:11px;height:11px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;margin:0 auto;"></div>';
+
+      var homeSide =
+        '<div style="display:flex;align-items:center;gap:2px;min-width:0;">' +
+          (hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:9px;height:9px;object-fit:contain;flex-shrink:0;" />' : '') +
+          '<span style="font-weight:700;font-size:7.5px;line-height:1.15;word-break:break-word;hyphens:auto;">' + m.home_team + '</span>' +
+        '</div>';
+
+      var awaySide =
+        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:0;">' +
+          '<span style="font-weight:700;font-size:7.5px;line-height:1.15;text-align:right;word-break:break-word;hyphens:auto;">' + m.away_team + '</span>' +
+          (aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:9px;height:9px;object-fit:contain;flex-shrink:0;" />' : '') +
+        '</div>';
+
+      return '<div style="display:grid;grid-template-columns:16px 1fr 14px 1fr 16px;gap:1px;' +
+             'align-items:center;margin-bottom:2px;">' +
+        BOX + homeSide + EBOX + awaySide + BOX +
+      '</div>';
     }).join("");
 
-    copy.innerHTML += matchesHtml;
+    // ── FOOTER ──
+    var footer =
+      '<div style="margin-top:auto;padding-top:3px;border-top:0.8px solid #ccc;font-size:7px;color:#333;">' +
+        '<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:3px;">' +
+          '<span style="white-space:nowrap;font-weight:700;">Nombre:</span>' +
+          '<div style="flex:1;border-bottom:0.8px solid #555;height:10px;"></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:3px;">' +
+          '<span style="white-space:nowrap;font-weight:700;">\u00c1rea:</span>' +
+          '<div style="flex:1;border-bottom:0.8px solid #555;height:10px;"></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:3px;">' +
+          '<span style="white-space:nowrap;font-weight:700;">*WhatsApp:</span>' +
+          '<div style="flex:1;border-bottom:0.8px solid #555;height:10px;"></div>' +
+        '</div>' +
+        '<div style="font-size:6px;color:#777;line-height:1.2;margin-top:2px;">' +
+          '*Registro 1\u00aa vez para env\u00edo de link Plataforma de Resultados' +
+        '</div>' +
+      '</div>';
 
-    // Footer lines
-    copy.innerHTML += [
-      '<div style="margin-top:6px;border-top:1px solid #e4e4e7;padding-top:5px;font-size:8px;color:#555;">',
-        '<div>Nombre: ___________________________</div>',
-        '<div style="margin-top:3px;">Área: _________________ Tel: ____________</div>',
-      '</div>'
-    ].join("");
-
+    copy.innerHTML = header + instrRow + matchRows + footer;
     page.appendChild(copy);
   }
 
@@ -5919,20 +5932,21 @@ async function printTemplateCopiesPage() {
     var pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
     var canvas = await html2canvas(page, {
-      scale: 2,
+      scale: 2.5,
       backgroundColor: "#ffffff",
-      useCORS: true
+      useCORS: true,
+      allowTaint: false,
+      imageTimeout: 8000
     });
 
     var imgData = canvas.toDataURL("image/png");
-    // A4 in pts: 595 x 842
     pdf.addImage(imgData, "PNG", 4, 4, 587, 834);
 
     var safeName = (pool && pool.name ? pool.name : "Plantilla")
       .replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
     pdf.save(safeName + "-copias-imprimir.pdf");
 
-    showAlert("PDF generado (8 copias en A4) ✅", "ok");
+    showAlert("PDF generado \u2014 12 copias en A4 \u2705", "ok");
   } catch(err) {
     showAlert("Error: " + (err && err.message ? err.message : String(err)), "error");
   } finally {
