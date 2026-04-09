@@ -6002,30 +6002,30 @@ async function printTemplateCopiesPage() {
 
     // ── MATCHES ──
     var matchWrap = document.createElement("div");
-    matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;gap:2px;";
+    matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;gap:1.5px;";
 
     matches.forEach(function(m) {
       var hLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.home_team||"").toUpperCase()]) || "";
       var aLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.away_team||"").toUpperCase()]) || "";
 
-      var BOX  = '<div style="width:13px;height:12px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;background:#fff;box-sizing:border-box;"></div>';
-      var EBOX = '<div style="width:11px;height:12px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;margin:0 auto;background:#fff;box-sizing:border-box;"></div>';
+      var BOX  = '<div style="width:13px;height:13px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;background:#fff;box-sizing:border-box;"></div>';
+      var EBOX = '<div style="width:11px;height:13px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;margin:0 auto;background:#fff;box-sizing:border-box;"></div>';
 
       var hImg = hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:10px;height:10px;object-fit:contain;flex-shrink:0;" />' : '';
       var aImg = aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:10px;height:10px;object-fit:contain;flex-shrink:0;" />' : '';
 
       var row = document.createElement("div");
-      row.style.cssText = "display:grid;grid-template-columns:15px minmax(0,1fr) 14px minmax(0,1fr) 15px;gap:2px;align-items:center;";
+      row.style.cssText = "display:grid;grid-template-columns:15px minmax(0,1fr) 14px minmax(0,1fr) 15px;gap:2px;align-items:center;min-height:14px;padding:1px 0;";
 
       row.innerHTML =
         BOX +
         '<div style="display:flex;align-items:center;gap:2px;min-width:0;">' +
           hImg +
-          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;">' + m.home_team + '</span>' +
+          '<span style="font-size:7px;font-weight:700;color:#111;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">' + m.home_team + '</span>' +
         '</div>' +
         EBOX +
         '<div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:0;">' +
-          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;text-align:right;">' + m.away_team + '</span>' +
+          '<span style="font-size:7px;font-weight:700;color:#111;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;text-align:right;">' + m.away_team + '</span>' +
           aImg +
         '</div>' +
         BOX;
