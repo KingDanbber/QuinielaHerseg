@@ -3796,6 +3796,42 @@ function renderStandingsPodium(rows) {
 }
 
 
+
+// Función Ganador Quiniela Sencilla (carga desde Supabase)
+async function loadSimpleWinnerSummary(poolId) {
+  const pool_id = poolId || $("standingsPool").value;
+  if (!pool_id) return null;
+
+  const { data: winners, error } = await supabaseClient
+    .from("pool_simple_winner")
+    .select("pool_id,entry_id,participant_id,winning_points,winners_count,prize_pool,commission_amount,total_collected,prize_per_winner")
+    .eq("pool_id", pool_id);
+
+  if (error) { showAlert(error.message, "error"); return null; }
+  if (!winners || !winners.length) return null;
+
+  const participantIds = winners.map(function(w){ return w.participant_id; });
+  const { data: parts, error: pErr } = await supabaseClient
+    .from("participants").select("id, name, area").in("id", participantIds);
+  if (pErr) { showAlert(pErr.message, "error"); return null; }
+
+  const partMap = new Map((parts||[]).map(function(p){ return [p.id, p]; }));
+
+  return {
+    winners: winners.map(function(w) {
+      const p = partMap.get(w.participant_id) || {};
+      return { participant_id: w.participant_id, name: p.name||"Sin nombre",
+               area: p.area||"", winning_points: Number(w.winning_points||0) };
+    }),
+    winners_count:      Number(winners[0].winners_count      || 0),
+    prize_pool:         Number(winners[0].prize_pool         || 0),
+    commission_amount:  Number(winners[0].commission_amount  || 0),
+    total_collected:    Number(winners[0].total_collected    || 0),
+    prize_per_winner:   Number(winners[0].prize_per_winner   || 0),
+    winning_points:     Number(winners[0].winning_points     || 0)
+  };
+}
+
 // Función completion info (requerida por loadStandings y exportWinnerCard)
 async function getPoolCompletionInfo(poolId) {
   const { data, error } = await supabaseClient
@@ -4856,6 +4892,11 @@ if ($("btnExportPending")) {
 // Resultados
 $("btnLoadResultsMatches").addEventListener("click", loadResultsMatches);
 $("btnSaveResults").addEventListener("click", saveResultsMatches);
+$("btnCloseResults").addEventListener("click", function() {
+  $("resultsMatchesList").innerHTML = "";
+  $("resultsGoalsTotal").textContent = "0";
+  hideAlert();
+});
 
 // Aciertos
 $("btnLoadStandings").addEventListener("click", loadStandings);
@@ -5813,10 +5854,16 @@ async function printTemplateCopiesPage() {
   if (!matches || !matches.length)
     return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
-  // ── Página A4 → 794×1123px. 3 cols × 4 filas = 12 copias ──
+  // A4 → 794×1123px  |  3 cols × 4 filas = 12 copias
   var COPIES = 12;
   var PAGE_W = 794;
   var PAGE_H = 1123;
+
+  var logoUrl = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
+  var jornada  = pool && pool.round ? "J" + pool.round : (pool && pool.name ? pool.name : "J?");
+  var fechas   = pool && pool.date_label ? pool.date_label : "";
+  var precio   = pool && pool.price ? "$" + pool.price : "";
+  var subtitulo = jornada + (fechas ? " \u2022 " + fechas : "") + (precio ? " \u2022 " + precio : "");
 
   var printArea = $("printArea");
   printArea.classList.remove("hidden");
@@ -5824,104 +5871,137 @@ async function printTemplateCopiesPage() {
 
   var page = document.createElement("div");
   page.style.cssText = [
-    "width:"      + PAGE_W + "px",
-    "height:"     + PAGE_H + "px",
+    "width:"   + PAGE_W + "px",
+    "height:"  + PAGE_H + "px",
     "background:#ffffff",
     "display:grid",
     "grid-template-columns:1fr 1fr 1fr",
     "grid-template-rows:repeat(4,1fr)",
-    "gap:5px",
-    "padding:8px",
+    "gap:4px",
+    "padding:6px",
     "box-sizing:border-box",
-    "font-family:Arial,sans-serif"
+    "font-family:Arial,Helvetica,sans-serif",
+    "color:#111111"
   ].join(";");
-
-  var logoUrl = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
-  var jornada = pool && pool.round ? "J" + pool.round : (pool && pool.name ? pool.name : "J?");
-  var fechas  = pool && pool.date_label ? pool.date_label : "";
-  var precio  = pool && pool.price ? "$" + pool.price : "";
-  var subtitulo = jornada + (fechas ? " \u2022 " + fechas : "") + (precio ? " \u2022 " + precio : "");
 
   for (var i = 0; i < COPIES; i++) {
     var copy = document.createElement("div");
     copy.style.cssText = [
-      "border:1px solid #b0b0b0",
-      "border-radius:6px",
-      "padding:5px 6px",
-      "background:#fff",
+      "border:1px solid #999",
+      "border-radius:5px",
+      "padding:4px 5px 4px 5px",
+      "background:#ffffff",
       "box-sizing:border-box",
       "overflow:hidden",
       "display:flex",
-      "flex-direction:column"
+      "flex-direction:column",
+      "color:#111111"
     ].join(";");
 
     // ── HEADER ──
-    var header = '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">' +
+    var header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;gap:4px;margin-bottom:2px;";
+    header.innerHTML =
       '<img src="' + logoUrl + '" crossorigin="anonymous" ' +
-        'style="width:20px;height:20px;object-fit:contain;border-radius:3px;flex-shrink:0;" />' +
-      '<div style="min-width:0;">' +
-        '<div style="font-weight:900;font-size:8.5px;line-height:1.1;white-space:nowrap;">Quiniela Arc\u00e1ngel</div>' +
-        '<div style="font-size:7px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + subtitulo + '</div>' +
-      '</div>' +
-    '</div>';
-
-    // ── INSTRUCTION + COLUMN HEADERS ──
-    var instrRow =
-      '<div style="font-size:7px;color:#444;text-align:center;margin-bottom:2px;font-style:italic;">' +
-        'Marca una opci\u00f3n por partido' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:16px 1fr 14px 1fr 16px;gap:1px;' +
-           'margin-bottom:2px;font-size:7px;font-weight:900;color:#333;text-align:center;">' +
-        '<div>L</div><div></div><div>E</div><div></div><div>V</div>' +
+        'style="width:18px;height:18px;object-fit:contain;border-radius:3px;flex-shrink:0;" />' +
+      '<div style="min-width:0;color:#111;">' +
+        '<div style="font-weight:900;font-size:8px;line-height:1.2;color:#111;white-space:nowrap;">Quiniela Arc\u00e1ngel</div>' +
+        '<div style="font-size:6.5px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + subtitulo + '</div>' +
       '</div>';
+    copy.appendChild(header);
+
+    // ── INSTRUCTION ──
+    var instr = document.createElement("div");
+    instr.style.cssText = "font-size:6.5px;color:#333;text-align:center;margin-bottom:2px;font-style:italic;";
+    instr.textContent = "Marca una opci\u00f3n por partido";
+    copy.appendChild(instr);
+
+    // ── COLUMN HEADERS L / E / V ──
+    var colHeaders = document.createElement("div");
+    colHeaders.style.cssText = [
+      "display:grid",
+      "grid-template-columns:14px 1fr 13px 1fr 14px",
+      "gap:1px",
+      "margin-bottom:2px",
+      "font-size:7px",
+      "font-weight:900",
+      "color:#111"
+    ].join(";");
+    colHeaders.innerHTML =
+      '<div style="text-align:center;">L</div>' +
+      '<div></div>' +
+      '<div style="text-align:center;">E</div>' +
+      '<div></div>' +
+      '<div style="text-align:center;">V</div>';
+    copy.appendChild(colHeaders);
 
     // ── MATCH ROWS ──
-    var matchRows = matches.map(function(m) {
+    var matchWrap = document.createElement("div");
+    matchWrap.style.cssText = "flex:1;";
+
+    matches.forEach(function(m) {
       var hLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.home_team||"").toUpperCase()]) || "";
       var aLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.away_team||"").toUpperCase()]) || "";
 
-      var BOX = '<div style="width:13px;height:11px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;"></div>';
-      var EBOX= '<div style="width:11px;height:11px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;margin:0 auto;"></div>';
+      var BOX  = '<div style="width:12px;height:10px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;background:#fff;"></div>';
+      var EBOX = '<div style="width:10px;height:10px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;margin:0 auto;background:#fff;"></div>';
 
-      var homeSide =
-        '<div style="display:flex;align-items:center;gap:2px;min-width:0;">' +
-          (hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:9px;height:9px;object-fit:contain;flex-shrink:0;" />' : '') +
-          '<span style="font-weight:700;font-size:7.5px;line-height:1.15;word-break:break-word;hyphens:auto;">' + m.home_team + '</span>' +
-        '</div>';
+      var hImg = hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:8px;height:8px;object-fit:contain;flex-shrink:0;" />' : '';
+      var aImg = aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:8px;height:8px;object-fit:contain;flex-shrink:0;" />' : '';
 
-      var awaySide =
-        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:0;">' +
-          '<span style="font-weight:700;font-size:7.5px;line-height:1.15;text-align:right;word-break:break-word;hyphens:auto;">' + m.away_team + '</span>' +
-          (aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:9px;height:9px;object-fit:contain;flex-shrink:0;" />' : '') +
-        '</div>';
-
-      return '<div style="display:grid;grid-template-columns:16px 1fr 14px 1fr 16px;gap:1px;' +
-             'align-items:center;margin-bottom:2px;">' +
-        BOX + homeSide + EBOX + awaySide + BOX +
-      '</div>';
-    }).join("");
-
-    // ── FOOTER ──
-    var footer =
-      '<div style="margin-top:auto;padding-top:3px;border-top:0.8px solid #ccc;font-size:7px;color:#333;">' +
-        '<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:3px;">' +
-          '<span style="white-space:nowrap;font-weight:700;">Nombre:</span>' +
-          '<div style="flex:1;border-bottom:0.8px solid #555;height:10px;"></div>' +
+      var row = document.createElement("div");
+      row.style.cssText = [
+        "display:grid",
+        "grid-template-columns:14px 1fr 13px 1fr 14px",
+        "gap:1px",
+        "align-items:center",
+        "margin-bottom:1.5px"
+      ].join(";");
+      row.innerHTML =
+        BOX +
+        '<div style="display:flex;align-items:center;gap:1px;min-width:0;overflow:hidden;">' +
+          hImg +
+          '<span style="font-weight:700;font-size:7px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;">' + m.home_team + '</span>' +
         '</div>' +
-        '<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:3px;">' +
-          '<span style="white-space:nowrap;font-weight:700;">\u00c1rea:</span>' +
-          '<div style="flex:1;border-bottom:0.8px solid #555;height:10px;"></div>' +
+        EBOX +
+        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:1px;min-width:0;overflow:hidden;">' +
+          '<span style="font-weight:700;font-size:7px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;line-height:1.2;">' + m.away_team + '</span>' +
+          aImg +
         '</div>' +
-        '<div style="display:flex;align-items:baseline;gap:2px;margin-bottom:3px;">' +
-          '<span style="white-space:nowrap;font-weight:700;">*WhatsApp:</span>' +
-          '<div style="flex:1;border-bottom:0.8px solid #555;height:10px;"></div>' +
-        '</div>' +
-        '<div style="font-size:6px;color:#777;line-height:1.2;margin-top:2px;">' +
-          '*Registro 1\u00aa vez para env\u00edo de link Plataforma de Resultados' +
-        '</div>' +
-      '</div>';
+        BOX;
+      matchWrap.appendChild(row);
+    });
+    copy.appendChild(matchWrap);
 
-    copy.innerHTML = header + instrRow + matchRows + footer;
+    // ── FOOTER — líneas DEBAJO de cada label ──
+    var footer = document.createElement("div");
+    footer.style.cssText = [
+      "margin-top:3px",
+      "padding-top:3px",
+      "border-top:0.8px solid #aaa",
+      "font-size:6.5px",
+      "color:#111",
+      "display:flex",
+      "flex-direction:column",
+      "gap:3px"
+    ].join(";");
+
+    // Each field: label on its own line, then underline below
+    ["Nombre","\\u00c1rea","*WhatsApp"].forEach(function(label) {
+      var field = document.createElement("div");
+      field.innerHTML =
+        '<div style="font-weight:700;color:#333;margin-bottom:1px;">' + label + ':</div>' +
+        '<div style="height:8px;border-bottom:0.8px solid #555;width:100%;"></div>';
+      footer.appendChild(field);
+    });
+
+    // Note
+    var note = document.createElement("div");
+    note.style.cssText = "font-size:5.5px;color:#666;margin-top:1px;line-height:1.3;";
+    note.textContent = "*Registro 1\u00aa vez para env\u00edo de link Plataforma de Resultados";
+    footer.appendChild(note);
+
+    copy.appendChild(footer);
     page.appendChild(copy);
   }
 
@@ -5936,7 +6016,8 @@ async function printTemplateCopiesPage() {
       backgroundColor: "#ffffff",
       useCORS: true,
       allowTaint: false,
-      imageTimeout: 8000
+      imageTimeout: 10000,
+      logging: false
     });
 
     var imgData = canvas.toDataURL("image/png");
@@ -5945,7 +6026,6 @@ async function printTemplateCopiesPage() {
     var safeName = (pool && pool.name ? pool.name : "Plantilla")
       .replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
     pdf.save(safeName + "-copias-imprimir.pdf");
-
     showAlert("PDF generado \u2014 12 copias en A4 \u2705", "ok");
   } catch(err) {
     showAlert("Error: " + (err && err.message ? err.message : String(err)), "error");

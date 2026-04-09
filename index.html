@@ -668,6 +668,9 @@
       <button id="btnSaveResults" class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
         Guardar resultados
       </button>
+      <button id="btnCloseResults" type="button" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+        ✖ Cerrar
+      </button>
     </div>
   </div>
 </section>
@@ -827,13 +830,17 @@
 </div>
 
 <script>
-// Register Service Worker
+// Register Service Worker — solo en producción (GitHub Pages)
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function() {
-    navigator.serviceWorker.register("./sw.js")
-      .then(function(reg) { console.log("SW registered:", reg.scope); })
-      .catch(function(err) { console.warn("SW error:", err); });
-  });
+  var hostname = window.location.hostname;
+  var isProduction = hostname === "gdanbber.github.io" || hostname.endsWith(".github.io");
+  if (isProduction) {
+    window.addEventListener("load", function() {
+      navigator.serviceWorker.register("./sw.js")
+        .then(function(reg) { console.log("SW registered:", reg.scope); })
+        .catch(function(err) { console.warn("SW error:", err); });
+    });
+  }
 }
 // Push notification permission request
 async function requestPushPermission() {
