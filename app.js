@@ -3832,6 +3832,72 @@ async function loadSimpleWinnerSummary(poolId) {
   };
 }
 
+// Render caja ganador/lider en la sección Aciertos
+function renderSimpleWinnerBox(rows, poolStats, completionInfo, winnerSummary) {
+  if (!rows || !rows.length) {
+    return '<div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-400">Aún no hay datos suficientes para determinar líder o ganador.</div>';
+  }
+
+  var prizePool        = Number(poolStats?.prize_pool        || 0);
+  var paidCount        = Number(poolStats?.paid_count        || 0);
+  var totalCollected   = Number(poolStats?.total_collected   || 0);
+  var commissionAmount = Number(poolStats?.commission_amount || 0);
+  var isFinished       = !!(completionInfo && completionInfo.isFinished);
+  var totalMatches     = Number(completionInfo?.totalMatches    || 0);
+  var completedMatches = Number(completionInfo?.completedMatches || 0);
+  var progressText     = totalMatches ? "Partidos con resultado: " + completedMatches + "/" + totalMatches : "Sin partidos cargados";
+
+  if (!winnerSummary || !winnerSummary.winners || !winnerSummary.winners.length) {
+    return [
+      '<div class="p-4 bg-zinc-950 border border-zinc-800 rounded-xl">',
+        '<div class="text-xs uppercase tracking-wide text-zinc-400">Quiniela Sencilla</div>',
+        '<div class="mt-2 text-sm text-zinc-300">Todavía no hay ganador calculado para esta jornada.</div>',
+        '<div class="text-xs text-zinc-500 mt-2">' + progressText + '</div>',
+        '<div class="grid grid-cols-3 gap-2 mt-4 text-sm">',
+          '<div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Pagados</div><div class="font-bold text-white">' + paidCount + '</div></div>',
+          '<div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Total</div><div class="font-bold text-white">' + money(totalCollected) + '</div></div>',
+          '<div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Bolsa</div><div class="font-bold text-white">' + money(prizePool) + '</div></div>',
+        '</div>',
+      '</div>'
+    ].join("");
+  }
+
+  var winners        = winnerSummary.winners;
+  var winnersCount   = Number(winnerSummary.winners_count   || 0);
+  var winningPoints  = Number(winnerSummary.winning_points  || 0);
+  var prizePerWinner = Number(winnerSummary.prize_per_winner || 0);
+  var isTie          = winnersCount > 1;
+
+  var titleLabel = isTie
+    ? (isFinished ? "EMPATE FINAL • QUINIELA SENCILLA" : "EMPATE PROVISIONAL • QUINIELA SENCILLA")
+    : (isFinished ? "GANADOR FINAL • QUINIELA SENCILLA" : "GANADOR PROVISIONAL • QUINIELA SENCILLA");
+
+  var boxClass   = isTie    ? "bg-amber-500/10 border-amber-500/20"  : isFinished ? "bg-sky-500/10 border-sky-500/20"    : "bg-emerald-500/10 border-emerald-500/20";
+  var titleClass = isTie    ? "text-amber-300"                       : isFinished ? "text-sky-300"                       : "text-emerald-300";
+  var prizeClass = titleClass;
+
+  var winnerNames = winners.map(function(x){ return x.name; }).join(", ");
+  var winnerAreas = [...new Set(winners.map(function(x){ return x.area||""; }).filter(Boolean))].join(", ");
+
+  return [
+    '<div class="p-4 ' + boxClass + ' border rounded-xl">',
+      '<div class="text-xs uppercase tracking-wide ' + titleClass + '">' + titleLabel + '</div>',
+      '<div class="mt-2 text-xl font-extrabold text-white">' + winnerNames + '</div>',
+      '<div class="text-sm text-zinc-300 mt-1">' + (winnerAreas || "Sin área") + ' • ' + winningPoints + ' aciertos</div>',
+      '<div class="text-xs text-zinc-400 mt-2">' + progressText + '</div>',
+      '<div class="grid grid-cols-2 gap-2 mt-4 text-sm">',
+        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Bolsa actual</div><div class="font-bold text-white">' + money(prizePool) + '</div></div>',
+        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Premio automático' + (isTie ? " por persona" : "") + '</div><div class="font-bold ' + prizeClass + '">' + money(prizePerWinner) + '</div></div>',
+      '</div>',
+      '<div class="grid grid-cols-3 gap-2 mt-2 text-sm">',
+        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Pagados</div><div class="font-bold text-white">' + paidCount + '</div></div>',
+        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Total</div><div class="font-bold text-white">' + money(totalCollected) + '</div></div>',
+        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Comisión</div><div class="font-bold text-white">' + money(commissionAmount) + '</div></div>',
+      '</div>',
+    '</div>'
+  ].join("");
+}
+
 // Función completion info (requerida por loadStandings y exportWinnerCard)
 async function getPoolCompletionInfo(poolId) {
   const { data, error } = await supabaseClient
@@ -5892,7 +5958,6 @@ async function printTemplateCopiesPage() {
       "padding:4px 5px 4px 5px",
       "background:#ffffff",
       "box-sizing:border-box",
-      "overflow:hidden",
       "display:flex",
       "flex-direction:column",
       "color:#111111"
@@ -5987,7 +6052,7 @@ async function printTemplateCopiesPage() {
     ].join(";");
 
     // Each field: label on its own line, then underline below
-    ["Nombre","\\u00c1rea","*WhatsApp"].forEach(function(label) {
+    ["Nombre","Área","*WhatsApp"].forEach(function(label) {
       var field = document.createElement("div");
       field.innerHTML =
         '<div style="font-weight:700;color:#333;margin-bottom:1px;">' + label + ':</div>' +
