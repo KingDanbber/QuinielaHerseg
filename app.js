@@ -5920,18 +5920,18 @@ async function printTemplateCopiesPage() {
   if (!matches || !matches.length)
     return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
-  // A4 → 794×1123px | 2 cols × 4 filas = 8 copias con más espacio
+  // A4 → 794×1123px | 2 cols × 4 filas = 8 copias
   var COPIES = 8;
   var PAGE_W = 794;
   var PAGE_H = 1123;
 
-  var logoUrl  = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
-  var jornada  = pool && pool.round ? "J" + pool.round : (pool && pool.name ? pool.name : "J?");
-  var fechas   = pool && pool.date_label ? pool.date_label : "";
-  var precio   = pool && pool.price ? "$" + pool.price : "";
-  // Split into two lines to avoid truncation
-  var headerLine1 = jornada + (precio ? " \u2022 " + precio : "");
-  var headerLine2 = fechas || "";
+  var logoUrl    = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
+  var jornada    = pool && pool.round ? "J" + pool.round : (pool && pool.name ? pool.name : "J?");
+  var fechas     = pool && pool.date_label ? pool.date_label : "";
+  var precio     = pool && pool.price ? "$" + pool.price : "";
+  var settings   = (function(){ try { return JSON.parse(localStorage.getItem("qa_settings")||"{}"); } catch(e){return{};} })();
+  var adminWa    = settings.adminWhatsapp || "8715118046";
+  var picksDeadline = settings.picksDeadline || "Viernes 05:00 PM";
 
   var printArea = $("printArea");
   printArea.classList.remove("hidden");
@@ -5941,12 +5941,12 @@ async function printTemplateCopiesPage() {
   page.style.cssText = [
     "width:" + PAGE_W + "px",
     "height:" + PAGE_H + "px",
-    "background:#ffffff",
+    "background:#fff",
     "display:grid",
     "grid-template-columns:1fr 1fr",
     "grid-template-rows:repeat(4,1fr)",
-    "gap:5px",
-    "padding:8px",
+    "gap:4px",
+    "padding:6px",
     "box-sizing:border-box",
     "font-family:Arial,Helvetica,sans-serif",
     "color:#111"
@@ -5957,7 +5957,7 @@ async function printTemplateCopiesPage() {
     copy.style.cssText = [
       "border:1.2px solid #888",
       "border-radius:6px",
-      "padding:6px 7px",
+      "padding:5px 7px 5px 7px",
       "background:#fff",
       "box-sizing:border-box",
       "display:flex",
@@ -5970,11 +5970,11 @@ async function printTemplateCopiesPage() {
     header.style.cssText = "display:flex;align-items:center;gap:5px;margin-bottom:3px;";
     header.innerHTML =
       '<img src="' + logoUrl + '" crossorigin="anonymous"' +
-        ' style="width:22px;height:22px;object-fit:contain;border-radius:3px;flex-shrink:0;" />' +
-      '<div style="min-width:0;flex:1;">' +
-        '<div style="font-weight:900;font-size:9.5px;color:#111;line-height:1.2;">Quiniela Arc\u00e1ngel</div>' +
-        '<div style="font-size:7.5px;color:#444;line-height:1.3;">' + headerLine1 + '</div>' +
-        (headerLine2 ? '<div style="font-size:7px;color:#555;line-height:1.2;">' + headerLine2 + '</div>' : '') +
+        ' style="width:24px;height:24px;object-fit:contain;border-radius:3px;flex-shrink:0;" />' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:900;font-size:10px;color:#111;line-height:1.2;">Quiniela Arc\u00e1ngel</div>' +
+        '<div style="font-size:7.5px;color:#333;line-height:1.3;">' + jornada + (precio ? " \u2022 " + precio : "") + '</div>' +
+        (fechas ? '<div style="font-size:7px;color:#555;line-height:1.2;">' + fechas + '</div>' : '') +
       '</div>';
     copy.appendChild(header);
 
@@ -5985,64 +5985,78 @@ async function printTemplateCopiesPage() {
 
     // ── INSTRUCTION ──
     var instr = document.createElement("div");
-    instr.style.cssText = "font-size:7.5px;color:#444;text-align:center;margin-bottom:3px;font-style:italic;";
+    instr.style.cssText = "font-size:7px;color:#555;text-align:center;margin-bottom:3px;font-style:italic;";
     instr.textContent = "Marca una opci\u00f3n por partido";
     copy.appendChild(instr);
 
     // ── COLUMN HEADERS ──
+    // 3-column: [checkbox L + nombre local] | [checkbox E] | [nombre visita + checkbox V]
     var colH = document.createElement("div");
-    colH.style.cssText = "display:grid;grid-template-columns:15px minmax(0,1fr) 14px minmax(0,1fr) 15px;gap:2px;margin-bottom:2px;";
+    colH.style.cssText = [
+      "display:grid",
+      "grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr)",
+      "gap:3px",
+      "margin-bottom:2px",
+      "font-size:7.5px",
+      "font-weight:900",
+      "color:#333",
+      "text-align:center"
+    ].join(";");
     colH.innerHTML =
-      '<div style="text-align:center;font-size:8px;font-weight:900;color:#111;">L</div>' +
-      '<div></div>' +
-      '<div style="text-align:center;font-size:8px;font-weight:900;color:#111;">E</div>' +
-      '<div></div>' +
-      '<div style="text-align:center;font-size:8px;font-weight:900;color:#111;">V</div>';
+      '<div style="text-align:left;padding-left:16px;">LOCAL</div>' +
+      '<div>E</div>' +
+      '<div style="text-align:right;padding-right:16px;">VISITA</div>';
     copy.appendChild(colH);
 
-    // ── MATCHES ──
+    // ── MATCHES — sin logos, nombres completos ──
     var matchWrap = document.createElement("div");
-    matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;gap:1.5px;";
+    matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;justify-content:space-around;";
 
     matches.forEach(function(m) {
-      var hLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.home_team||"").toUpperCase()]) || "";
-      var aLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.away_team||"").toUpperCase()]) || "";
-
-      var BOX  = '<div style="width:13px;height:13px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;background:#fff;box-sizing:border-box;"></div>';
-      var EBOX = '<div style="width:11px;height:13px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;margin:0 auto;background:#fff;box-sizing:border-box;"></div>';
-
-      var hImg = hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:10px;height:10px;object-fit:contain;flex-shrink:0;" />' : '';
-      var aImg = aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:10px;height:10px;object-fit:contain;flex-shrink:0;" />' : '';
-
+      // Row layout: [□ NOMBRE LOCAL] [□] [NOMBRE VISITA □]
       var row = document.createElement("div");
-      row.style.cssText = "display:grid;grid-template-columns:15px minmax(0,1fr) 14px minmax(0,1fr) 15px;gap:2px;align-items:center;min-height:14px;padding:1px 0;";
+      row.style.cssText = [
+        "display:grid",
+        "grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr)",
+        "gap:3px",
+        "align-items:center",
+        "min-height:13px"
+      ].join(";");
+
+      var BOX  = '<div style="width:12px;height:12px;border:1.2px solid #333;border-radius:2px;background:#fff;flex-shrink:0;box-sizing:border-box;display:inline-block;vertical-align:middle;"></div>';
+      var EBOX = '<div style="width:12px;height:12px;border:1.2px solid #333;border-radius:2px;background:#fff;box-sizing:border-box;margin:0 auto;"></div>';
 
       row.innerHTML =
-        BOX +
+        // Local: checkbox left, then name
         '<div style="display:flex;align-items:center;gap:2px;min-width:0;">' +
-          hImg +
-          '<span style="font-size:7px;font-weight:700;color:#111;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">' + m.home_team + '</span>' +
+          BOX +
+          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.3;white-space:nowrap;">' + m.home_team + '</span>' +
         '</div>' +
+        // Empate checkbox centered
         EBOX +
+        // Visita: name right-aligned, then checkbox
         '<div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:0;">' +
-          '<span style="font-size:7px;font-weight:700;color:#111;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;text-align:right;">' + m.away_team + '</span>' +
-          aImg +
-        '</div>' +
-        BOX;
+          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.3;white-space:nowrap;text-align:right;">' + m.away_team + '</span>' +
+          BOX +
+        '</div>';
+
       matchWrap.appendChild(row);
     });
     copy.appendChild(matchWrap);
 
     // ── FOOTER ──
-    var footer = document.createElement("div");
-    footer.style.cssText = "margin-top:5px;padding-top:4px;border-top:1px solid #bbb;display:flex;flex-direction:column;gap:4px;";
+    var div2 = document.createElement("div");
+    div2.style.cssText = "height:1px;background:#ccc;margin-top:4px;margin-bottom:4px;";
+    copy.appendChild(div2);
 
-    // Fields: label then underline below
+    var footer = document.createElement("div");
+    footer.style.cssText = "display:flex;flex-direction:column;gap:4px;";
+
     ["Nombre", "\u00c1rea", "*WhatsApp"].forEach(function(label) {
       var field = document.createElement("div");
       field.innerHTML =
         '<div style="font-size:7.5px;font-weight:700;color:#222;margin-bottom:2px;">' + label + ':</div>' +
-        '<div style="height:9px;border-bottom:0.9px solid #444;width:100%;"></div>';
+        '<div style="height:8px;border-bottom:0.8px solid #444;width:100%;"></div>';
       footer.appendChild(field);
     });
 
