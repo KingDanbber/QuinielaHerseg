@@ -5920,16 +5920,18 @@ async function printTemplateCopiesPage() {
   if (!matches || !matches.length)
     return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
-  // A4 → 794×1123px  |  3 cols × 4 filas = 12 copias
-  var COPIES = 12;
+  // A4 → 794×1123px | 2 cols × 4 filas = 8 copias con más espacio
+  var COPIES = 8;
   var PAGE_W = 794;
   var PAGE_H = 1123;
 
-  var logoUrl = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
+  var logoUrl  = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
   var jornada  = pool && pool.round ? "J" + pool.round : (pool && pool.name ? pool.name : "J?");
   var fechas   = pool && pool.date_label ? pool.date_label : "";
   var precio   = pool && pool.price ? "$" + pool.price : "";
-  var subtitulo = jornada + (fechas ? " \u2022 " + fechas : "") + (precio ? " \u2022 " + precio : "");
+  // Split into two lines to avoid truncation
+  var headerLine1 = jornada + (precio ? " \u2022 " + precio : "");
+  var headerLine2 = fechas || "";
 
   var printArea = $("printArea");
   printArea.classList.remove("hidden");
@@ -5937,100 +5939,93 @@ async function printTemplateCopiesPage() {
 
   var page = document.createElement("div");
   page.style.cssText = [
-    "width:"   + PAGE_W + "px",
-    "height:"  + PAGE_H + "px",
+    "width:" + PAGE_W + "px",
+    "height:" + PAGE_H + "px",
     "background:#ffffff",
     "display:grid",
-    "grid-template-columns:1fr 1fr 1fr",
+    "grid-template-columns:1fr 1fr",
     "grid-template-rows:repeat(4,1fr)",
-    "gap:4px",
-    "padding:6px",
+    "gap:5px",
+    "padding:8px",
     "box-sizing:border-box",
     "font-family:Arial,Helvetica,sans-serif",
-    "color:#111111"
+    "color:#111"
   ].join(";");
 
   for (var i = 0; i < COPIES; i++) {
     var copy = document.createElement("div");
     copy.style.cssText = [
-      "border:1px solid #999",
-      "border-radius:5px",
-      "padding:4px 5px 4px 5px",
-      "background:#ffffff",
+      "border:1.2px solid #888",
+      "border-radius:6px",
+      "padding:6px 7px",
+      "background:#fff",
       "box-sizing:border-box",
       "display:flex",
       "flex-direction:column",
-      "color:#111111"
+      "color:#111"
     ].join(";");
 
     // ── HEADER ──
     var header = document.createElement("div");
-    header.style.cssText = "display:flex;align-items:center;gap:4px;margin-bottom:2px;";
+    header.style.cssText = "display:flex;align-items:center;gap:5px;margin-bottom:3px;";
     header.innerHTML =
-      '<img src="' + logoUrl + '" crossorigin="anonymous" ' +
-        'style="width:18px;height:18px;object-fit:contain;border-radius:3px;flex-shrink:0;" />' +
-      '<div style="min-width:0;color:#111;">' +
-        '<div style="font-weight:900;font-size:8px;line-height:1.2;color:#111;white-space:nowrap;">Quiniela Arc\u00e1ngel</div>' +
-        '<div style="font-size:6.5px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + subtitulo + '</div>' +
+      '<img src="' + logoUrl + '" crossorigin="anonymous"' +
+        ' style="width:22px;height:22px;object-fit:contain;border-radius:3px;flex-shrink:0;" />' +
+      '<div style="min-width:0;flex:1;">' +
+        '<div style="font-weight:900;font-size:9.5px;color:#111;line-height:1.2;">Quiniela Arc\u00e1ngel</div>' +
+        '<div style="font-size:7.5px;color:#444;line-height:1.3;">' + headerLine1 + '</div>' +
+        (headerLine2 ? '<div style="font-size:7px;color:#555;line-height:1.2;">' + headerLine2 + '</div>' : '') +
       '</div>';
     copy.appendChild(header);
 
+    // ── DIVIDER ──
+    var div1 = document.createElement("div");
+    div1.style.cssText = "height:1px;background:#ccc;margin-bottom:3px;";
+    copy.appendChild(div1);
+
     // ── INSTRUCTION ──
     var instr = document.createElement("div");
-    instr.style.cssText = "font-size:6.5px;color:#333;text-align:center;margin-bottom:2px;font-style:italic;";
+    instr.style.cssText = "font-size:7.5px;color:#444;text-align:center;margin-bottom:3px;font-style:italic;";
     instr.textContent = "Marca una opci\u00f3n por partido";
     copy.appendChild(instr);
 
-    // ── COLUMN HEADERS L / E / V ──
-    var colHeaders = document.createElement("div");
-    colHeaders.style.cssText = [
-      "display:grid",
-      "grid-template-columns:14px 1fr 13px 1fr 14px",
-      "gap:1px",
-      "margin-bottom:2px",
-      "font-size:7px",
-      "font-weight:900",
-      "color:#111"
-    ].join(";");
-    colHeaders.innerHTML =
-      '<div style="text-align:center;">L</div>' +
+    // ── COLUMN HEADERS ──
+    var colH = document.createElement("div");
+    colH.style.cssText = "display:grid;grid-template-columns:15px minmax(0,1fr) 14px minmax(0,1fr) 15px;gap:2px;margin-bottom:2px;";
+    colH.innerHTML =
+      '<div style="text-align:center;font-size:8px;font-weight:900;color:#111;">L</div>' +
       '<div></div>' +
-      '<div style="text-align:center;">E</div>' +
+      '<div style="text-align:center;font-size:8px;font-weight:900;color:#111;">E</div>' +
       '<div></div>' +
-      '<div style="text-align:center;">V</div>';
-    copy.appendChild(colHeaders);
+      '<div style="text-align:center;font-size:8px;font-weight:900;color:#111;">V</div>';
+    copy.appendChild(colH);
 
-    // ── MATCH ROWS ──
+    // ── MATCHES ──
     var matchWrap = document.createElement("div");
-    matchWrap.style.cssText = "flex:1;";
+    matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;gap:2px;";
 
     matches.forEach(function(m) {
       var hLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.home_team||"").toUpperCase()]) || "";
       var aLogo = (typeof TEAM_LOGOS !== "undefined" && TEAM_LOGOS[(m.away_team||"").toUpperCase()]) || "";
 
-      var BOX  = '<div style="width:12px;height:10px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;background:#fff;"></div>';
-      var EBOX = '<div style="width:10px;height:10px;border:1.2px solid #333;border-radius:2px;flex-shrink:0;margin:0 auto;background:#fff;"></div>';
+      var BOX  = '<div style="width:13px;height:12px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;background:#fff;box-sizing:border-box;"></div>';
+      var EBOX = '<div style="width:11px;height:12px;border:1.3px solid #444;border-radius:2px;flex-shrink:0;margin:0 auto;background:#fff;box-sizing:border-box;"></div>';
 
-      var hImg = hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:8px;height:8px;object-fit:contain;flex-shrink:0;" />' : '';
-      var aImg = aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:8px;height:8px;object-fit:contain;flex-shrink:0;" />' : '';
+      var hImg = hLogo ? '<img src="' + hLogo + '" crossorigin="anonymous" style="width:10px;height:10px;object-fit:contain;flex-shrink:0;" />' : '';
+      var aImg = aLogo ? '<img src="' + aLogo + '" crossorigin="anonymous" style="width:10px;height:10px;object-fit:contain;flex-shrink:0;" />' : '';
 
       var row = document.createElement("div");
-      row.style.cssText = [
-        "display:grid",
-        "grid-template-columns:14px 1fr 13px 1fr 14px",
-        "gap:1px",
-        "align-items:center",
-        "margin-bottom:1.5px"
-      ].join(";");
+      row.style.cssText = "display:grid;grid-template-columns:15px minmax(0,1fr) 14px minmax(0,1fr) 15px;gap:2px;align-items:center;";
+
       row.innerHTML =
         BOX +
-        '<div style="display:flex;align-items:center;gap:1px;min-width:0;overflow:hidden;">' +
+        '<div style="display:flex;align-items:center;gap:2px;min-width:0;">' +
           hImg +
-          '<span style="font-weight:700;font-size:7px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;">' + m.home_team + '</span>' +
+          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;">' + m.home_team + '</span>' +
         '</div>' +
         EBOX +
-        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:1px;min-width:0;overflow:hidden;">' +
-          '<span style="font-weight:700;font-size:7px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;line-height:1.2;">' + m.away_team + '</span>' +
+        '<div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:0;">' +
+          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;text-align:right;">' + m.away_team + '</span>' +
           aImg +
         '</div>' +
         BOX;
@@ -6038,31 +6033,21 @@ async function printTemplateCopiesPage() {
     });
     copy.appendChild(matchWrap);
 
-    // ── FOOTER — líneas DEBAJO de cada label ──
+    // ── FOOTER ──
     var footer = document.createElement("div");
-    footer.style.cssText = [
-      "margin-top:3px",
-      "padding-top:3px",
-      "border-top:0.8px solid #aaa",
-      "font-size:6.5px",
-      "color:#111",
-      "display:flex",
-      "flex-direction:column",
-      "gap:3px"
-    ].join(";");
+    footer.style.cssText = "margin-top:5px;padding-top:4px;border-top:1px solid #bbb;display:flex;flex-direction:column;gap:4px;";
 
-    // Each field: label on its own line, then underline below
-    ["Nombre","Área","*WhatsApp"].forEach(function(label) {
+    // Fields: label then underline below
+    ["Nombre", "\u00c1rea", "*WhatsApp"].forEach(function(label) {
       var field = document.createElement("div");
       field.innerHTML =
-        '<div style="font-weight:700;color:#333;margin-bottom:1px;">' + label + ':</div>' +
-        '<div style="height:8px;border-bottom:0.8px solid #555;width:100%;"></div>';
+        '<div style="font-size:7.5px;font-weight:700;color:#222;margin-bottom:2px;">' + label + ':</div>' +
+        '<div style="height:9px;border-bottom:0.9px solid #444;width:100%;"></div>';
       footer.appendChild(field);
     });
 
-    // Note
     var note = document.createElement("div");
-    note.style.cssText = "font-size:5.5px;color:#666;margin-top:1px;line-height:1.3;";
+    note.style.cssText = "font-size:6px;color:#666;margin-top:2px;line-height:1.3;";
     note.textContent = "*Registro 1\u00aa vez para env\u00edo de link Plataforma de Resultados";
     footer.appendChild(note);
 
@@ -6077,7 +6062,7 @@ async function printTemplateCopiesPage() {
     var pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
     var canvas = await html2canvas(page, {
-      scale: 2.5,
+      scale: 3,
       backgroundColor: "#ffffff",
       useCORS: true,
       allowTaint: false,
@@ -6091,7 +6076,7 @@ async function printTemplateCopiesPage() {
     var safeName = (pool && pool.name ? pool.name : "Plantilla")
       .replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
     pdf.save(safeName + "-copias-imprimir.pdf");
-    showAlert("PDF generado \u2014 12 copias en A4 \u2705", "ok");
+    showAlert("PDF generado \u2014 8 copias en A4 \u2705", "ok");
   } catch(err) {
     showAlert("Error: " + (err && err.message ? err.message : String(err)), "error");
   } finally {
