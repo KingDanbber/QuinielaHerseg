@@ -178,6 +178,9 @@
         </div>
       </div>
 
+      <!-- Resumen Semanal -->
+      <div id="weeklySummaryWrap"></div>
+
       <!-- Historial de Ganadores -->
       <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
         <div class="flex items-center justify-between mb-3">
@@ -448,6 +451,9 @@
           <button id="btnRefreshStats" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
             Actualizar
           </button>
+          <button type="button" onclick="showPaymentHistory()" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+            💳 Historial de pagos
+          </button>
         </div>
 
         <!-- Boton cobrar pendientes -->
@@ -542,6 +548,10 @@
 
     <div class="grid gap-2 mt-4">
       <select id="pickPool" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"></select>
+      <div class="relative">
+        <input id="pickSearchInput" type="text" placeholder="🔍 Buscar participante..." autocomplete="off"
+          class="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm" />
+      </div>
       <select id="pickParticipant" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"></select>
 
       <button id="btnLoadEntryForPick" class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
@@ -568,6 +578,9 @@
 
 <button onclick="sendPicksReminder()" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Recordatorio a pendientes">
   ⏰
+</button>
+<button id="btnExportAllPicks" type="button" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Exportar lista de picks por WhatsApp">
+  📋
 </button>
     </div>
   </div>
@@ -633,6 +646,14 @@
       <button id="btnSavePicks" class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
         Guardar pronósticos
       </button>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="btnSavePicksNext" type="button" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 text-sm">
+          ⏭️ Guardar y siguiente
+        </button>
+        <button id="btnDeletePicks" type="button" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 text-sm">
+          🗑️ Borrar picks
+        </button>
+      </div>
       <button id="btnClearPicks" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
         Limpiar selección
       </button>
