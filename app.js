@@ -54,6 +54,33 @@ let currentParticipantSearch = "";
 let currentEntriesFilter = "all";
 let currentEntriesSearch = "";
 
+
+// ═══════════════════════════════════════════════
+// CACHÉ LOCAL — evita re-queries innecesarios
+// ═══════════════════════════════════════════════
+var _cache = {};
+var _cacheLoaded = {};  // qué tabs ya cargaron datos
+
+function cacheSet(key, data, ttlSeconds) {
+  _cache[key] = { data: data, expires: Date.now() + (ttlSeconds || 30) * 1000 };
+}
+function cacheGet(key) {
+  var entry = _cache[key];
+  if (!entry) return null;
+  if (Date.now() > entry.expires) { delete _cache[key]; return null; }
+  return entry.data;
+}
+function cacheInvalidate(key) {
+  // Supports prefix matching e.g. "participants" clears "participants_*"
+  Object.keys(_cache).forEach(function(k) {
+    if (k === key || k.startsWith(key)) delete _cache[k];
+  });
+}
+function markTabLoaded(tabId) { _cacheLoaded[tabId] = true; }
+function isTabLoaded(tabId)   { return !!_cacheLoaded[tabId]; }
+function resetTabLoaded(tabId){ delete _cacheLoaded[tabId]; }
+function resetAllTabs()       { _cacheLoaded = {}; }
+
 // ── Control de inicialización ──
 let appInitialized = false;  // true después del primer init completo
 let lastAuthUserId  = null;  // para detectar cambios reales de usuario
@@ -435,50 +462,66 @@ async function showAppTab(tabId) {
 
   try {
 
-    // INICIO
+    // INICIO — siempre refresca (datos críticos)
     if (tabId === "tab-home") {
       await loadDashboardSummary();
       await loadHistoricalStandings();
       await loadWeeklySummary();
+      markTabLoaded("tab-home");
     }
 
-    // PARTICIPANTES
+    // PARTICIPANTES — lazy: solo carga si no estaba cargado
     if (tabId === "tab-participants") {
-      await loadParticipants();
+      if (!isTabLoaded("tab-participants")) {
+        await loadParticipants();
+        markTabLoaded("tab-participants");
+      }
     }
 
-    // JORNADAS
+    // JORNADAS — lazy
     if (tabId === "tab-pools") {
-      await loadPools();
+      if (!isTabLoaded("tab-pools")) {
+        await loadPools();
+        markTabLoaded("tab-pools");
+      }
     }
 
-    // PLANTILLAS
+    // PLANTILLAS — lazy
     if (tabId === "tab-templates") {
-      await fillTplPools();
+      if (!isTabLoaded("tab-templates")) {
+        await fillTplPools();
+        markTabLoaded("tab-templates");
+      }
     }
 
-    // PAGOS
+    // PAGOS — siempre refresca (estado de pagos cambia frecuentemente)
     if (tabId === "tab-payments") {
       await fillEntryPoolsSelect();
       await fillEntryParticipantsSelect();
       await loadEntriesAndStats();
     }
 
-    // PICKS
+    // PICKS — siempre refresca (picks cambian frecuentemente)
     if (tabId === "tab-picks") {
       await fillPickPoolsSelect();
       await fillPickParticipantsSelect();
       await loadPickStatusList();
     }
 
-    // RESULTADOS
+    // RESULTADOS — lazy
     if (tabId === "tab-results") {
-      await fillResultsPoolsSelect();
+      if (!isTabLoaded("tab-results")) {
+        await fillResultsPoolsSelect();
+        markTabLoaded("tab-results");
+      }
     }
 
-    // ACIERTOS
+    // ACIERTOS — lazy
     if (tabId === "tab-standings") {
-      await fillStandingsPoolsSelect();
+      if (!isTabLoaded("tab-standings")) {
+        await fillStandingsPoolsSelect();
+        markTabLoaded("tab-standings");
+      }
     }
 
   } catch (err) {
@@ -753,9 +796,14 @@ const whatsappBadge = hasWhatsapp
   data-whatsapp="${String(whatsapp || "").toLowerCase()}"
   data-has-whatsapp="${p.whatsapp ? "1" : "0"}">
 
+    <!-- Checkbox bulk select -->
+    <input type="checkbox" class="participant-bulk-check w-4 h-4 rounded accent-emerald-500 flex-shrink-0"
+      data-id="${p.id}" onchange="updateBulkEditBtn()" />
+
     <div class="min-w-0 flex-1">
       <div class="font-semibold text-sm leading-tight truncate flex items-center gap-1">
         ${p.name || "—"} ${whatsappBadge}
+        <span data-picks-badge="${p.id}" class="text-xs" title="Estado de picks"></span>
       </div>
       <div class="text-xs text-zinc-400 mt-0.5 truncate">${area}</div>
       <div class="text-xs text-zinc-500 truncate">${whatsapp !== "—" ? whatsapp : ""}</div>
@@ -796,6 +844,8 @@ const whatsappBadge = hasWhatsapp
   attachParticipantEditEvents();
 attachParticipantHistoryEvents();
 attachParticipantToggleEvents();
+// Load picks status badges
+loadParticipantPicksStatus();
 attachParticipantFilterEvents();
 attachParticipantSearchEvent();
 applyParticipantFilter(currentParticipantFilter);
@@ -881,6 +931,7 @@ async function updateParticipant() {
   closeParticipantEditModal();
   showAlert("Participante actualizado ✅", "ok");
 
+  resetTabLoaded('tab-participants');
   await loadParticipants();
   await fillEntryParticipantsSelect();
   await fillPickParticipantsSelect();
@@ -1294,7 +1345,8 @@ async function setPoolDraft(poolId) {
 
 function money(n) {
   const x = Number(n || 0);
-  return "$" + x.toFixed(0);
+  // Redondear hacia abajo (reducido) para premios divididos
+  return "$" + Math.floor(x).toString();
 }
 
 // Selector Pagos Jornadas Activa
@@ -2006,6 +2058,7 @@ const rowsHtml = (participants || []).map(function(participant) {
   attachPickStatusOpenEvents();
 attachPickStatusExportEvents();
 attachPickStatusWaEvents();
+attachEditPickEvents();
 attachPickStatusFilterEvents();
 attachPickStatusSearchEvent();
 applyPickStatusFilter(currentPickStatusFilter);
@@ -2106,12 +2159,20 @@ function attachPickStatusExportEvents() {
   document.querySelectorAll(".pick-status-export").forEach(function(btn) {
     btn.addEventListener("click", async function() {
       const participantId = btn.getAttribute("data-participant-id");
-      await exportParticipantPickImage($("pickPool").value, participantId);
+      const entryId = btn.getAttribute("data-entry-id") || null;
+      await exportParticipantPickImage($("pickPool").value, participantId, entryId);
+    });
+  });
+}
 
-document.getElementById("pickMatches")?.scrollIntoView({
-  behavior: "smooth",
-  block: "start"
-});
+function attachEditPickEvents() {
+  document.querySelectorAll("[data-edit-pick]").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      var entryId  = btn.getAttribute("data-entry-id");
+      var matchId  = btn.getAttribute("data-match-id");
+      var label    = btn.getAttribute("data-match-label") || "Partido";
+      var current  = btn.getAttribute("data-current-pick") || null;
+      await editSinglePick(entryId, matchId, label, current);
     });
   });
 }
@@ -2127,7 +2188,7 @@ function attachPickStatusWaEvents() {
   });
 }
 
-async function exportParticipantPickImage(poolId, participantId) {
+async function exportParticipantPickImage(poolId, participantId, entryId) {
   hideAlert();
 
   if (!poolId || !participantId) {
@@ -2148,18 +2209,23 @@ async function exportParticipantPickImage(poolId, participantId) {
     if (pErr) return showAlert(pErr.message, "error");
     if (!participant) return showAlert("Participante no encontrado.", "error");
 
-    // boleto
-    const { data: entry, error: eErr } = await supabaseClient
-      .from("entries")
-      .select("id, participant_id, pool_id")
+    // boleto — obtener el específico si viene entryId, sino el más reciente
+    var entryQuery = supabaseClient.from("entries")
+      .select("id, participant_id, pool_id, created_at")
       .eq("pool_id", poolId)
       .eq("participant_id", participantId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order("created_at", { ascending: true });
 
+    const { data: allEntries, error: eErr } = await entryQuery;
     if (eErr) return showAlert(eErr.message, "error");
-    if (!entry) return showAlert("Ese participante no tiene boleto en esta jornada.", "error");
+    if (!allEntries || !allEntries.length) return showAlert("Ese participante no tiene boleto en esta jornada.", "error");
+
+    // Identify which entry and its boleto number (1-based, oldest first)
+    var entry = entryId
+      ? allEntries.find(function(e){ return e.id === entryId; }) || allEntries[allEntries.length - 1]
+      : allEntries[allEntries.length - 1];
+    var boletaNum = allEntries.findIndex(function(e){ return e.id === entry.id; }) + 1;
+    var totalBoletas = allEntries.length;
 
     // partidos
     const { data: matches, error: mErr } = await supabaseClient
@@ -2188,11 +2254,26 @@ async function exportParticipantPickImage(poolId, participantId) {
     printArea.classList.remove("hidden");
     printArea.innerHTML = "";
 
+    // Precargar logo como base64 para que html2canvas lo incluya
+    var logoBase64 = QUINIELA_LOGO_URL;
+    try {
+      var logoResp = await fetch(QUINIELA_LOGO_URL);
+      var logoBlob = await logoResp.blob();
+      logoBase64 = await new Promise(function(res) {
+        var reader = new FileReader();
+        reader.onload = function() { res(reader.result); };
+        reader.readAsDataURL(logoBlob);
+      });
+    } catch(logoErr) { console.warn("Logo preload failed:", logoErr); }
+
     const card = makePickedTicketCard({
       pool: pool,
       participant: participant,
       matches: matches || [],
-      pickMap: pickMap
+      pickMap: pickMap,
+      logoUrl: logoBase64,
+      boletaNum: boletaNum,
+      totalBoletas: totalBoletas
     });
 
     printArea.appendChild(card);
@@ -2200,15 +2281,23 @@ async function exportParticipantPickImage(poolId, participantId) {
     const canvas = await html2canvas(card, {
       scale: 2,
       backgroundColor: "#ffffff",
-      useCORS: true
+      useCORS: true,
+      allowTaint: true,
+      logging: false
     });
 
     const a = document.createElement("a");
     const safeName = (participant.name || "boleto")
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-");
+      .replace(/[áàäâ]/gi, "a").replace(/[éèëê]/gi, "e")
+      .replace(/[íìïî]/gi, "i").replace(/[óòöô]/gi, "o")
+      .replace(/[úùüû]/gi, "u").replace(/[ñ]/gi, "n")
+      .replace(/[^a-zA-Z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+    const safeJornada = pool && pool.round ? "J" + pool.round : (pool && pool.name ? pool.name : "Jornada");
+    const boletaSuffix = totalBoletas > 1 ? "-Boleta" + boletaNum : "";
 
-    a.download = `Boleto-${safeName}.png`;
+    a.download = safeName + "-" + safeJornada + boletaSuffix + ".png";
     a.href = canvas.toDataURL("image/png");
     a.click();
 
@@ -2222,10 +2311,13 @@ async function exportParticipantPickImage(poolId, participantId) {
 }
 
 function makePickedTicketCard(opts) {
-  var pool        = opts.pool;
-  var participant = opts.participant;
-  var matches     = opts.matches || [];
-  var pickMap     = opts.pickMap || new Map();
+  var pool         = opts.pool        || {};
+  var participant  = opts.participant || {};
+  var matches      = opts.matches     || [];
+  var pickMap      = opts.pickMap     || new Map();
+  var logoUrl      = opts.logoUrl     || (typeof QUINIELA_LOGO_URL !== "undefined" ? QUINIELA_LOGO_URL : "");
+  var boletaNum    = opts.boletaNum    || 1;
+  var totalBoletas = opts.totalBoletas || 1;
 
   var bg      = "#ffffff";
   var text    = "#111111";
@@ -2240,7 +2332,6 @@ function makePickedTicketCard(opts) {
   card.style.cssText = "width:860px;box-sizing:border-box;background:" + bg + ";color:" + text +
     ";border:1.5px solid " + border + ";border-radius:18px;padding:32px 28px;font-family:Arial,sans-serif;";
 
-  var logoUrl     = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "";
   var jornadaText = pool && pool.round ? ("Jornada " + pool.round) : (pool && pool.name ? pool.name : "Jornada");
   var dateText    = (pool && pool.date_label) ? pool.date_label : "—";
   var priceText   = "$" + Number((pool && pool.price) ? pool.price : 20);
@@ -2273,7 +2364,10 @@ function makePickedTicketCard(opts) {
       "</div>" +
     "</div>" +
     "<div style='margin-bottom:16px;padding:14px 16px;border-radius:12px;background:" + softBg + ";border:1px solid " + border + ";'>" +
-      "<div style='font-size:19px;font-weight:800;color:" + text + ";'>" + partName + "</div>" +
+      "<div style='display:flex;align-items:center;justify-content:space-between;'>" +
+      "<span style='font-size:19px;font-weight:800;color:" + text + ";'>" + partName + "</span>" +
+      (totalBoletas > 1 ? "<span style='font-size:11px;font-weight:800;background:#111;color:#fff;padding:3px 10px;border-radius:99px;'>Boleta " + boletaNum + "/" + totalBoletas + "</span>" : "") +
+    "</div>" +
       "<div style='font-size:13px;color:" + sub + ";margin-top:3px;'>" + partArea + "</div>" +
       "<div style='font-size:12px;color:" + accent + ";font-weight:700;margin-top:8px;'>Pron\u00f3stico registrado \u2705</div>" +
     "</div>" +
@@ -3669,7 +3763,13 @@ function renderResultRow(match) {
       </div>
       <div class="mt-2 flex items-center justify-between text-xs">
         <div class="text-zinc-400">Resultado: <span data-result-outcome="${match.id}" class="font-semibold text-zinc-200">${outcome}</span></div>
-        <div class="text-zinc-400">Goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span></div>
+        <div class="flex items-center gap-2">
+          <div class="text-zinc-400">Goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span></div>
+          <button data-save-row="${match.id}" onclick="saveOneResult('${match.id}')"
+            class="px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 font-bold text-xs border border-emerald-500/20">
+            💾
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -3925,7 +4025,7 @@ async function loadSimpleWinnerSummary(poolId) {
     prize_pool:         Number(winners[0].prize_pool         || 0),
     commission_amount:  Number(winners[0].commission_amount  || 0),
     total_collected:    Number(winners[0].total_collected    || 0),
-    prize_per_winner:   Number(winners[0].prize_per_winner   || 0),
+    prize_per_winner:   Math.floor(Number(winners[0].prize_per_winner   || 0)),
     winning_points:     Number(winners[0].winning_points     || 0)
   };
 }
@@ -6489,6 +6589,309 @@ async function exportAllPicksList() {
   var text = header + lines;
   var encoded = encodeURIComponent(text);
   window.open("https://wa.me/?text=" + encoded, "_blank");
+}
+
+
+
+// ═══════════════════════════════════════════════
+// MEJORA 3: EDITAR ÁREA EN BLOQUE
+// ═══════════════════════════════════════════════
+async function bulkEditArea() {
+  hideAlert();
+
+  var newArea = prompt("Nueva área para los participantes seleccionados\n(deja en blanco para cancelar):");
+  if (newArea === null || newArea.trim() === "") return;
+  newArea = newArea.trim();
+
+  // Get checked participants
+  var checked = Array.from(document.querySelectorAll(".participant-bulk-check:checked"))
+    .map(function(cb) { return cb.getAttribute("data-id"); });
+
+  if (!checked.length) return showAlert("Selecciona al menos un participante con la casilla ☑️.", "error");
+
+  var confirmed = await showConfirmModal({
+    icon: "✏️",
+    title: "Cambiar área en bloque",
+    message: "Se cambiará el área de " + checked.length + " participante(s) a \"" + newArea + "\".",
+    confirmLabel: "Cambiar área",
+    confirmStyle: "background:linear-gradient(135deg,#059669,#10b981);"
+  });
+  if (!confirmed) return;
+
+  var { error } = await supabaseClient.from("participants")
+    .update({ area: newArea }).in("id", checked);
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Área actualizada en " + checked.length + " participante(s) ✅", "ok");
+  resetTabLoaded("tab-participants");
+  await loadParticipants();
+}
+
+function toggleAllParticipants(masterCb) {
+  var checked = masterCb.checked;
+  document.querySelectorAll(".participant-bulk-check").forEach(function(cb) {
+    cb.checked = checked;
+  });
+  updateBulkEditBtn();
+}
+
+function updateBulkEditBtn() {
+  var count = document.querySelectorAll(".participant-bulk-check:checked").length;
+  var btn = $("btnBulkEditArea");
+  if (btn) {
+    btn.textContent = count > 0 ? "✏️ Cambiar área (" + count + ")" : "✏️ Cambiar área";
+    btn.classList.toggle("opacity-50", count === 0);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 4: INDICADOR VISUAL PICKS EN PARTICIPANTES
+// ═══════════════════════════════════════════════
+var _picksStatusCache = {};
+
+async function loadParticipantPicksStatus() {
+  // Get active pool
+  var poolRes = await supabaseClient.from("pools")
+    .select("id").eq("status", "open").limit(1).maybeSingle();
+  if (!poolRes.data) return;
+  var pool_id = poolRes.data.id;
+
+  // Get entries for this pool
+  var entRes = await supabaseClient.from("entries")
+    .select("id, participant_id").eq("pool_id", pool_id);
+  var entries = entRes.data || [];
+  if (!entries.length) return;
+
+  // Total matches
+  var mRes = await supabaseClient.from("matches")
+    .select("id", { count: "exact", head: true }).eq("pool_id", pool_id);
+  var total = mRes.count || 0;
+
+  // Picks count
+  var eIds = entries.map(function(e){ return e.id; });
+  var pRes = await supabaseClient.from("predictions_1x2")
+    .select("entry_id").in("entry_id", eIds);
+  var pickCount = {};
+  (pRes.data || []).forEach(function(p) {
+    pickCount[p.entry_id] = (pickCount[p.entry_id] || 0) + 1;
+  });
+
+  // Map by participant
+  _picksStatusCache = {};
+  entries.forEach(function(e) {
+    var cnt = pickCount[e.id] || 0;
+    _picksStatusCache[e.participant_id] = {
+      complete: cnt >= total && total > 0,
+      partial:  cnt > 0 && cnt < total,
+      none:     cnt === 0
+    };
+  });
+
+  // Update badges in DOM
+  document.querySelectorAll("[data-picks-badge]").forEach(function(el) {
+    var pid = el.getAttribute("data-picks-badge");
+    var status = _picksStatusCache[pid];
+    if (!status) { el.textContent = ""; return; }
+    el.textContent = status.complete ? "✅" : status.partial ? "🟡" : "⏰";
+    el.title = status.complete ? "Picks completos" : status.partial ? "Picks incompletos" : "Sin picks";
+  });
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 5: VISTA COMPACTA DE TODOS LOS PICKS
+// ═══════════════════════════════════════════════
+async function showPicksCompactView() {
+  hideAlert();
+  var pool_id = $("pickPool").value;
+  if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
+
+  var modal = document.createElement("div");
+  modal.id = "picksTableModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;";
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.75);" id="picksTableBg"></div>',
+    '<div style="position:relative;width:100%;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px 24px 0 0;padding:20px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;">',
+      '<div style="width:48px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 14px;"></div>',
+      '<div style="font-size:16px;font-weight:800;color:#f0f4f8;margin-bottom:4px;">📊 Todos los pronósticos</div>',
+      '<div id="picksTableContent" style="overflow:auto;flex:1;margin-top:12px;-webkit-overflow-scrolling:touch;">',
+        '<div style="text-align:center;color:#8a94a6;padding:20px;">Cargando...</div>',
+      '</div>',
+      '<button id="picksTableClose" style="width:100%;margin-top:12px;padding:12px;border-radius:14px;',
+        'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#8a94a6;font-size:14px;cursor:pointer;">',
+        'Cerrar',
+      '</button>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+  document.getElementById("picksTableBg").addEventListener("click", function(){ modal.remove(); });
+  document.getElementById("picksTableClose").addEventListener("click", function(){ modal.remove(); });
+
+  // Load data
+  var [matchRes, entRes] = await Promise.all([
+    supabaseClient.from("matches").select("id, match_no, home_team, away_team")
+      .eq("pool_id", pool_id).order("match_no", { ascending: true }),
+    supabaseClient.from("entries").select("id, participant_id")
+      .eq("pool_id", pool_id)
+  ]);
+
+  var matches = matchRes.data || [];
+  var entries = entRes.data || [];
+  if (!matches.length || !entries.length) {
+    document.getElementById("picksTableContent").innerHTML =
+      '<div style="color:#8a94a6;padding:20px;text-align:center;">Sin datos.</div>';
+    return;
+  }
+
+  var partIds = [...new Set(entries.map(function(e){ return e.participant_id; }))];
+  var [partRes, predsRes] = await Promise.all([
+    supabaseClient.from("participants").select("id, name").in("id", partIds),
+    supabaseClient.from("predictions_1x2").select("entry_id, match_id, pick")
+      .in("entry_id", entries.map(function(e){ return e.id; }))
+  ]);
+
+  var partMap = {};
+  (partRes.data || []).forEach(function(p){ partMap[p.id] = p.name; });
+
+  var entryToParticipant = {};
+  entries.forEach(function(e){ entryToParticipant[e.id] = e.participant_id; });
+
+  var pickMap = {};
+  (predsRes.data || []).forEach(function(p) {
+    var pid = entryToParticipant[p.entry_id];
+    if (!pickMap[pid]) pickMap[pid] = {};
+    pickMap[pid][p.match_id] = p.pick;
+  });
+
+  function pickLabel(c) {
+    return c === "H" ? '<span style="color:#34d399;font-weight:800;">L</span>'
+         : c === "D" ? '<span style="color:#fbbf24;font-weight:800;">E</span>'
+         : c === "A" ? '<span style="color:#60a5fa;font-weight:800;">V</span>'
+         : '<span style="color:#4b5563;">-</span>';
+  }
+
+  // Build table
+  var colW = "28px";
+  var headerRow = '<tr style="border-bottom:1px solid rgba(255,255,255,.1);">' +
+    '<th style="text-align:left;padding:6px 8px;font-size:11px;color:#8a94a6;white-space:nowrap;position:sticky;left:0;background:#0c1018;z-index:1;">Participante</th>' +
+    matches.map(function(m) {
+      return '<th style="text-align:center;padding:4px 2px;font-size:9px;color:#8a94a6;width:' + colW + ';min-width:' + colW + ';">' +
+        m.home_team.substring(0,3) + '<br>vs<br>' + m.away_team.substring(0,3) + '</th>';
+    }).join("") +
+    '</tr>';
+
+  var bodyRows = partIds.map(function(pid) {
+    var name = partMap[pid] || "?";
+    var picks = pickMap[pid] || {};
+    var allComplete = matches.every(function(m) { return picks[m.id]; });
+    var rowBg = allComplete ? "rgba(16,185,129,.05)" : "transparent";
+    return '<tr style="border-bottom:1px solid rgba(255,255,255,.05);background:' + rowBg + ';">' +
+      '<td style="padding:6px 8px;font-size:11px;font-weight:700;color:#f0f4f8;white-space:nowrap;' +
+           'position:sticky;left:0;background:' + (allComplete ? "#061a12" : "#0c1018") + ';z-index:1;">' + name + '</td>' +
+      matches.map(function(m) {
+        return '<td style="text-align:center;padding:4px 2px;font-size:12px;">' + pickLabel(picks[m.id]) + '</td>';
+      }).join("") +
+      '</tr>';
+  }).join("");
+
+  document.getElementById("picksTableContent").innerHTML =
+    '<table style="border-collapse:collapse;width:100%;font-size:12px;">' +
+      '<thead>' + headerRow + '</thead>' +
+      '<tbody>' + bodyRows + '</tbody>' +
+    '</table>';
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 6: EDITAR PICK INDIVIDUAL DESDE LA LISTA
+// ═══════════════════════════════════════════════
+async function editSinglePick(entryId, matchId, matchLabel, currentPick) {
+  var opts = [
+    { pick: "H", label: "LOCAL",  icon: "🟢" },
+    { pick: "D", label: "EMPATE", icon: "🟡" },
+    { pick: "A", label: "VISITA", icon: "🔵" },
+  ];
+
+  var modal = document.createElement("div");
+  modal.id = "editPickModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+
+  var btnsHtml = opts.map(function(o) {
+    var isActive = o.pick === currentPick;
+    var activeCss = isActive ? "border:2px solid #10b981;background:rgba(16,185,129,.15);" : "border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);";
+    return '<button class="edit-pick-opt" data-pick="' + o.pick + '" style="' + activeCss +
+      'padding:14px;border-radius:14px;color:#f0f4f8;font-size:15px;font-weight:700;cursor:pointer;text-align:center;width:100%;">' +
+      o.icon + ' ' + o.label + '</button>';
+  }).join("");
+
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="editPickBg"></div>',
+    '<div style="position:relative;width:100%;max-width:340px;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px;padding:24px;">',
+      '<div style="font-size:16px;font-weight:800;color:#f0f4f8;margin-bottom:4px;">Editar pronóstico</div>',
+      '<div style="font-size:12px;color:#8a94a6;margin-bottom:16px;">' + matchLabel + '</div>',
+      '<div style="display:flex;flex-direction:column;gap:8px;">' + btnsHtml + '</div>',
+      '<button id="editPickCancel" style="width:100%;margin-top:12px;padding:12px;border-radius:14px;',
+        'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);',
+        'color:#8a94a6;font-size:14px;cursor:pointer;">Cancelar</button>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+
+  document.getElementById("editPickBg").addEventListener("click", function(){ modal.remove(); });
+  document.getElementById("editPickCancel").addEventListener("click", function(){ modal.remove(); });
+
+  modal.querySelectorAll(".edit-pick-opt").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      var pick = btn.getAttribute("data-pick");
+      modal.remove();
+
+      var { error } = await supabaseClient.from("predictions_1x2")
+        .upsert([{ entry_id: entryId, match_id: matchId, pick: pick }],
+          { onConflict: "entry_id,match_id" });
+
+      if (error) return showAlert(error.message, "error");
+      showAlert("Pick actualizado ✅", "ok");
+      await loadPickStatusList();
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 7: GUARDAR RESULTADO PARTIDO POR PARTIDO
+// ═══════════════════════════════════════════════
+async function saveOneResult(matchId) {
+  var homeInput = document.querySelector('[data-result-home="' + matchId + '"]');
+  var awayInput = document.querySelector('[data-result-away="' + matchId + '"]');
+  if (!homeInput || !awayInput) return;
+
+  var hg = homeInput.value.trim();
+  var ag = awayInput.value.trim();
+  if (hg === "" || ag === "") return showAlert("Captura ambos goles antes de guardar.", "error");
+
+  var btn = document.querySelector('[data-save-row="' + matchId + '"]');
+  if (btn) { btn.disabled = true; btn.textContent = "⏳"; }
+
+  var { error } = await supabaseClient.from("matches")
+    .update({ home_goals: Number(hg), away_goals: Number(ag) })
+    .eq("id", matchId);
+
+  if (btn) { btn.disabled = false; btn.textContent = "💾"; }
+
+  if (error) return showAlert(error.message, "error");
+
+  // Visual feedback on the row
+  var outcomeEl = document.querySelector('[data-result-outcome="' + matchId + '"]');
+  var totalEl   = document.querySelector('[data-result-total="' + matchId + '"]');
+  var home = Number(hg), away = Number(ag);
+  if (outcomeEl) outcomeEl.textContent = home > away ? "Local" : home === away ? "Empate" : "Visita";
+  if (totalEl)   totalEl.textContent   = home + away;
+
+  updateResultsGoalsSummary();
+  showAlert("Resultado guardado ✅", "ok");
+  await updateNavBadges();
 }
 
 
