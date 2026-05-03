@@ -181,6 +181,9 @@
       <!-- Resumen Semanal -->
       <div id="weeklySummaryWrap"></div>
 
+      <!-- Gráfica de aciertos por jornada -->
+      <div id="accuracyChartWrap"></div>
+
       <!-- Historial de Ganadores -->
       <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
         <div class="flex items-center justify-between mb-3">
@@ -238,6 +241,9 @@
         </button>
         <button onclick="deleteTestParticipants()" class="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center" type="button" title="Borrar pruebas">
           🗑️
+        </button>
+        <button onclick="showParticipantLegend()" class="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center" type="button" title="Guía de íconos">
+          ❓
         </button>
       </div>
     </div>
@@ -456,6 +462,9 @@
           <button id="btnAddEntry" class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
             Registrar boleto
           </button>
+          <button id="btnAddEntryPaid" type="button" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
+            💰 Registrar y pagar
+          </button>
 
           <button id="btnRefreshStats" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
             Actualizar
@@ -530,7 +539,11 @@
     </button>
   </div>
 
-<div class="mb-3">
+<div class="mb-3 space-y-2">
+  <select id="areaFilter" onchange="applyAreaFilter()"
+    class="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm">
+    <option value="all">Todas las áreas</option>
+  </select>
   <input
     id="entriesSearch"
     type="text"

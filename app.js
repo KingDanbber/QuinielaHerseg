@@ -467,6 +467,7 @@ async function showAppTab(tabId) {
       await loadDashboardSummary();
       await loadHistoricalStandings();
       await loadWeeklySummary();
+      await loadAccuracyChart();
       markTabLoaded("tab-home");
     }
 
@@ -506,6 +507,7 @@ async function showAppTab(tabId) {
       await fillPickPoolsSelect();
       await fillPickParticipantsSelect();
       await loadPickStatusList();
+      await restoreLastPickSelection();
     }
 
     // RESULTADOS — lazy
@@ -789,49 +791,58 @@ const whatsappBadge = hasWhatsapp
 
     return `
   <div
-  class="participant-card p-3 border rounded-xl flex items-center gap-2 ${cardClass}"
+  class="participant-card p-3 border rounded-xl ${cardClass}"
   data-status="${statusKey}"
   data-name="${String(p.name || "").toLowerCase()}"
   data-area="${String(area || "").toLowerCase()}"
   data-whatsapp="${String(whatsapp || "").toLowerCase()}"
   data-has-whatsapp="${p.whatsapp ? "1" : "0"}">
 
-    <!-- Checkbox bulk select -->
-    <input type="checkbox" class="participant-bulk-check w-4 h-4 rounded accent-emerald-500 flex-shrink-0"
-      data-id="${p.id}" onchange="updateBulkEditBtn()" />
+    <!-- Fila superior: checkbox + datos -->
+    <div class="flex items-start gap-2">
+      <input type="checkbox" class="participant-bulk-check w-4 h-4 rounded accent-emerald-500 flex-shrink-0 mt-1"
+        data-id="${p.id}" onchange="updateBulkEditBtn()" />
 
-    <div class="min-w-0 flex-1">
-      <div class="font-semibold text-sm leading-tight truncate flex items-center gap-1">
-        ${p.name || "—"} ${whatsappBadge}
-        <span data-picks-badge="${p.id}" class="text-xs" title="Estado de picks"></span>
+      <div class="min-w-0 flex-1">
+        <!-- Nombre + badges -->
+        <div class="flex items-center gap-1 flex-wrap">
+          <span class="font-bold text-sm text-white leading-tight">${p.name || "—"}</span>
+          ${whatsappBadge}
+          <span data-picks-badge="${p.id}" class="text-xs" title="Estado de picks"></span>
+          <span class="text-xs ${isActive ? "text-emerald-400" : "text-zinc-500"}">${statusEmoji}</span>
+        </div>
+        <!-- Área -->
+        <div class="text-xs text-zinc-400 mt-0.5">${area}</div>
+        <!-- WhatsApp -->
+        ${whatsapp !== "—" ? `<div class="text-xs text-zinc-500">${whatsapp}</div>` : ""}
       </div>
-      <div class="text-xs text-zinc-400 mt-0.5 truncate">${area}</div>
-      <div class="text-xs text-zinc-500 truncate">${whatsapp !== "—" ? whatsapp : ""}</div>
     </div>
 
-    <div class="flex items-center gap-1 shrink-0">
-      <div class="w-8 h-8 rounded-lg border flex items-center justify-center text-base ${isActive ? "border-emerald-500/30 bg-emerald-500/10" : "border-zinc-700 bg-zinc-900"}"
-           title="${isActive ? "Activo" : "Archivado"}">
-        ${statusEmoji}
-      </div>
+    <!-- Fila inferior: botones de acción -->
+    <div class="flex items-center gap-1 mt-2 pt-2 border-t border-zinc-800">
       <button type="button"
-        class="participant-wa-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
+        class="participant-wa-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         onclick="openWhatsApp('${p.whatsapp || ""}')"
         title="Abrir WhatsApp">💬</button>
       <button type="button"
-        class="participant-edit-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
+        class="participant-edit-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         data-id="${p.id}"
         data-name="${p.name || ""}"
         data-area="${p.area || ""}"
         data-whatsapp="${p.whatsapp || ""}"
-        title="Editar">✏️</button>
+        title="Editar datos">✏️</button>
       <button type="button"
-        class="participant-history-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
+        class="participant-history-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         data-id="${p.id}"
         data-name="${p.name || ""}"
-        title="Ver historial">📋</button>
+        title="Historial picks">📋</button>
       <button type="button"
-        class="participant-toggle-btn w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center"
+        class="participant-entry-hist-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
+        data-id="${p.id}"
+        data-name="${p.name || ""}"
+        title="Historial boletos">🎫</button>
+      <button type="button"
+        class="participant-toggle-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         data-id="${p.id}"
         data-active="${isActive ? "1" : "0"}"
         data-name="${p.name || ""}"
@@ -843,6 +854,7 @@ const whatsappBadge = hasWhatsapp
 
   attachParticipantEditEvents();
 attachParticipantHistoryEvents();
+attachParticipantEntryHistEvents();
 attachParticipantToggleEvents();
 // Load picks status badges
 loadParticipantPicksStatus();
@@ -987,6 +999,16 @@ function attachParticipantHistoryEvents() {
       var id   = btn.getAttribute("data-id");
       var name = btn.getAttribute("data-name") || "Participante";
       showParticipantHistory(id, name);
+    });
+  });
+}
+
+function attachParticipantEntryHistEvents() {
+  document.querySelectorAll(".participant-entry-hist-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var id   = btn.getAttribute("data-id");
+      var name = btn.getAttribute("data-name") || "Participante";
+      showParticipantEntryHistory(id, name);
     });
   });
 }
@@ -2627,7 +2649,7 @@ async function loadEntriesAndStats() {
   // Lista de entries
   const { data: rows, error } = await supabaseClient
     .from("entries")
-    .select("id, paid, paid_at, created_at, participant_id, participants(name), pools(name)")
+    .select("id, paid, paid_at, created_at, participant_id, participants(name, area), pools(name)")
     .eq("pool_id", pool_id)
     .order("created_at", { ascending: false })
     .limit(300);
@@ -2737,7 +2759,8 @@ async function loadEntriesAndStats() {
   class="entry-card p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3"
   data-paid-status="${paidStatus}"
   data-picks-status="${picksStatus}"
-  data-name="${String(r.participants?.name || "").toLowerCase()}">
+  data-name="${String(r.participants?.name || "").toLowerCase()}"
+  data-area="${String(r.participants?.area || "").trim()}">
 
         <div class="min-w-0">
           <div class="font-semibold flex items-center gap-2 flex-wrap">${r.participants?.name || "—"}${boleta}</div>
@@ -5076,8 +5099,10 @@ $("btnOpenActivePool").addEventListener("click", openLatestClosedPool);
 
 // Pagos / Boletos
 $("btnAddEntry").addEventListener("click", addEntry);
+if ($("btnAddEntryPaid")) $("btnAddEntryPaid").addEventListener("click", addEntryAndPay);
 $("btnRefreshStats").addEventListener("click", loadEntriesAndStats);
 $("entryPool").addEventListener("change", async () => {
+  await loadAreaFilterOptions();
   currentEntriesSearch = "";
   if ($("entriesSearch")) $("entriesSearch").value = "";
   await loadEntriesAndStats();
@@ -5143,6 +5168,7 @@ $("pickPool").addEventListener("change", async () => {
 });
 
 $("pickParticipant").addEventListener("change", () => {
+  saveLastPickSelection();
   $("pickMatches").innerHTML = "";
   $("pickEntryLabel").textContent = "—";
 });
@@ -6593,6 +6619,55 @@ async function exportAllPicksList() {
 
 
 
+
+// ═══════════════════════════════════════════════
+// LEYENDA DE ÍCONOS — PARTICIPANTES
+// ═══════════════════════════════════════════════
+function showParticipantLegend() {
+  var modal = document.createElement("div");
+  modal.id = "legendModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+
+  var items = [
+    ["📱", "Insignia de WhatsApp", "El participante tiene número registrado"],
+    ["✅ / 🟡 / ⏰", "Estado de picks", "✅ Completos · 🟡 Incompletos · ⏰ Sin picks"],
+    ["🟢 / 📦", "Estado del participante", "🟢 Activo · 📦 Archivado"],
+    ["💬", "Abrir WhatsApp", "Abre chat directo con el participante"],
+    ["✏️", "Editar", "Editar nombre, área y WhatsApp"],
+    ["📋", "Historial de picks", "Ver pronósticos por jornada"],
+    ["🎫", "Historial de boletos", "Ver en qué jornadas participó y si pagó"],
+    ["📦 / ♻️", "Archivar / Restaurar", "Ocultar o reactivar al participante"],
+    ["☑️", "Seleccionar", "Para cambiar área en bloque con ✏️ Área"],
+  ];
+
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.75);" id="legendBg"></div>',
+    '<div style="position:relative;width:100%;max-width:400px;background:#0c1018;',
+         'border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:22px;',
+         'max-height:80vh;overflow-y:auto;">',
+      '<div style="font-size:17px;font-weight:800;color:#f0f4f8;margin-bottom:16px;">❓ Guía de íconos</div>',
+      items.map(function(it) {
+        return [
+          '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);">',
+            '<div style="font-size:16px;flex-shrink:0;width:40px;text-align:center;line-height:1.4;">' + it[0] + '</div>',
+            '<div>',
+              '<div style="font-size:13px;font-weight:700;color:#f0f4f8;">' + it[1] + '</div>',
+              '<div style="font-size:11px;color:#8a94a6;margin-top:2px;">' + it[2] + '</div>',
+            '</div>',
+          '</div>'
+        ].join("");
+      }).join(""),
+      '<button id="legendClose" style="width:100%;margin-top:16px;padding:12px;border-radius:14px;',
+        'background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);',
+        'color:#8a94a6;font-size:14px;cursor:pointer;">Cerrar</button>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+  document.getElementById("legendBg").addEventListener("click", function(){ modal.remove(); });
+  document.getElementById("legendClose").addEventListener("click", function(){ modal.remove(); });
+}
+
 // ═══════════════════════════════════════════════
 // MEJORA 3: EDITAR ÁREA EN BLOQUE
 // ═══════════════════════════════════════════════
@@ -6892,6 +6967,355 @@ async function saveOneResult(matchId) {
   updateResultsGoalsSummary();
   showAlert("Resultado guardado ✅", "ok");
   await updateNavBadges();
+}
+
+
+
+// ═══════════════════════════════════════════════
+// MEJORA 1: REGISTRAR BOLETO + PAGO EN UN PASO
+// ═══════════════════════════════════════════════
+async function addEntryAndPay() {
+  hideAlert();
+
+  const pool_id        = $("entryPool").value;
+  const participant_id = $("entryParticipant").value;
+
+  if (!pool_id || !participant_id)
+    return showAlert("Falta seleccionar jornada o participante.", "error");
+
+  const { data: poolInfo, error: poolErr } = await supabaseClient
+    .from("pools").select("id, status, price").eq("id", pool_id).maybeSingle();
+
+  if (poolErr) return showAlert(poolErr.message, "error");
+  if (!poolInfo || poolInfo.status !== "open")
+    return showAlert("Esta jornada ya está cerrada.", "error");
+
+  const confirmed = await showConfirmModal({
+    icon: "💰",
+    title: "Registrar y marcar pagado",
+    message: "Se registrará el boleto y se marcará como PAGADO al instante.",
+    confirmLabel: "✅ Registrar y pagar",
+    confirmStyle: "background:linear-gradient(135deg,#059669,#10b981);"
+  });
+  if (!confirmed) return;
+
+  const { error } = await supabaseClient.from("entries").insert({
+    pool_id, participant_id,
+    paid: true,
+    paid_at: new Date().toISOString()
+  });
+
+  if (error) return showAlert(error.message, "error");
+
+  showAlert("Boleto registrado y pagado ✅", "ok");
+  $("entryPaid").checked = false;
+  await loadEntriesAndStats();
+  await fillPickParticipantsSelect();
+  await loadPickStatusList();
+  await loadDashboardSummary();
+  await updateNavBadges();
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 2: FILTRO POR ÁREA EN PAGOS
+// ═══════════════════════════════════════════════
+var currentAreaFilter = "all";
+
+async function loadAreaFilterOptions() {
+  var sel = $("areaFilter");
+  if (!sel) return;
+
+  var { data, error } = await supabaseClient
+    .from("participants")
+    .select("area")
+    .eq("is_active", true);
+
+  if (error || !data) return;
+
+  var areas = [...new Set(
+    data.map(function(p){ return (p.area || "").trim(); })
+        .filter(Boolean)
+  )].sort();
+
+  sel.innerHTML = '<option value="all">Todas las áreas</option>' +
+    areas.map(function(a) {
+      return '<option value="' + a + '">' + a + '</option>';
+    }).join("");
+}
+
+function applyAreaFilter() {
+  var sel = $("areaFilter");
+  currentAreaFilter = sel ? sel.value : "all";
+
+  document.querySelectorAll(".entry-card").forEach(function(card) {
+    var area = card.getAttribute("data-area") || "";
+    var show = currentAreaFilter === "all" || area === currentAreaFilter;
+    card.style.display = show ? "" : "none";
+  });
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 3: GRÁFICA DE ACIERTOS POR JORNADA
+// ═══════════════════════════════════════════════
+async function loadAccuracyChart() {
+  var wrap = $("accuracyChartWrap");
+  if (!wrap) return;
+
+  // Get all closed pools with results
+  var poolsRes = await supabaseClient.from("pools")
+    .select("id, round, name")
+    .order("round", { ascending: true })
+    .limit(30);
+  var pools = (poolsRes.data || []);
+  if (pools.length < 2) { wrap.innerHTML = ""; return; }
+
+  var poolIds = pools.map(function(p){ return p.id; });
+
+  // Get entry_points for all pools
+  var epRes = await supabaseClient.from("entry_points")
+    .select("pool_id, participant_id, points")
+    .in("pool_id", poolIds);
+  var ep = epRes.data || [];
+
+  // Compute avg points per pool
+  var statsByPool = {};
+  pools.forEach(function(p){ statsByPool[p.id] = { sum: 0, count: 0, max: 0 }; });
+  ep.forEach(function(r) {
+    if (!statsByPool[r.pool_id]) return;
+    statsByPool[r.pool_id].sum   += Number(r.points || 0);
+    statsByPool[r.pool_id].count += 1;
+    if (Number(r.points) > statsByPool[r.pool_id].max) statsByPool[r.pool_id].max = Number(r.points);
+  });
+
+  var labels  = [];
+  var avgData = [];
+  var maxData = [];
+
+  pools.forEach(function(p) {
+    var s = statsByPool[p.id];
+    if (!s || s.count === 0) return;
+    labels.push(p.round ? "J" + p.round : (p.name || "?"));
+    avgData.push(parseFloat((s.sum / s.count).toFixed(1)));
+    maxData.push(s.max);
+  });
+
+  if (labels.length < 2) { wrap.innerHTML = ""; return; }
+
+  wrap.innerHTML = [
+    '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">',
+      '<div class="flex items-center justify-between mb-3">',
+        '<h3 class="font-semibold text-sm">📈 Aciertos por Jornada</h3>',
+        '<div class="flex gap-3 text-xs text-zinc-400">',
+          '<span><span class="inline-block w-3 h-1 bg-emerald-400 rounded mr-1"></span>Promedio</span>',
+          '<span><span class="inline-block w-3 h-1 bg-sky-400 rounded mr-1"></span>Máximo</span>',
+        '</div>',
+      '</div>',
+      '<canvas id="accuracyCanvas" height="140"></canvas>',
+    '</div>'
+  ].join("");
+
+  var ctx = document.getElementById("accuracyCanvas").getContext("2d");
+
+  // Simple canvas chart (no Chart.js dependency)
+  var canvas = document.getElementById("accuracyCanvas");
+  canvas.width = wrap.offsetWidth - 32;
+  canvas.height = 140;
+
+  var W = canvas.width, H = canvas.height;
+  var pad = { t: 10, r: 10, b: 28, l: 28 };
+  var chartW = W - pad.l - pad.r;
+  var chartH = H - pad.t - pad.b;
+
+  var allVals = avgData.concat(maxData);
+  var minV = 0;
+  var maxV = Math.max.apply(null, allVals) + 1;
+
+  function xPos(i) { return pad.l + (i / (labels.length - 1)) * chartW; }
+  function yPos(v) { return pad.t + chartH - ((v - minV) / (maxV - minV)) * chartH; }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = "rgba(255,255,255,.06)";
+  ctx.lineWidth = 1;
+  for (var g = 0; g <= 4; g++) {
+    var gy = pad.t + (g / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(W - pad.r, gy); ctx.stroke();
+  }
+
+  function drawLine(data, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    data.forEach(function(v, i) {
+      if (i === 0) ctx.moveTo(xPos(i), yPos(v));
+      else ctx.lineTo(xPos(i), yPos(v));
+    });
+    ctx.stroke();
+    // Dots
+    data.forEach(function(v, i) {
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.arc(xPos(i), yPos(v), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  drawLine(maxData, "#38bdf8");
+  drawLine(avgData, "#34d399");
+
+  // X labels
+  ctx.fillStyle = "#8a94a6";
+  ctx.font = "10px Arial";
+  ctx.textAlign = "center";
+  labels.forEach(function(l, i) {
+    ctx.fillText(l, xPos(i), H - 6);
+  });
+
+  // Y labels
+  ctx.textAlign = "right";
+  for (var yl = 0; yl <= 4; yl++) {
+    var v2 = minV + (yl / 4) * (maxV - minV);
+    ctx.fillText(Math.round(v2), pad.l - 4, pad.t + chartH - (yl / 4) * chartH + 4);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 4: RECORDAR ÚLTIMO PARTICIPANTE EN PICKS
+// ═══════════════════════════════════════════════
+var _lastPickParticipant = null;
+var _lastPickPool        = null;
+
+function saveLastPickSelection() {
+  var pool = $("pickPool");
+  var part = $("pickParticipant");
+  if (pool && pool.value) _lastPickPool        = pool.value;
+  if (part && part.value) _lastPickParticipant = part.value;
+}
+
+async function restoreLastPickSelection() {
+  if (!_lastPickPool && !_lastPickParticipant) return;
+  var pool = $("pickPool");
+  var part = $("pickParticipant");
+  if (pool && _lastPickPool && pool.querySelector('[value="' + _lastPickPool + '"]')) {
+    pool.value = _lastPickPool;
+    await fillPickParticipantsSelect();
+  }
+  if (part && _lastPickParticipant && part.querySelector('[value="' + _lastPickParticipant + '"]')) {
+    part.value = _lastPickParticipant;
+    // Auto-load the entry
+    if (_lastPickPool) await loadEntryForPick(_lastPickPool, _lastPickParticipant);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// MEJORA 5: HISTORIAL DE BOLETOS POR PARTICIPANTE
+// ═══════════════════════════════════════════════
+async function showParticipantEntryHistory(participantId, participantName) {
+  hideAlert();
+  if (!participantId) return;
+
+  var modal = document.createElement("div");
+  modal.id = "entryHistModal";
+  modal.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;";
+  modal.innerHTML = [
+    '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="entryHistBg"></div>',
+    '<div style="position:relative;width:100%;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
+         'border-radius:24px 24px 0 0;padding:20px;max-height:82vh;overflow-y:auto;">',
+      '<div style="width:48px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 14px;"></div>',
+      '<div style="font-size:17px;font-weight:800;color:#f0f4f8;margin-bottom:2px;">🎫 Historial de boletos</div>',
+      '<div style="font-size:13px;color:#8a94a6;margin-bottom:16px;">' + participantName + '</div>',
+      '<div id="entryHistContent"><div style="text-align:center;color:#8a94a6;padding:20px;">Cargando...</div></div>',
+      '<button id="entryHistClose" style="width:100%;margin-top:16px;padding:12px;border-radius:14px;',
+        'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);',
+        'color:#8a94a6;font-size:14px;cursor:pointer;">Cerrar</button>',
+    '</div>'
+  ].join("");
+
+  document.body.appendChild(modal);
+  document.getElementById("entryHistBg").addEventListener("click", function(){ modal.remove(); });
+  document.getElementById("entryHistClose").addEventListener("click", function(){ modal.remove(); });
+
+  var [entriesRes, poolsRes] = await Promise.all([
+    supabaseClient.from("entries")
+      .select("id, pool_id, paid, paid_at, created_at")
+      .eq("participant_id", participantId)
+      .order("created_at", { ascending: false }),
+    supabaseClient.from("pools")
+      .select("id, round, name, status, competition, season, price")
+  ]);
+
+  var entries = entriesRes.data || [];
+  var poolMap = {};
+  (poolsRes.data || []).forEach(function(p){ poolMap[p.id] = p; });
+
+  var content = document.getElementById("entryHistContent");
+  if (!entries.length) {
+    content.innerHTML = '<div style="text-align:center;color:#8a94a6;padding:20px;">Sin boletos registrados.</div>';
+    return;
+  }
+
+  // Get points for each entry
+  var entryIds = entries.map(function(e){ return e.id; });
+  var ptRes = await supabaseClient.from("entry_points")
+    .select("entry_id, points, played_matches, captured_picks")
+    .in("entry_id", entryIds);
+  var ptMap = {};
+  (ptRes.data || []).forEach(function(r){ ptMap[r.entry_id] = r; });
+
+  // Stats summary
+  var totalBoletos = entries.length;
+  var totalPagados = entries.filter(function(e){ return e.paid; }).length;
+
+  content.innerHTML = [
+    // Summary
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">',
+      '<div style="padding:10px;background:rgba(255,255,255,.05);border-radius:12px;text-align:center;">',
+        '<div style="font-size:11px;color:#8a94a6;">Jornadas</div>',
+        '<div style="font-size:20px;font-weight:900;color:#fff;">' + totalBoletos + '</div>',
+      '</div>',
+      '<div style="padding:10px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:12px;text-align:center;">',
+        '<div style="font-size:11px;color:#8a94a6;">Pagados</div>',
+        '<div style="font-size:20px;font-weight:900;color:#34d399;">' + totalPagados + '</div>',
+      '</div>',
+      '<div style="padding:10px;background:rgba(255,255,255,.05);border-radius:12px;text-align:center;">',
+        '<div style="font-size:11px;color:#8a94a6;">Pendientes</div>',
+        '<div style="font-size:20px;font-weight:900;color:#fbbf24;">' + (totalBoletos - totalPagados) + '</div>',
+      '</div>',
+    '</div>',
+    // Entry list
+    entries.map(function(e) {
+      var pool  = poolMap[e.pool_id] || {};
+      var pt    = ptMap[e.id];
+      var jornada = pool.round ? "Jornada " + pool.round : (pool.name || "—");
+      var paidColor = e.paid ? "rgba(16,185,129,.1)" : "rgba(255,255,255,.04)";
+      var paidBorder = e.paid ? "rgba(16,185,129,.25)" : "rgba(255,255,255,.08)";
+      var statusIcon = e.paid ? "✅" : "⏳";
+      var paidDate = e.paid && e.paid_at
+        ? new Date(e.paid_at).toLocaleDateString("es-MX", { day:"2-digit", month:"short", year:"numeric" })
+        : "";
+      var pts = pt ? pt.points : null;
+
+      return [
+        '<div style="padding:12px 14px;border-radius:14px;border:1px solid ' + paidBorder + ';background:' + paidColor + ';margin-bottom:8px;">',
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">',
+            '<div>',
+              '<div style="font-size:14px;font-weight:800;color:#f0f4f8;">' + jornada + '</div>',
+              '<div style="font-size:11px;color:#8a94a6;margin-top:2px;">' + (pool.competition || "Liga MX") + (pool.season ? " · " + pool.season : "") + '</div>',
+              paidDate ? '<div style="font-size:11px;color:#34d399;margin-top:2px;">Pagó: ' + paidDate + '</div>' : '',
+            '</div>',
+            '<div style="text-align:right;flex-shrink:0;">',
+              '<div style="font-size:18px;">' + statusIcon + '</div>',
+              pts !== null
+                ? '<div style="font-size:13px;font-weight:800;color:#60a5fa;margin-top:2px;">' + pts + ' ac.</div>'
+                : '',
+            '</div>',
+          '</div>',
+        '</div>'
+      ].join("");
+    }).join("")
+  ].join("");
 }
 
 
