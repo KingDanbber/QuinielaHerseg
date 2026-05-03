@@ -708,7 +708,16 @@
       Captura los goles reales de cada partido. El sistema calcula automáticamente Local / Empate / Visita y el total de goles.
     </div>
 
-    <div id="resultsMatchesList" class="mt-4 space-y-3"></div>
+    <!-- Progress bar -->
+    <div class="mt-4 space-y-1">
+      <div class="flex items-center justify-between text-xs text-zinc-400">
+        <span id="resultsProgressText">0/0 partidos con resultado</span>
+      </div>
+      <div class="h-2 bg-zinc-800 rounded-full overflow-hidden">
+        <div id="resultsProgressBar" class="h-full rounded-full transition-all duration-300" style="width:0%;background:#f87171;"></div>
+      </div>
+    </div>
+    <div id="resultsMatchesList" class="mt-3 space-y-3"></div>
 
     <div class="grid gap-2 mt-4">
       <button id="btnSaveResults" class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
@@ -748,6 +757,10 @@
 
   <button onclick="exportStandingsWhatsApp()" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 flex items-center justify-center gap-2">
     📲 Compartir tabla por WhatsApp
+  </button>
+
+  <button id="btnPicksVsResults" type="button" class="bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 flex items-center justify-center gap-2">
+    ⚡ Comparativa picks vs resultados
   </button>
 </div>
 
