@@ -323,23 +323,50 @@
           </div>
         </div>
 
+        <!-- Accesos rápidos Mundial 2026 -->
+        <div class="mb-2">
+          <div class="text-xs text-zinc-400 mb-2">⚡ Acceso rápido Mundial 2026:</div>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button type="button" onclick="quickFillPool('J1','Mundial 2026','50','24 partidos')"
+              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
+              🌍 J1 · $50 (24 par.)
+            </button>
+            <button type="button" onclick="quickFillPool('J1','Mundial 2026','20','12 partidos')"
+              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
+              🌍 J1 · $20 (12 par.)
+            </button>
+            <button type="button" onclick="quickFillPool('J2','Mundial 2026','50','24 partidos')"
+              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
+              🌍 J2 · $50 (24 par.)
+            </button>
+            <button type="button" onclick="quickFillPool('J2','Mundial 2026','20','12 partidos')"
+              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
+              🌍 J2 · $20 (12 par.)
+            </button>
+            <button type="button" onclick="quickFillPool('J1','Mundial 2026','50','24 partidos','GOLEO')"
+              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-emerald-500/20 hover:border-emerald-500/30 border border-zinc-700 text-zinc-300 font-semibold col-span-2">
+              ⚽ J1 · Campeón de Goleo (24 par.)
+            </button>
+          </div>
+        </div>
+
         <form id="formPool" class="grid gap-2">
           <select id="poolMode" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
-            <option value="SENCILLA">Quiniela Sencilla</option>
+            <option value="SENCILLA">Quiniela Sencilla (L/E/V)</option>
             <option value="ACUMULADA">Quiniela Acumulada</option>
-            <option value="GOLEO">Campeón de Goleo</option>
+            <option value="GOLEO">⚽ Campeón de Goleo</option>
             <option value="CAMPEON_CAMPEONES">Campeón de Campeones</option>
           </select>
 
-          <input id="poolRound" type="number" min="1" placeholder="Jornada (obligatorio)" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
-          <input id="poolCompetition" placeholder="Competencia" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
-          <input id="poolSeason" placeholder="Temporada" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
-          <input id="poolDates" placeholder="Fechas (Ej. 06/07/08 Marzo)" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
+          <input id="poolRound" type="text" placeholder="Jornada (obligatorio, ej: 1)" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
+          <input id="poolCompetition" placeholder="Competencia (ej: Mundial 2026)" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
+          <input id="poolSeason" placeholder="Temporada / Notas (ej: 12 partidos)" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
+          <input id="poolDates" placeholder="Fechas (Ej. 12/13/14 Jun)" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
           <input id="poolPrice" type="number" min="1" step="1" placeholder="Precio" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
           <input id="poolCommission" type="number" min="0" step="0.5" placeholder="% comisión" class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"/>
 
           <button class="bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold py-3">
-            Crear
+            Crear jornada
           </button>
         </form>
 
@@ -668,6 +695,20 @@
       🔒 Esta jornada está cerrada. Los pronósticos son de solo lectura.
     </div>
 
+    <!-- Campeón de Goleo: input de goles totales -->
+    <div id="goalChampionSection" class="hidden mt-4 p-4 bg-zinc-900 border border-amber-500/30 rounded-2xl">
+      <div class="text-sm font-bold text-amber-400 mb-1">⚽ Campeón de Goleo</div>
+      <div class="text-xs text-zinc-400 mb-3">¿Cuántos goles crees que habrá en total en esta jornada?</div>
+      <div class="flex gap-2">
+        <input id="goalChampionInput" type="number" min="0" max="300" placeholder="Ej: 42"
+          class="flex-1 p-3 bg-zinc-950 border border-amber-500/30 rounded-xl text-center text-lg font-black text-amber-400" />
+        <button id="btnSaveGoalChampion" type="button"
+          class="px-4 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold text-sm text-white">
+          💾 Guardar
+        </button>
+      </div>
+    </div>
+
     <div id="pickMatches" class="mt-4 space-y-3"></div>
 
     <div class="grid gap-2 mt-4">
@@ -795,6 +836,8 @@
 <div id="standingsWinnerBox" class="mt-4"></div>
 
     <div id="standingsList" class="mt-4 space-y-2 max-h-96 overflow-y-auto pr-1"></div>
+    <!-- Goleo champion results (shown only for GOLEO pools) -->
+    <div id="goalChampionResults" class="hidden"></div>
   </div>
 </section>
 

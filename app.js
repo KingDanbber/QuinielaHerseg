@@ -1602,6 +1602,8 @@ async function loadEntryForPick(poolId, partId) {
 
   if (poolErr) return showAlert(poolErr.message, "error");
 
+  // Load Goleo pick if this is a Goleo pool
+  await loadGoalChampionPick();
   if (poolInfo && poolInfo.status === "closed") {
     $("pickEntryLabel").textContent =
       (entry.paid ? "Pagado ✅" : "Pendiente ⏳") + " • Jornada cerrada 🔒";
@@ -4351,6 +4353,8 @@ async function loadStandings() {
   if ($("standingsPodiumBox")) {
     $("standingsPodiumBox").innerHTML = renderStandingsPodium(rows);
   }
+  // Load Goleo standings if applicable
+  await loadGoalChampionStandings();
 
   // Stats de la jornada
   const { data: poolStats, error: statsErr } = await supabaseClient
@@ -5110,15 +5114,14 @@ $("formPool").addEventListener("submit", async (e) => {
 
   // ── Validación manual visible (no depende del tooltip nativo del browser) ──
   const roundRaw = $("poolRound").value.trim();
-  if (!roundRaw || isNaN(Number(roundRaw)) || Number(roundRaw) < 1) {
-    showAlert("⚠️ Ingresa el número de jornada (campo obligatorio).", "error");
+  if (!roundRaw) {
+    showAlert("⚠️ Ingresa el número o nombre de jornada (obligatorio).", "error");
     $("poolRound").focus();
-    // Scroll al alert para que se vea en móvil
     $("alert").scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
-
-  const round = Number(roundRaw);
+  // Accept numeric (17) or text (J1, Fase de Grupos) — store as-is
+  const round = isNaN(Number(roundRaw)) ? roundRaw : Number(roundRaw);
   const mode_code = $("poolMode").value;
   const carryover_enabled = (mode_code === "ACUMULADA" || mode_code === "GOLEO");
   const competition = $("poolCompetition").value.trim() || "Liga MX";
@@ -5240,6 +5243,7 @@ if ($("btnSavePicksNext")) $("btnSavePicksNext").addEventListener("click", saveP
 if ($("btnFastMode")) $("btnFastMode").addEventListener("click", toggleFastMode);
 $("btnClearPicks").addEventListener("click", clearPicksSelection);
 if ($("btnDeletePicks")) $("btnDeletePicks").addEventListener("click", clearParticipantPicks);
+if ($("btnSaveGoalChampion")) $("btnSaveGoalChampion").addEventListener("click", saveGoalChampionPick);
 
 $("btnRefreshPickStatus").addEventListener("click", loadPickStatusList);
 if ($("btnExportAllPicks")) $("btnExportAllPicks").addEventListener("click", exportAllPicksList);
@@ -5457,6 +5461,17 @@ async function loadHistoricalStandings() {
   });
 
   // Ordenar por total descendente
+  // Calculate max possible points: total matches with results across all valid pools
+  var _localMatchesByPool = {};
+  (matches || []).forEach(function(m) {
+    if (!_localMatchesByPool[m.pool_id]) _localMatchesByPool[m.pool_id] = [];
+    _localMatchesByPool[m.pool_id].push(m);
+  });
+  var maxPossiblePts = poolsWithResults.reduce(function(sum, pool) {
+    var poolMatches = _localMatchesByPool[pool.id] || [];
+    return sum + poolMatches.filter(function(m){ return matchResult[m.id]; }).length;
+  }, 0);
+
   var ranked = Object.values(totalByPart)
     .filter(function(p) { return p.jornadas > 0; })
     .sort(function(a, b) { return b.total - a.total || a.name.localeCompare(b.name); });
@@ -5471,7 +5486,7 @@ async function loadHistoricalStandings() {
 
   wrap.innerHTML = ranked.map(function(p, i) {
     var medal = i < 3 ? medals[i] : '<span class="text-zinc-500 font-bold text-sm">' + (i+1) + '</span>';
-    var pct = totalJornadas > 0 ? Math.round((p.total / (totalJornadas * 9)) * 100) : 0;
+    var pct = (totalJornadas > 0 && maxPossiblePts > 0) ? Math.round((p.total / maxPossiblePts) * 100) : 0;
     var barColor = i === 0 ? "bg-yellow-400" : i === 1 ? "bg-zinc-300" : i === 2 ? "bg-amber-600" : "bg-emerald-500";
     return [
       '<div class="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-800 rounded-xl">',
@@ -8421,6 +8436,186 @@ async function exportTop3Card() {
     printArea.classList.add("hidden");
   }
 }
+
+
+// ═══════════════════════════════════════════════════════
+// ACCESO RÁPIDO MUNDIAL — pre-llenar formulario
+// ═══════════════════════════════════════════════════════
+function quickFillPool(round, competition, price, season, mode) {
+  var roundInput = $("poolRound");
+  var compInput  = $("poolCompetition");
+  var seasInput  = $("poolSeason");
+  var priceInput = $("poolPrice");
+  var modeInput  = $("poolMode");
+  var commInput  = $("poolCommission");
+
+  if (roundInput)  roundInput.value  = round       || "";
+  if (compInput)   compInput.value   = competition || "Mundial 2026";
+  if (seasInput)   seasInput.value   = season      || "";
+  if (priceInput)  priceInput.value  = price       || "";
+  if (commInput)   commInput.value   = "15";
+  if (modeInput && mode) modeInput.value = mode;
+  else if (modeInput)    modeInput.value = "SENCILLA";
+
+  // Scroll to form
+  var form = $("formPool");
+  if (form) form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Fix poolRound validation to accept text (J1, J2, etc.) or number
+// The round field now accepts text for Mundial-style labeling
+
+// ═══════════════════════════════════════════════════════
+// CAMPEÓN DE GOLEO — Captura y cálculo
+// ═══════════════════════════════════════════════════════
+
+// Show goals champion input for current entry
+async function loadGoalChampionPick() {
+  var pool_id = currentPickPoolId || $("pickPool").value;
+  var entry_id = currentPickEntryId;
+  if (!pool_id || !entry_id) return;
+
+  // Check if pool is GOLEO mode
+  var poolRes = await supabaseClient.from("pools")
+    .select("id, mode_code, status").eq("id", pool_id).maybeSingle();
+  if (!poolRes.data || poolRes.data.mode_code !== "GOLEO") return;
+
+  var goalSection = $("goalChampionSection");
+  if (!goalSection) return;
+
+  goalSection.classList.remove("hidden");
+
+  // Load existing prediction
+  var { data: existing } = await supabaseClient.from("predictions_goals_total")
+    .select("predicted_goals").eq("entry_id", entry_id).maybeSingle();
+
+  var input = $("goalChampionInput");
+  if (input && existing) input.value = existing.predicted_goals;
+
+  var isClosed = poolRes.data.status !== "open";
+  if (input) input.disabled = isClosed;
+  var saveBtn = $("btnSaveGoalChampion");
+  if (saveBtn) saveBtn.disabled = isClosed;
+}
+
+async function saveGoalChampionPick() {
+  var entry_id = currentPickEntryId;
+  var pool_id  = currentPickPoolId || $("pickPool").value;
+  var input    = $("goalChampionInput");
+
+  if (!entry_id || !pool_id || !input) return;
+  var predicted = parseInt(input.value, 10);
+  if (isNaN(predicted) || predicted < 0)
+    return showAlert("Ingresa un número de goles válido.", "error");
+
+  var { error } = await supabaseClient.from("predictions_goals_total")
+    .upsert([{ entry_id: entry_id, pool_id: pool_id, predicted_goals: predicted }],
+      { onConflict: "entry_id" });
+
+  if (error) return showAlert(error.message, "error");
+  showAlert("Pronóstico de goles guardado ✅ (" + predicted + " goles)", "ok");
+}
+
+// ═══════════════════════════════════════════════════════
+// CAMPEÓN DE GOLEO — Tabla de resultados
+// ═══════════════════════════════════════════════════════
+async function loadGoalChampionStandings() {
+  var pool_id = $("standingsPool").value;
+  if (!pool_id) return;
+
+  var poolRes = await supabaseClient.from("pools")
+    .select("id, mode_code, name, round").eq("id", pool_id).maybeSingle();
+  if (!poolRes.data || poolRes.data.mode_code !== "GOLEO") return;
+
+  var goalWrap = $("goalChampionResults");
+  if (!goalWrap) return;
+  goalWrap.classList.remove("hidden");
+
+  // Actual total goals
+  var goalsRes = await supabaseClient.from("pool_goals_total")
+    .select("total_goals").eq("pool_id", pool_id).maybeSingle();
+  var actualGoals = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
+
+  // All predictions
+  var predsRes = await supabaseClient.from("predictions_goals_total")
+    .select("entry_id, pool_id, predicted_goals").eq("pool_id", pool_id);
+  var preds = predsRes.data || [];
+
+  // Entries with participants
+  var entRes = await supabaseClient.from("entries")
+    .select("id, participant_id, paid").eq("pool_id", pool_id);
+  var entMap = {};
+  (entRes.data || []).forEach(function(e){ entMap[e.id] = e; });
+
+  var partIds = [...new Set((entRes.data || []).map(function(e){ return e.participant_id; }))];
+  var partRes = await supabaseClient.from("participants")
+    .select("id, name, area").in("id", partIds);
+  var partMap = {};
+  (partRes.data || []).forEach(function(p){ partMap[p.id] = p; });
+
+  // Build ranking
+  var rows = preds.map(function(pred) {
+    var entry = entMap[pred.entry_id] || {};
+    var part  = partMap[entry.participant_id] || { name: "?", area: "" };
+    var diff  = actualGoals !== null ? Math.abs(pred.predicted_goals - actualGoals) : null;
+    var isWinner = diff !== null && diff <= 5;
+    var isExact  = diff === 0;
+    return {
+      name: part.name, area: part.area || "",
+      predicted: pred.predicted_goals,
+      diff: diff, isWinner: isWinner, isExact: isExact,
+      paid: !!entry.paid
+    };
+  }).filter(function(r){ return r.paid; }) // Only paid entries
+    .sort(function(a, b) {
+      if (a.diff === null && b.diff === null) return a.name.localeCompare(b.name);
+      if (a.diff === null) return 1;
+      if (b.diff === null) return -1;
+      return a.diff - b.diff;
+    });
+
+  var jornada = poolRes.data.round ? "Jornada " + poolRes.data.round : poolRes.data.name;
+
+  goalWrap.innerHTML = [
+    '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mt-4">',
+      '<div class="flex items-center justify-between mb-3">',
+        '<h3 class="font-semibold">⚽ Campeón de Goleo \u2014 ' + jornada + '</h3>',
+        actualGoals !== null
+          ? '<span class="text-sm font-black text-emerald-400">' + actualGoals + ' goles reales</span>'
+          : '<span class="text-xs text-zinc-400">Sin goles capturados aún</span>',
+      '</div>',
+      (actualGoals !== null
+        ? '<div class="text-xs text-zinc-400 mb-3">Ganador: pronóstico exacto o ±5 goles del total real</div>'
+        : '<div class="text-xs text-zinc-400 mb-3">Captura los resultados para ver el ganador</div>'),
+      rows.length
+        ? rows.map(function(r, i) {
+            var bg = r.isExact ? "bg-emerald-500/20 border-emerald-500/40"
+                   : r.isWinner ? "bg-sky-500/10 border-sky-500/20"
+                   : "bg-zinc-950 border-zinc-800";
+            var badge = r.isExact ? '<span class="text-xs text-emerald-400 font-bold">EXACTO ✅</span>'
+                      : r.isWinner ? '<span class="text-xs text-sky-400 font-bold">GANADOR ±' + r.diff + '</span>'
+                      : (r.diff !== null ? '<span class="text-xs text-zinc-500">±' + r.diff + '</span>' : '');
+            return [
+              '<div class="flex items-center justify-between p-3 border rounded-xl mb-2 ' + bg + '">',
+                '<div>',
+                  '<div class="font-semibold text-sm">' + (i+1) + '. ' + r.name + '</div>',
+                  '<div class="text-xs text-zinc-400">' + r.area + '</div>',
+                '</div>',
+                '<div class="text-right flex items-center gap-3">',
+                  '<div>',
+                    '<div class="text-lg font-black">' + r.predicted + '</div>',
+                    '<div class="text-xs text-zinc-400">goles pred.</div>',
+                  '</div>',
+                  badge,
+                '</div>',
+              '</div>'
+            ].join("");
+          }).join("")
+        : '<div class="text-sm text-zinc-400">Sin pronósticos registrados aún.</div>',
+    '</div>'
+  ].join("");
+}
+
 
 // =====================
 // Init
