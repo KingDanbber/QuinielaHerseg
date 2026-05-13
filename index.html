@@ -843,6 +843,20 @@
 
   </div>
 
+<!-- MUNDIAL 2026 TAB -->
+<section id="tab-mundial" class="app-tab hidden px-4 py-4 space-y-4">
+  <div class="flex items-center gap-3 mb-2">
+    <span class="text-3xl">🌍</span>
+    <div>
+      <h2 class="text-lg font-bold leading-tight">Mundial 2026</h2>
+      <p class="text-xs text-zinc-400">Tabla acumulada en tiempo real</p>
+    </div>
+  </div>
+  <div id="mundialStandingsWrap">
+    <div class="text-sm text-zinc-400 text-center p-6">Cargando...</div>
+  </div>
+</section>
+
 <div id="moreMenuSheet" class="hidden fixed inset-0 z-[60]">
   <div id="moreMenuBackdrop" class="absolute inset-0 bg-black/60"></div>
 
@@ -883,6 +897,16 @@
   <div class="text-xs text-zinc-400 mt-1">Tabla y ganador</div>
   <span id="moreBadgeStandings" class="hidden absolute top-3 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] leading-[18px] text-center font-bold">1</span>
 </button>
+
+  <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative col-span-2" data-tab="tab-mundial">
+    <div class="flex items-center gap-3">
+      <span class="text-3xl">🌍</span>
+      <div>
+        <div class="font-bold">Mundial 2026</div>
+        <div class="text-xs text-zinc-400 mt-0.5">Tabla en tiempo real · Liga de Goleo</div>
+      </div>
+    </div>
+  </button>
 </div>
   </div>
 </div>

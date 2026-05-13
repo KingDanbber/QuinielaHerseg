@@ -526,6 +526,11 @@ async function showAppTab(tabId) {
       }
     }
 
+    // MUNDIAL — siempre refresca (tiempo real)
+    if (tabId === "tab-mundial") {
+      await loadMundialStandings();
+    }
+
   } catch (err) {
     showAlert("Error cargando sección: " + (err?.message || err), "error");
   }
@@ -8614,6 +8619,199 @@ async function loadGoalChampionStandings() {
         : '<div class="text-sm text-zinc-400">Sin pronósticos registrados aún.</div>',
     '</div>'
   ].join("");
+}
+
+
+
+// ═══════════════════════════════════════════════════════
+// TABLA MUNDIAL 2026 — EN TIEMPO REAL
+// ═══════════════════════════════════════════════════════
+var _mundialRefreshTimer  = null;
+var _mundialCountdownTimer = null;
+var _mundialRefreshSecs   = 60;
+
+async function loadMundialStandings() {
+  var wrap = $("mundialStandingsWrap");
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="text-sm text-zinc-400 text-center p-6">Cargando...</div>';
+
+  // 1. Get all Mundial 2026 pools
+  var { data: pools, error: poolsErr } = await supabaseClient
+    .from("pools")
+    .select("id, round, name, status, competition, season, price, mode_code")
+    .ilike("competition", "%Mundial%")
+    .order("created_at", { ascending: true });
+
+  if (poolsErr) { wrap.innerHTML = '<div class="text-sm text-red-400 p-4">Error: ' + poolsErr.message + '</div>'; return; }
+  if (!pools || !pools.length) {
+    wrap.innerHTML = '<div class="text-sm text-zinc-400 text-center p-6">No hay jornadas de Mundial 2026 creadas aún.</div>';
+    return;
+  }
+
+  var poolIds = pools.map(function(p){ return p.id; });
+
+  // 2. Load all data in parallel
+  var [entRes, ptRes, matchRes, goalsRes, partRes] = await Promise.all([
+    supabaseClient.from("entries").select("id, participant_id, paid, pool_id").in("pool_id", poolIds),
+    supabaseClient.from("entry_points").select("entry_id, pool_id, participant_id, points, played_matches, captured_picks").in("pool_id", poolIds),
+    supabaseClient.from("matches").select("id, pool_id, home_goals, away_goals").in("pool_id", poolIds),
+    supabaseClient.from("pool_goals_total").select("pool_id, total_goals").in("pool_id", poolIds),
+    supabaseClient.from("participants").select("id, name, area").eq("is_active", true)
+  ]);
+
+  var entries    = entRes.data  || [];
+  var points     = ptRes.data   || [];
+  var matches    = matchRes.data || [];
+  var goalsData  = goalsRes.data || [];
+  var parts      = partRes.data  || [];
+
+  var partMap = {};
+  parts.forEach(function(p){ partMap[p.id] = p; });
+
+  var goalsMap = {};
+  goalsData.forEach(function(g){ goalsMap[g.pool_id] = g.total_goals; });
+
+  // Paid entries per pool
+  var paidByPool = {};
+  entries.forEach(function(e) {
+    if (!e.paid) return;
+    if (!paidByPool[e.pool_id]) paidByPool[e.pool_id] = new Set();
+    paidByPool[e.pool_id].add(e.id);
+  });
+
+  // Completed matches per pool
+  var completedByPool = {};
+  var totalByPool = {};
+  matches.forEach(function(m) {
+    if (!totalByPool[m.pool_id]) totalByPool[m.pool_id] = 0;
+    totalByPool[m.pool_id]++;
+    if (m.home_goals !== null && m.away_goals !== null) {
+      if (!completedByPool[m.pool_id]) completedByPool[m.pool_id] = 0;
+      completedByPool[m.pool_id]++;
+    }
+  });
+
+  // ── BUILD ACCUMULATED LEADERBOARD ──
+  var accumulatedPts = {};  // participantId → { name, area, totalPts, poolBreakdown[] }
+
+  points.forEach(function(r) {
+    var pool = pools.find(function(p){ return p.id === r.pool_id; });
+    if (!pool) return;
+    var paidSet = paidByPool[r.pool_id] || new Set();
+    if (!paidSet.has(r.entry_id)) return; // only paid
+
+    var pid = r.participant_id;
+    var part = partMap[pid] || {};
+    if (!accumulatedPts[pid]) {
+      accumulatedPts[pid] = { name: part.name || "?", area: part.area || "", totalPts: 0, pools: {} };
+    }
+    accumulatedPts[pid].totalPts += Number(r.points || 0);
+    accumulatedPts[pid].pools[pool.id] = {
+      pts: Number(r.points || 0),
+      label: pool.round ? "J" + pool.round : pool.name,
+      played: Number(r.played_matches || 0),
+      totalMatches: totalByPool[pool.id] || 0
+    };
+  });
+
+  var ranked = Object.values(accumulatedPts)
+    .sort(function(a, b){ return b.totalPts - a.totalPts || a.name.localeCompare(b.name); });
+
+  var medals = ["🥇","🥈","🥉"];
+
+  // ── RENDER ──
+  var html = [];
+
+  // Header with auto-refresh countdown
+  html.push('<div class="flex items-center justify-between mb-3">');
+  html.push('  <div>');
+  html.push('    <div class="text-xs text-zinc-500">Actualización en: <span id="mundialCountdown" class="text-emerald-400 font-bold">60s</span></div>');
+  html.push('  </div>');
+  html.push('  <button onclick="refreshMundialNow()" class="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold">🔄 Ahora</button>');
+  html.push('</div>');
+
+  // Pool status cards
+  html.push('<div class="grid gap-2 mb-4">');
+  pools.forEach(function(pool) {
+    var completed = completedByPool[pool.id] || 0;
+    var total     = totalByPool[pool.id]     || 0;
+    var pct       = total > 0 ? Math.round(completed / total * 100) : 0;
+    var barColor  = pct === 100 ? "bg-emerald-500" : pct > 50 ? "bg-amber-400" : "bg-zinc-600";
+    var statusDot = pool.status === "open" ? "🟢" : pool.status === "draft" ? "🔵" : "🔴";
+    var goles     = goalsMap[pool.id] || 0;
+    var label     = pool.round ? (isNaN(pool.round) ? pool.round : "Jornada " + pool.round) : pool.name;
+    var price     = pool.price ? "$" + pool.price : "";
+    html.push([
+      '<div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">',
+        '<div class="flex items-center justify-between mb-1.5">',
+          '<div class="font-semibold text-sm">' + statusDot + ' ' + label + ' <span class="text-xs text-zinc-400">' + price + '</span></div>',
+          '<div class="text-xs text-zinc-400">' + completed + '/' + total + ' partidos</div>',
+        '</div>',
+        '<div class="h-1.5 bg-zinc-800 rounded-full overflow-hidden">',
+          '<div class="h-full rounded-full transition-all ' + barColor + '" style="width:' + pct + '%"></div>',
+        '</div>',
+        goles ? '<div class="text-xs text-emerald-400 mt-1">⚽ ' + goles + ' goles</div>' : '',
+      '</div>'
+    ].join(""));
+  });
+  html.push('</div>');
+
+  // Accumulated standings
+  if (!ranked.length) {
+    html.push('<div class="text-sm text-zinc-400 text-center p-4 bg-zinc-900 border border-zinc-800 rounded-xl">Sin boletos pagados aún.</div>');
+  } else {
+    html.push('<div class="font-semibold text-sm mb-2">🏆 Tabla Acumulada — Mundial 2026</div>');
+    html.push('<div class="space-y-2">');
+    ranked.forEach(function(p, i) {
+      var medal = i < 3 ? medals[i] : '<span class="text-zinc-500 font-bold text-sm">' + (i+1) + '</span>';
+      var isTop = i === 0;
+      var bg    = isTop ? "bg-zinc-900 border-emerald-500/30" : "bg-zinc-950 border-zinc-800";
+      // Pool breakdown pills
+      var pills = Object.values(p.pools).map(function(pp) {
+        return '<span class="text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">' +
+          pp.label + ': <span class="font-bold text-emerald-400">' + pp.pts + '</span>' +
+        '</span>';
+      }).join(" ");
+
+      html.push([
+        '<div class="flex items-center gap-3 p-3 border rounded-xl ' + bg + '">',
+          '<div class="text-xl w-8 text-center flex-shrink-0">' + medal + '</div>',
+          '<div class="flex-1 min-w-0">',
+            '<div class="font-bold text-sm">' + p.name + '</div>',
+            '<div class="text-xs text-zinc-400 mt-0.5">' + (p.area || "Sin área") + '</div>',
+            '<div class="flex flex-wrap gap-1 mt-1">' + pills + '</div>',
+          '</div>',
+          '<div class="text-right flex-shrink-0">',
+            '<div class="text-xl font-black ' + (isTop ? "text-emerald-400" : "text-white") + '">' + p.totalPts + '</div>',
+            '<div class="text-xs text-zinc-400">pts</div>',
+          '</div>',
+        '</div>'
+      ].join(""));
+    });
+    html.push('</div>');
+  }
+
+  wrap.innerHTML = html.join("\n");
+  startMundialCountdown();
+}
+
+function startMundialCountdown() {
+  if (_mundialCountdownTimer) clearInterval(_mundialCountdownTimer);
+  _mundialRefreshSecs = 60;
+  _mundialCountdownTimer = setInterval(function() {
+    _mundialRefreshSecs--;
+    var el = $("mundialCountdown");
+    if (el) el.textContent = _mundialRefreshSecs + "s";
+    if (_mundialRefreshSecs <= 0) {
+      clearInterval(_mundialCountdownTimer);
+      loadMundialStandings();
+    }
+  }, 1000);
+}
+
+function refreshMundialNow() {
+  if (_mundialCountdownTimer) clearInterval(_mundialCountdownTimer);
+  loadMundialStandings();
 }
 
 
