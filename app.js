@@ -1987,20 +1987,35 @@ async function loadPickStatusList() {
     entryByParticipant.set(entry.participant_id, entry);
   });
 
-  // Picks existentes para esos boletos
+  // Picks existentes para esos boletos — filtrado en servidor (evita límite 1000 rows)
   const entryIds = (entries || []).map(function(e) { return e.id; });
+
+  // Also get match IDs for this pool to anchor the query (double filter = fastest + most accurate)
+  const { data: matchIds } = await supabaseClient
+    .from("matches")
+    .select("id")
+    .eq("pool_id", pool_id);
+  const matchIdList = (matchIds || []).map(function(m){ return m.id; });
 
   let picks = [];
   if (entryIds.length) {
-    const { data: picksData, error: picksErr } = await supabaseClient
-      .from("predictions_1x2")
-      .select("entry_id");
-
-    if (picksErr) return showAlert(picksErr.message, "error");
-
-    picks = (picksData || []).filter(function(p) {
-      return entryIds.indexOf(p.entry_id) !== -1;
-    });
+    // Paginate in batches of 500 to handle large pools (24+ matches × many participants)
+    const BATCH = 500;
+    let allPicks = [];
+    for (let offset = 0; ; offset += BATCH) {
+      let q = supabaseClient
+        .from("predictions_1x2")
+        .select("entry_id, match_id")
+        .in("entry_id", entryIds)
+        .range(offset, offset + BATCH - 1);
+      if (matchIdList.length) q = q.in("match_id", matchIdList);
+      const { data: batch, error: bErr } = await q;
+      if (bErr) return showAlert(bErr.message, "error");
+      if (!batch || !batch.length) break;
+      allPicks = allPicks.concat(batch);
+      if (batch.length < BATCH) break;
+    }
+    picks = allPicks;
   }
 
   const picksCountByEntry = new Map();
