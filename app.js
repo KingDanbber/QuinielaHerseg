@@ -6273,8 +6273,11 @@ async function printTemplateCopiesPage() {
   if (!matches || !matches.length)
     return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
-  // A4 → 794×1123px | 2 cols × 4 filas = 8 copias
-  var COPIES = 8;
+  // A4 → 794×1123px
+  // Auto-layout: ≤15 partidos → 2×4 = 8 copias | >15 partidos → 2×3 = 6 copias (más espacio)
+  var matchCount = matches.length;
+  var ROWS   = matchCount > 15 ? 3 : 4;
+  var COPIES = 2 * ROWS;
   var PAGE_W = 794;
   var PAGE_H = 1123;
 
@@ -6285,6 +6288,11 @@ async function printTemplateCopiesPage() {
   var settings   = (function(){ try { return JSON.parse(localStorage.getItem("qa_settings")||"{}"); } catch(e){return{};} })();
   var adminWa    = settings.adminWhatsapp || "8715118046";
   var picksDeadline = settings.picksDeadline || "Viernes 05:00 PM";
+
+  // Font sizes scale down slightly for more partidos
+  var nameFontSize  = matchCount > 20 ? "7px"   : "7.5px";
+  var rowMinHeight  = matchCount > 20 ? "15px"  : "16px";
+  var rowPadding    = matchCount > 20 ? "1.5px 0" : "2px 0";
 
   var printArea = $("printArea");
   printArea.classList.remove("hidden");
@@ -6297,9 +6305,9 @@ async function printTemplateCopiesPage() {
     "background:#fff",
     "display:grid",
     "grid-template-columns:1fr 1fr",
-    "grid-template-rows:repeat(4,1fr)",
-    "gap:4px",
-    "padding:6px",
+    "grid-template-rows:repeat(" + ROWS + ",1fr)",
+    "gap:5px",
+    "padding:7px",
     "box-sizing:border-box",
     "font-family:Arial,Helvetica,sans-serif",
     "color:#111"
@@ -6310,7 +6318,7 @@ async function printTemplateCopiesPage() {
     copy.style.cssText = [
       "border:1.2px solid #888",
       "border-radius:6px",
-      "padding:5px 7px 5px 7px",
+      "padding:6px 8px 5px 8px",
       "background:#fff",
       "box-sizing:border-box",
       "display:flex",
@@ -6363,7 +6371,7 @@ async function printTemplateCopiesPage() {
 
     // ── MATCHES — sin logos, nombres completos ──
     var matchWrap = document.createElement("div");
-    matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;justify-content:space-around;";
+    matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:1px;padding:1px 0;";
 
     matches.forEach(function(m) {
       // Row layout: [□ NOMBRE LOCAL] [□] [NOMBRE VISITA □]
@@ -6373,7 +6381,8 @@ async function printTemplateCopiesPage() {
         "grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr)",
         "gap:3px",
         "align-items:center",
-        "min-height:13px"
+        "min-height:" + rowMinHeight,
+        "padding:" + rowPadding
       ].join(";");
 
       var BOX  = '<div style="width:12px;height:12px;border:1.2px solid #333;border-radius:2px;background:#fff;flex-shrink:0;box-sizing:border-box;display:inline-block;vertical-align:middle;"></div>';
@@ -6383,13 +6392,13 @@ async function printTemplateCopiesPage() {
         // Local: checkbox left, then name
         '<div style="display:flex;align-items:center;gap:2px;min-width:0;">' +
           BOX +
-          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.3;white-space:nowrap;">' + m.home_team + '</span>' +
+          '<span style="font-size:' + nameFontSize + ';font-weight:700;color:#111;line-height:1.3;white-space:nowrap;">' + m.home_team + '</span>' +
         '</div>' +
         // Empate checkbox centered
         EBOX +
         // Visita: name right-aligned, then checkbox
         '<div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;min-width:0;">' +
-          '<span style="font-size:7.5px;font-weight:700;color:#111;line-height:1.3;white-space:nowrap;text-align:right;">' + m.away_team + '</span>' +
+          '<span style="font-size:' + nameFontSize + ';font-weight:700;color:#111;line-height:1.3;white-space:nowrap;text-align:right;">' + m.away_team + '</span>' +
           BOX +
         '</div>';
 
@@ -6443,7 +6452,7 @@ async function printTemplateCopiesPage() {
     var safeName = (pool && pool.name ? pool.name : "Plantilla")
       .replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
     pdf.save(safeName + "-copias-imprimir.pdf");
-    showAlert("PDF generado \u2014 8 copias en A4 \u2705", "ok");
+    showAlert("PDF generado \u2014 " + COPIES + " copias en A4 \u2705", "ok");
   } catch(err) {
     showAlert("Error: " + (err && err.message ? err.message : String(err)), "error");
   } finally {
