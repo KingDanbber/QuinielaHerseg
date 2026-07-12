@@ -106,7 +106,7 @@ const TEAM_LOGOS = {
   "ATLAS": "./assets/logos/atlas.png",
   "JUÁREZ": "./assets/logos/juarez.png",
   "TIJUANA": "./assets/logos/tijuana.png",
-  "SAN LUIS": "./assets/logos/san-luis.png"
+  "SAN LUIS": "./assets/logos/san-luis.png", "ATLANTE": "./assets/logos/atlante.png"
 };
 
 function normalizeTeamName(name) {
