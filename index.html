@@ -532,7 +532,7 @@
         <div class="mt-4">
   <div class="flex items-center justify-between gap-2 mb-2">
     <div class="text-zinc-400 text-sm">Boletos registrados</div>
-    <button id="btnRefreshEntriesList" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" type="button" title="Actualizar">
+    <button id="btnRefreshEntriesList" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" type="button" title="Actualizar">
       🔄
     </button>
   </div>
@@ -616,25 +616,25 @@
     </div>
 
 <div class="mt-4">
-  <div class="flex items-center justify-between gap-3 mb-2">
+  <div class="pick-status-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
     <div class="text-sm font-semibold">Estado de captura</div>
 
-    <div class="flex items-center gap-2">
-      <button id="btnPickLegend" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
+    <div class="pick-status-toolbar flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
+      <button id="btnPickLegend" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
   💬
 </button>
 
-<button id="btnRefreshPickStatus" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
+<button id="btnRefreshPickStatus" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
   🔄
 </button>
 
-<button onclick="sendPicksReminder()" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Recordatorio a pendientes">
+<button onclick="sendPicksReminder()" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Recordatorio a pendientes">
   ⏰
 </button>
-<button id="btnExportAllPicks" type="button" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Exportar lista de picks por WhatsApp">
+<button id="btnExportAllPicks" type="button" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Exportar lista de picks por WhatsApp">
   📋
 </button>
-<button onclick="showPicksCompactView()" type="button" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Vista compacta de todos los picks">
+<button onclick="showPicksCompactView()" type="button" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Vista compacta de todos los picks">
   📊
 </button>
     </div>
@@ -1020,7 +1020,7 @@ function showLocalNotification(title, body) {
 window.requestPushPermission = requestPushPermission;
 window.showLocalNotification = showLocalNotification;
 </script>
-<script src="./app.js?v=780"></script>
+<script src="./app.js?v=782"></script>
 
   <!--script src="./app.js"></script-->
 </body>

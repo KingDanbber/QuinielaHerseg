@@ -276,6 +276,15 @@ function initBottomNav() {
   });
 }
 
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function setBusy(btn, busy, textBusy="Procesando…") {
   if (!btn) return;
   if (!btn.dataset.text) btn.dataset.text = btn.textContent;
@@ -545,143 +554,193 @@ window.scrollTo({
 
 // =================
 // Actualizar Badges
-async function updateNavBadges() {
-  try {
-    // La insignia siempre representa la jornada ACTIVA más reciente.
-    const { data: activePools, error: poolErr } = await supabaseClient
-      .from("pools")
-      .select("id, name, status, created_at")
-      .eq("status", "open")
-      .order("created_at", { ascending: false })
-      .limit(2);
+let _navBadgesCache = null;
+let _navBadgesCacheExpiresAt = 0;
+let _navBadgesInFlight = null;
+const NAV_BADGES_TTL_MS = 15000;
 
-    if (poolErr) throw poolErr;
+function applyNavBadgeState(state) {
+  const safe = state || {
+    picksPendingCount: 0,
+    moreCount: 0,
+    paymentsPendingCount: 0,
+    resultsPendingCount: 0,
+    standingsReadyCount: 0
+  };
 
-    const activePool = (activePools || [])[0] || null;
+  setBadge("navBadgePicks", safe.picksPendingCount || 0);
+  setBadge("navBadgeMore", safe.moreCount || 0);
+  setBadge("moreBadgePayments", safe.paymentsPendingCount || 0);
+  setBadge("moreBadgeResults", safe.resultsPendingCount || 0);
+  setBadge("moreBadgeStandings", safe.standingsReadyCount || 0);
+}
 
-    // Ayuda a detectar datos inconsistentes: debería existir máximo una jornada abierta.
-    if ((activePools || []).length > 1) {
-      console.warn("Hay más de una jornada abierta. El badge usará:", activePool?.name);
-    }
+function clearNavBadgesCache() {
+  _navBadgesCache = null;
+  _navBadgesCacheExpiresAt = 0;
+}
 
-    if (!activePool?.id) {
-      setBadge("navBadgePicks", 0);
-      setBadge("navBadgeMore", 0);
-      setBadge("moreBadgePayments", 0);
-      setBadge("moreBadgeResults", 0);
-      setBadge("moreBadgeStandings", 0);
-      return;
-    }
+async function updateNavBadges(options = {}) {
+  const force = options === true || options.force === true;
+  const now = Date.now();
 
-    const poolId = activePool.id;
+  if (!force && _navBadgesCache && now < _navBadgesCacheExpiresAt) {
+    applyNavBadgeState(_navBadgesCache);
+    return _navBadgesCache;
+  }
 
-    // Boletos y partidos de la jornada activa.
-    const [entriesRes, matchesRes] = await Promise.all([
-      supabaseClient
-        .from("entries")
-        .select("id, participant_id, paid")
-        .eq("pool_id", poolId),
-      supabaseClient
-        .from("matches")
-        .select("id, home_goals, away_goals")
-        .eq("pool_id", poolId)
-    ]);
+  if (_navBadgesInFlight) {
+    return _navBadgesInFlight;
+  }
 
-    if (entriesRes.error) throw entriesRes.error;
-    if (matchesRes.error) throw matchesRes.error;
+  _navBadgesInFlight = (async function() {
+    try {
+      // La insignia siempre representa la jornada ACTIVA más reciente.
+      const { data: activePools, error: poolErr } = await supabaseClient
+        .from("pools")
+        .select("id, name, status, created_at")
+        .eq("status", "open")
+        .order("created_at", { ascending: false })
+        .limit(2);
 
-    const entries = entriesRes.data || [];
-    const matches = matchesRes.data || [];
-    const entryIds = entries.map(function(e) { return e.id; });
-    const validMatchIds = matches.map(function(m) { return m.id; });
-    const validMatchSet = new Set(validMatchIds);
-    const totalMatches = validMatchIds.length;
+      if (poolErr) throw poolErr;
 
-    // IMPORTANTE:
-    // Antes se descargaban TODAS las filas de predictions_1x2 y luego se filtraban
-    // en JavaScript. Supabase/PostgREST suele limitar la respuesta a 1000 filas,
-    // por lo que los picks de la jornada activa podían no llegar y el badge marcaba
-    // todos los boletos como pendientes. Ahora filtramos en el servidor y paginamos.
-    const picksByEntry = new Map();
+      const activePool = (activePools || [])[0] || null;
 
-    if (entryIds.length && validMatchIds.length) {
-      const ENTRY_CHUNK = 80;
-      const PAGE_SIZE = 500;
+      if ((activePools || []).length > 1) {
+        console.warn("Hay más de una jornada abierta. El badge usará:", activePool?.name);
+      }
 
-      for (let start = 0; start < entryIds.length; start += ENTRY_CHUNK) {
-        const entryChunk = entryIds.slice(start, start + ENTRY_CHUNK);
+      if (!activePool?.id) {
+        const empty = {
+          picksPendingCount: 0,
+          moreCount: 0,
+          paymentsPendingCount: 0,
+          resultsPendingCount: 0,
+          standingsReadyCount: 0
+        };
+        _navBadgesCache = empty;
+        _navBadgesCacheExpiresAt = Date.now() + NAV_BADGES_TTL_MS;
+        applyNavBadgeState(empty);
+        return empty;
+      }
 
-        for (let offset = 0; ; offset += PAGE_SIZE) {
-          const { data: page, error: picksErr } = await supabaseClient
-            .from("predictions_1x2")
-            .select("entry_id, match_id")
-            .in("entry_id", entryChunk)
-            .in("match_id", validMatchIds)
-            .order("entry_id", { ascending: true })
-            .order("match_id", { ascending: true })
-            .range(offset, offset + PAGE_SIZE - 1);
+      const poolId = activePool.id;
 
-          if (picksErr) throw picksErr;
-          if (!page || !page.length) break;
+      const [entriesRes, matchesRes] = await Promise.all([
+        supabaseClient
+          .from("entries")
+          .select("id, participant_id, paid")
+          .eq("pool_id", poolId),
+        supabaseClient
+          .from("matches")
+          .select("id, home_goals, away_goals")
+          .eq("pool_id", poolId)
+      ]);
 
-          page.forEach(function(pick) {
-            // Contar partidos únicos y únicamente los que pertenecen a esta jornada.
-            if (!validMatchSet.has(pick.match_id)) return;
-            if (!picksByEntry.has(pick.entry_id)) {
-              picksByEntry.set(pick.entry_id, new Set());
-            }
-            picksByEntry.get(pick.entry_id).add(pick.match_id);
-          });
+      if (entriesRes.error) throw entriesRes.error;
+      if (matchesRes.error) throw matchesRes.error;
 
-          if (page.length < PAGE_SIZE) break;
+      const entries = entriesRes.data || [];
+      const matches = matchesRes.data || [];
+      const entryIds = entries.map(function(e) { return e.id; });
+      const validMatchIds = matches.map(function(m) { return m.id; });
+      const validMatchSet = new Set(validMatchIds);
+      const totalMatches = validMatchIds.length;
+      const picksByEntry = new Map();
+
+      if (entryIds.length && validMatchIds.length) {
+        const ENTRY_CHUNK = 80;
+        const PAGE_SIZE = 500;
+
+        for (let start = 0; start < entryIds.length; start += ENTRY_CHUNK) {
+          const entryChunk = entryIds.slice(start, start + ENTRY_CHUNK);
+
+          for (let offset = 0; ; offset += PAGE_SIZE) {
+            const { data: page, error: picksErr } = await supabaseClient
+              .from("predictions_1x2")
+              .select("entry_id, match_id")
+              .in("entry_id", entryChunk)
+              .in("match_id", validMatchIds)
+              .order("entry_id", { ascending: true })
+              .order("match_id", { ascending: true })
+              .range(offset, offset + PAGE_SIZE - 1);
+
+            if (picksErr) throw picksErr;
+            if (!page || !page.length) break;
+
+            page.forEach(function(pick) {
+              if (!validMatchSet.has(pick.match_id)) return;
+              if (!picksByEntry.has(pick.entry_id)) {
+                picksByEntry.set(pick.entry_id, new Set());
+              }
+              picksByEntry.get(pick.entry_id).add(pick.match_id);
+            });
+
+            if (page.length < PAGE_SIZE) break;
+          }
         }
       }
+
+      const picksPendingCount = totalMatches > 0
+        ? entries.filter(function(entry) {
+            const completedMatches = picksByEntry.get(entry.id)?.size || 0;
+            return completedMatches < totalMatches;
+          }).length
+        : 0;
+
+      const paymentsPendingCount = entries.filter(function(entry) {
+        return entry.paid !== true;
+      }).length;
+
+      const resultsPendingCount = matches.filter(function(match) {
+        return match.home_goals === null || match.away_goals === null;
+      }).length;
+
+      const standingsReadyCount =
+        totalMatches > 0 && resultsPendingCount === 0 ? 1 : 0;
+
+      const moreCount =
+        paymentsPendingCount + resultsPendingCount + standingsReadyCount;
+
+      const state = {
+        picksPendingCount,
+        moreCount,
+        paymentsPendingCount,
+        resultsPendingCount,
+        standingsReadyCount
+      };
+
+      _navBadgesCache = state;
+      _navBadgesCacheExpiresAt = Date.now() + NAV_BADGES_TTL_MS;
+      applyNavBadgeState(state);
+
+      console.info("Badge Picks actualizado", {
+        pool: activePool.name,
+        boletos: entries.length,
+        partidos: totalMatches,
+        pendientes: picksPendingCount,
+        cache_ms: NAV_BADGES_TTL_MS
+      });
+
+      return state;
+    } catch (err) {
+      console.warn("updateNavBadges:", err?.message || err);
+      const empty = {
+        picksPendingCount: 0,
+        moreCount: 0,
+        paymentsPendingCount: 0,
+        resultsPendingCount: 0,
+        standingsReadyCount: 0
+      };
+      applyNavBadgeState(empty);
+      return empty;
+    } finally {
+      _navBadgesInFlight = null;
     }
+  })();
 
-    // Número de BOLETOS incompletos, no número de partidos faltantes.
-    const picksPendingCount = totalMatches > 0
-      ? entries.filter(function(entry) {
-          const completedMatches = picksByEntry.get(entry.id)?.size || 0;
-          return completedMatches < totalMatches;
-        }).length
-      : 0;
-
-    const paymentsPendingCount = entries.filter(function(entry) {
-      return entry.paid !== true;
-    }).length;
-
-    const resultsPendingCount = matches.filter(function(match) {
-      return match.home_goals === null || match.away_goals === null;
-    }).length;
-
-    const standingsReadyCount =
-      totalMatches > 0 && resultsPendingCount === 0 ? 1 : 0;
-
-    const moreCount =
-      paymentsPendingCount + resultsPendingCount + standingsReadyCount;
-
-    setBadge("navBadgePicks", picksPendingCount);
-    setBadge("navBadgeMore", moreCount);
-    setBadge("moreBadgePayments", paymentsPendingCount);
-    setBadge("moreBadgeResults", resultsPendingCount);
-    setBadge("moreBadgeStandings", standingsReadyCount);
-
-    console.info("Badge Picks actualizado", {
-      pool: activePool.name,
-      boletos: entries.length,
-      partidos: totalMatches,
-      pendientes: picksPendingCount
-    });
-  } catch (err) {
-    console.warn("updateNavBadges:", err?.message || err);
-
-    // No mostrar un número falso cuando hubo error de red, RLS o consulta.
-    setBadge("navBadgePicks", 0);
-    setBadge("navBadgeMore", 0);
-    setBadge("moreBadgePayments", 0);
-    setBadge("moreBadgeResults", 0);
-    setBadge("moreBadgeStandings", 0);
-  }
+  return _navBadgesInFlight;
 }
 
 // ===============
@@ -801,14 +860,23 @@ const whatsappBadge = hasWhatsapp
   ? '<span class="text-sky-300 text-xs ml-1">📱</span>'
   : '<span class="text-amber-300 text-xs ml-1">⚠️</span>';
     const area = p.area ? p.area : "Sin área";
+    const safeName = escapeHTML(p.name || "—");
+    const safeArea = escapeHTML(area || "Sin área");
+    const safeWhatsapp = escapeHTML(whatsapp || "—");
+    const dataName = escapeHTML(String(p.name || "").toLowerCase());
+    const dataArea = escapeHTML(String(area || "").toLowerCase());
+    const dataWhatsapp = escapeHTML(String(whatsapp || "").toLowerCase());
+    const safeRawName = escapeHTML(p.name || "");
+    const safeRawArea = escapeHTML(p.area || "");
+    const safeRawWhatsapp = escapeHTML(p.whatsapp || "");
 
     return `
   <div
   class="participant-card p-3 border rounded-xl ${cardClass}"
   data-status="${statusKey}"
-  data-name="${String(p.name || "").toLowerCase()}"
-  data-area="${String(area || "").toLowerCase()}"
-  data-whatsapp="${String(whatsapp || "").toLowerCase()}"
+  data-name="${dataName}"
+  data-area="${dataArea}"
+  data-whatsapp="${dataWhatsapp}"
   data-has-whatsapp="${p.whatsapp ? "1" : "0"}">
 
     <!-- Fila superior: checkbox + datos -->
@@ -819,15 +887,15 @@ const whatsappBadge = hasWhatsapp
       <div class="min-w-0 flex-1">
         <!-- Nombre + badges -->
         <div class="flex items-center gap-1 flex-wrap">
-          <span class="font-bold text-sm text-white leading-tight">${p.name || "—"}</span>
+          <span class="font-bold text-sm text-white leading-tight">${safeName}</span>
           ${whatsappBadge}
           <span data-picks-badge="${p.id}" class="text-xs" title="Estado de picks"></span>
           <span class="text-xs ${isActive ? "text-emerald-400" : "text-zinc-500"}">${statusEmoji}</span>
         </div>
         <!-- Área -->
-        <div class="text-xs text-zinc-400 mt-0.5">${area}</div>
+        <div class="text-xs text-zinc-400 mt-0.5">${safeArea}</div>
         <!-- WhatsApp -->
-        ${whatsapp !== "—" ? `<div class="text-xs text-zinc-500">${whatsapp}</div>` : ""}
+        ${whatsapp !== "—" ? `<div class="text-xs text-zinc-500">${safeWhatsapp}</div>` : ""}
       </div>
     </div>
 
@@ -835,30 +903,30 @@ const whatsappBadge = hasWhatsapp
     <div class="flex items-center gap-1 mt-2 pt-2 border-t border-zinc-800">
       <button type="button"
         class="participant-wa-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
-        onclick="openWhatsApp('${p.whatsapp || ""}')"
+        onclick="openWhatsApp('${safeRawWhatsapp}')"
         title="Abrir WhatsApp">💬</button>
       <button type="button"
         class="participant-edit-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         data-id="${p.id}"
-        data-name="${p.name || ""}"
-        data-area="${p.area || ""}"
-        data-whatsapp="${p.whatsapp || ""}"
+        data-name="${safeRawName}"
+        data-area="${safeRawArea}"
+        data-whatsapp="${safeRawWhatsapp}"
         title="Editar datos">✏️</button>
       <button type="button"
         class="participant-history-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         data-id="${p.id}"
-        data-name="${p.name || ""}"
+        data-name="${safeRawName}"
         title="Historial picks">📋</button>
       <button type="button"
         class="participant-entry-hist-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         data-id="${p.id}"
-        data-name="${p.name || ""}"
+        data-name="${safeRawName}"
         title="Historial boletos">🎫</button>
       <button type="button"
         class="participant-toggle-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
         data-id="${p.id}"
         data-active="${isActive ? "1" : "0"}"
-        data-name="${p.name || ""}"
+        data-name="${safeRawName}"
         title="${isActive ? "Archivar" : "Restaurar"}">${isActive ? "📦" : "♻️"}</button>
     </div>
   </div>
@@ -1442,8 +1510,9 @@ async function fillEntryParticipantsSelect() {
 
   const sel = $("entryParticipant");
   sel.innerHTML = (data || []).map(p => {
-    const area = p.area ? ` • ${p.area}` : "";
-    return `<option value="${p.id}">${p.name}${area}</option>`;
+    const safeName = escapeHTML(p.name || "—");
+    const safeArea = p.area ? ` • ${escapeHTML(p.area)}` : "";
+    return `<option value="${p.id}">${safeName}${safeArea}</option>`;
   }).join("");
 }
 
@@ -1505,8 +1574,9 @@ async function fillPickParticipantsSelect() {
 
     const sel = $("pickParticipant");
     sel.innerHTML = (data || []).map(function(p) {
-      const area = p.area ? " • " + p.area : "";
-      return `<option value="${p.id}">${p.name}${area}</option>`;
+      const safeName = escapeHTML(p.name || "—");
+      const safeArea = p.area ? " • " + escapeHTML(p.area) : "";
+      return `<option value="${p.id}">${safeName}${safeArea}</option>`;
     }).join("");
     return;
   }
@@ -1523,8 +1593,9 @@ async function fillPickParticipantsSelect() {
 
   const sel = $("pickParticipant");
   sel.innerHTML = (data || []).map(function(p) {
-    const area = p.area ? " • " + p.area : "";
-    return `<option value="${p.id}">${p.name}${area}</option>`;
+    const safeName = escapeHTML(p.name || "—");
+    const safeArea = p.area ? " • " + escapeHTML(p.area) : "";
+    return `<option value="${p.id}">${safeName}${safeArea}</option>`;
   }).join("");
 }
 
@@ -1727,7 +1798,8 @@ async function markEntryPaid(entryId) {
   await loadEntriesAndStats();
   await loadDashboardSummary();
   await loadPickStatusList();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 async function markEntryPending(entryId) {
@@ -1779,7 +1851,8 @@ async function markEntryPending(entryId) {
   await loadEntriesAndStats();
   await loadDashboardSummary();
   await loadPickStatusList();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 // Confirm modal premium
@@ -1941,7 +2014,8 @@ async function savePicks() {
 
   showAlert("Pronósticos guardados ✅", "ok");
   await loadPickStatusList();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 // Limpiar Selección de Pronosticos
@@ -2064,6 +2138,10 @@ const rowsHtml = (participants || []).map(function(participant) {
   const entry = entryByParticipant.get(participant.id);
   const area = participant.area ? participant.area : "Sin área";
   const pEntries = (entries || []).filter(function(e) { return e.participant_id === participant.id; });
+  const safeParticipantName = escapeHTML(participant.name || "—");
+  const safeArea = escapeHTML(area || "Sin área");
+  const dataName = escapeHTML(String(participant.name || "").toLowerCase());
+  const dataArea = escapeHTML(String(area || "").toLowerCase());
 
   let statusEmoji = "🚫";
   let statusTitle = "Sin boleto";
@@ -2179,13 +2257,13 @@ const rowsHtml = (participants || []).map(function(participant) {
     <div
   class="pick-status-card p-3 border rounded-xl ${cardClass} ${hiddenByFilter}"
   data-status="${statusKey}"
-  data-name="${String(participant.name || "").toLowerCase()}"
-  data-area="${String(area || "").toLowerCase()}">
+  data-name="${dataName}"
+  data-area="${dataArea}">
 
       <div class="flex items-center justify-between gap-2 mb-${isMulti ? "2" : "0"}">
         <div class="min-w-0 flex-1">
-          <div class="font-semibold text-sm leading-tight truncate">${participant.name}</div>
-          <div class="text-xs text-zinc-400 mt-1 truncate">${area}</div>
+          <div class="font-semibold text-sm leading-tight truncate">${safeParticipantName}</div>
+          <div class="text-xs text-zinc-400 mt-1 truncate">${safeArea}</div>
           ${progressHtml}
         </div>
         <div class="w-10 h-10 rounded-xl border flex items-center justify-center text-lg shrink-0 ${iconWrapClass}"
@@ -2640,7 +2718,8 @@ async function closeActivePool() {
   await fillPickPoolsSelect();
   await fillStandingsPoolsSelect();
   await fillResultsPoolsSelect();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 // Función Reabrir Quiniela
@@ -2685,7 +2764,8 @@ async function openLatestClosedPool() {
   await fillPickPoolsSelect();
   await fillStandingsPoolsSelect();
   await fillResultsPoolsSelect();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 // Agregar Boleto
@@ -2740,7 +2820,8 @@ async function addEntry() {
 
   await loadPickStatusList();
   await loadDashboardSummary();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 //Lista Boletos Pagados
@@ -3202,6 +3283,9 @@ async function deleteCurrentTemplate() {
         No hay partidos guardados para esta jornada todavía.
       </div>
     `;
+
+    clearNavBadgesCache();
+    await updateNavBadges({ force: true });
 
     setTimeout(async () => {
       try {
@@ -4458,14 +4542,15 @@ async function loadStandings() {
   $("standingsList").innerHTML = rows.length
     ? rows.map(function(r, index) {
         const pos = index + 1;
-        const area = r.area ? " • " + r.area : "";
+        const safeName = escapeHTML(r.name || "—");
+        const safeArea = r.area ? " • " + escapeHTML(r.area) : "";
 
         return `
           <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
             <div class="min-w-0 flex-1">
-              <div class="font-semibold">${pos}. ${r.name}</div>
+              <div class="font-semibold">${pos}. ${safeName}</div>
               <div class="text-xs text-zinc-400 truncate">
-                ${area} • Picks: ${r.captured_picks} • Jugados: ${r.played_matches}
+                ${safeArea} • Picks: ${Number(r.captured_picks || 0)} • Jugados: ${Number(r.played_matches || 0)}
               </div>
             </div>
             <div class="shrink-0 text-right">
@@ -6730,7 +6815,8 @@ async function clearParticipantPicks() {
   showAlert("Picks eliminados. El participante puede volver a enviarlos. ✅", "ok");
   clearPicksSelection();
   await loadPickStatusList();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 // ═══════════════════════════════════════════════════
@@ -7152,7 +7238,8 @@ async function saveOneResult(matchId) {
 
   updateResultsGoalsSummary();
   showAlert("Resultado guardado ✅", "ok");
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 
@@ -7199,7 +7286,8 @@ async function addEntryAndPay() {
   await fillPickParticipantsSelect();
   await loadPickStatusList();
   await loadDashboardSummary();
-  await updateNavBadges();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 // ═══════════════════════════════════════════════
