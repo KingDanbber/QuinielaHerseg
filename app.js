@@ -547,23 +547,21 @@ window.scrollTo({
 // Actualizar Badges
 async function updateNavBadges() {
   try {
-    // 1) Buscar jornada activa
-    const { data: activePool, error: poolErr } = await supabaseClient
+    // La insignia siempre representa la jornada ACTIVA más reciente.
+    const { data: activePools, error: poolErr } = await supabaseClient
       .from("pools")
-      .select("id, name, status")
+      .select("id, name, status, created_at")
       .eq("status", "open")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(2);
 
-    if (poolErr) {
-      console.warn("Badges pools:", poolErr.message);
-      setBadge("navBadgePicks", 0);
-      setBadge("navBadgeMore", 0);
-      setBadge("moreBadgePayments", 0);
-      setBadge("moreBadgeResults", 0);
-      setBadge("moreBadgeStandings", 0);
-      return;
+    if (poolErr) throw poolErr;
+
+    const activePool = (activePools || [])[0] || null;
+
+    // Ayuda a detectar datos inconsistentes: debería existir máximo una jornada abierta.
+    if ((activePools || []).length > 1) {
+      console.warn("Hay más de una jornada abierta. El badge usará:", activePool?.name);
     }
 
     if (!activePool?.id) {
@@ -577,93 +575,90 @@ async function updateNavBadges() {
 
     const poolId = activePool.id;
 
-    // 2) Participantes activos
-    const { data: participants, error: pErr } = await supabaseClient
-      .from("participants")
-      .select("id")
-      .eq("is_active", true);
+    // Boletos y partidos de la jornada activa.
+    const [entriesRes, matchesRes] = await Promise.all([
+      supabaseClient
+        .from("entries")
+        .select("id, participant_id, paid")
+        .eq("pool_id", poolId),
+      supabaseClient
+        .from("matches")
+        .select("id, home_goals, away_goals")
+        .eq("pool_id", poolId)
+    ]);
 
-    if (pErr) {
-      console.warn("Badges participants:", pErr.message);
-      return;
-    }
+    if (entriesRes.error) throw entriesRes.error;
+    if (matchesRes.error) throw matchesRes.error;
 
-    // 3) Entries de la jornada activa
-    const { data: entries, error: eErr } = await supabaseClient
-      .from("entries")
-      .select("id, participant_id, paid")
-      .eq("pool_id", poolId);
+    const entries = entriesRes.data || [];
+    const matches = matchesRes.data || [];
+    const entryIds = entries.map(function(e) { return e.id; });
+    const validMatchIds = matches.map(function(m) { return m.id; });
+    const validMatchSet = new Set(validMatchIds);
+    const totalMatches = validMatchIds.length;
 
-    if (eErr) {
-      console.warn("Badges entries:", eErr.message);
-      return;
-    }
+    // IMPORTANTE:
+    // Antes se descargaban TODAS las filas de predictions_1x2 y luego se filtraban
+    // en JavaScript. Supabase/PostgREST suele limitar la respuesta a 1000 filas,
+    // por lo que los picks de la jornada activa podían no llegar y el badge marcaba
+    // todos los boletos como pendientes. Ahora filtramos en el servidor y paginamos.
+    const picksByEntry = new Map();
 
-    // 4) Matches de la jornada activa
-    const { data: matches, error: mErr } = await supabaseClient
-      .from("matches")
-      .select("id, home_goals, away_goals")
-      .eq("pool_id", poolId);
+    if (entryIds.length && validMatchIds.length) {
+      const ENTRY_CHUNK = 80;
+      const PAGE_SIZE = 500;
 
-    if (mErr) {
-      console.warn("Badges matches:", mErr.message);
-      return;
-    }
+      for (let start = 0; start < entryIds.length; start += ENTRY_CHUNK) {
+        const entryChunk = entryIds.slice(start, start + ENTRY_CHUNK);
 
-    const totalMatches = (matches || []).length;
+        for (let offset = 0; ; offset += PAGE_SIZE) {
+          const { data: page, error: picksErr } = await supabaseClient
+            .from("predictions_1x2")
+            .select("entry_id, match_id")
+            .in("entry_id", entryChunk)
+            .in("match_id", validMatchIds)
+            .order("entry_id", { ascending: true })
+            .order("match_id", { ascending: true })
+            .range(offset, offset + PAGE_SIZE - 1);
 
-    // 5) Picks capturados
-    const entryIds = (entries || []).map(function(e) { return e.id; });
+          if (picksErr) throw picksErr;
+          if (!page || !page.length) break;
 
-    let picks = [];
-    if (entryIds.length) {
-      const { data: picksData, error: picksErr } = await supabaseClient
-        .from("predictions_1x2")
-        .select("entry_id, match_id");
+          page.forEach(function(pick) {
+            // Contar partidos únicos y únicamente los que pertenecen a esta jornada.
+            if (!validMatchSet.has(pick.match_id)) return;
+            if (!picksByEntry.has(pick.entry_id)) {
+              picksByEntry.set(pick.entry_id, new Set());
+            }
+            picksByEntry.get(pick.entry_id).add(pick.match_id);
+          });
 
-      if (!picksErr) {
-        picks = (picksData || []).filter(function(p) {
-          return entryIds.indexOf(p.entry_id) !== -1;
-        });
+          if (page.length < PAGE_SIZE) break;
+        }
       }
     }
 
-    const picksCountByEntry = new Map();
-    picks.forEach(function(p) {
-      picksCountByEntry.set(
-        p.entry_id,
-        (picksCountByEntry.get(p.entry_id) || 0) + 1
-      );
-    });
+    // Número de BOLETOS incompletos, no número de partidos faltantes.
+    const picksPendingCount = totalMatches > 0
+      ? entries.filter(function(entry) {
+          const completedMatches = picksByEntry.get(entry.id)?.size || 0;
+          return completedMatches < totalMatches;
+        }).length
+      : 0;
 
-    // 6) Badge Picks: boletos con picks pendientes o incompletos
-    let picksPendingCount = 0;
-    (entries || []).forEach(function(entry) {
-      const pickCount = picksCountByEntry.get(entry.id) || 0;
-      if (pickCount < totalMatches) {
-        picksPendingCount++;
-      }
-    });
-
-    // 7) Badge Pagos: boletos registrados pero NO pagados en la jornada activa
-    const paymentsPendingCount = (entries || []).filter(function(e) {
-      return e.paid !== true;
+    const paymentsPendingCount = entries.filter(function(entry) {
+      return entry.paid !== true;
     }).length;
 
-    // 8) Badge Resultados: partidos sin goles capturados
-    const resultsPendingCount = (matches || []).filter(function(m) {
-      return m.home_goals === null || m.away_goals === null;
+    const resultsPendingCount = matches.filter(function(match) {
+      return match.home_goals === null || match.away_goals === null;
     }).length;
 
-    // 9) Badge Aciertos: listo cuando ya no hay resultados pendientes
     const standingsReadyCount =
-      resultsPendingCount === 0 && totalMatches > 0 ? 1 : 0;
+      totalMatches > 0 && resultsPendingCount === 0 ? 1 : 0;
 
-    // 10) Badge Más
     const moreCount =
-      paymentsPendingCount +
-      resultsPendingCount +
-      standingsReadyCount;
+      paymentsPendingCount + resultsPendingCount + standingsReadyCount;
 
     setBadge("navBadgePicks", picksPendingCount);
     setBadge("navBadgeMore", moreCount);
@@ -671,8 +666,21 @@ async function updateNavBadges() {
     setBadge("moreBadgeResults", resultsPendingCount);
     setBadge("moreBadgeStandings", standingsReadyCount);
 
+    console.info("Badge Picks actualizado", {
+      pool: activePool.name,
+      boletos: entries.length,
+      partidos: totalMatches,
+      pendientes: picksPendingCount
+    });
   } catch (err) {
     console.warn("updateNavBadges:", err?.message || err);
+
+    // No mostrar un número falso cuando hubo error de red, RLS o consulta.
+    setBadge("navBadgePicks", 0);
+    setBadge("navBadgeMore", 0);
+    setBadge("moreBadgePayments", 0);
+    setBadge("moreBadgeResults", 0);
+    setBadge("moreBadgeStandings", 0);
   }
 }
 
@@ -1560,7 +1568,7 @@ function renderPickRow(match, selectedPick) {
   `;
 }
 
-async function loadEntryForPick(poolId, partId) {
+async function loadEntryForPick(poolId, partId, entryId = null) {
   hideAlert();
 
   const pool_id = poolId || $("pickPool").value;
@@ -1570,14 +1578,21 @@ async function loadEntryForPick(poolId, partId) {
     return showAlert("Selecciona jornada y participante.", "error");
   }
 
-  const { data: entry, error: entryError } = await supabaseClient
+  let entryQuery = supabaseClient
     .from("entries")
     .select("id, paid, created_at, pool_id, participant_id")
     .eq("pool_id", pool_id)
-    .eq("participant_id", participant_id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("participant_id", participant_id);
+
+  if (entryId) {
+    entryQuery = entryQuery.eq("id", entryId);
+  } else {
+    entryQuery = entryQuery
+      .order("created_at", { ascending: false })
+      .limit(1);
+  }
+
+  const { data: entry, error: entryError } = await entryQuery.maybeSingle();
 
   if (entryError) return showAlert(entryError.message, "error");
 
@@ -2018,9 +2033,17 @@ async function loadPickStatusList() {
     picks = allPicks;
   }
 
-  const picksCountByEntry = new Map();
+  const picksSetByEntry = new Map();
   picks.forEach(function(p) {
-    picksCountByEntry.set(p.entry_id, (picksCountByEntry.get(p.entry_id) || 0) + 1);
+    if (!picksSetByEntry.has(p.entry_id)) {
+      picksSetByEntry.set(p.entry_id, new Set());
+    }
+    picksSetByEntry.get(p.entry_id).add(p.match_id);
+  });
+
+  const picksCountByEntry = new Map();
+  picksSetByEntry.forEach(function(matchSet, entryId) {
+    picksCountByEntry.set(entryId, matchSet.size);
   });
 
   const totalMatchesInPool = await (async function() {
@@ -2050,86 +2073,99 @@ const rowsHtml = (participants || []).map(function(participant) {
   let iconWrapClass = "border-zinc-700 bg-zinc-900";
   let progressHtml = `<div class="text-xs text-zinc-500 mt-1">0/${totalMatchesInPool || 0}</div>`;
 
-  if (entry) {
-    const pickCount = picksCountByEntry.get(entry.id) || 0;
+  if (pEntries.length > 0) {
+    const entryProgress = pEntries.map(function(e) {
+      const count = picksCountByEntry.get(e.id) || 0;
+      return {
+        entry: e,
+        count: count,
+        complete: totalMatchesInPool > 0 && count >= totalMatchesInPool
+      };
+    });
 
-    const numBoletas = pEntries.length;
-    const boletaBadge = numBoletas > 1
-      ? `<span style="font-size:10px;padding:1px 6px;border-radius:99px;background:rgba(6,182,212,.15);color:#67e8f9;border:1px solid rgba(6,182,212,.3);font-weight:700;margin-left:4px;">${numBoletas} boletas</span>`
-      : "";
+    const totalCaptured = entryProgress.reduce(function(sum, item) {
+      return sum + item.count;
+    }, 0);
+    const completeEntries = entryProgress.filter(function(item) {
+      return item.complete;
+    }).length;
+    const allComplete =
+      totalMatchesInPool > 0 && completeEntries === entryProgress.length;
+    const allEmpty = totalCaptured === 0;
 
-    progressHtml = `
-      <div class="text-xs mt-1 flex items-center gap-1 flex-wrap">
-        <span class="${pickCount > 0 ? "text-zinc-300" : "text-zinc-500"}">
-          ${pickCount}/${totalMatchesInPool || 0} picks
-        </span>
-        ${boletaBadge}
-      </div>
-    `;
-
-    if (pickCount > 0) {
-      if (totalMatchesInPool > 0 && pickCount >= totalMatchesInPool) {
-        statusEmoji = "✅";
-        statusTitle = "Capturado completo";
-        statusKey = "complete";
-        cardClass = "bg-emerald-500/5 border-emerald-500/20";
-        iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
-      } else {
-        statusEmoji = "🟡";
-        statusTitle = "Captura incompleta";
-        statusKey = "partial";
-        cardClass = "bg-yellow-500/5 border-yellow-500/20";
-        iconWrapClass = "border-yellow-500/30 bg-yellow-500/10";
-      }
+    if (entryProgress.length === 1) {
+      progressHtml = `
+        <div class="text-xs mt-1">
+          <span class="${totalCaptured > 0 ? "text-zinc-300" : "text-zinc-500"}">
+            ${totalCaptured}/${totalMatchesInPool || 0} picks
+          </span>
+        </div>
+      `;
     } else {
+      progressHtml = `
+        <div class="text-xs mt-1 flex items-center gap-1 flex-wrap">
+          <span class="${allComplete ? "text-emerald-300" : "text-zinc-300"}">
+            ${completeEntries}/${entryProgress.length} boletas completas
+          </span>
+          <span class="text-zinc-500">·</span>
+          <span class="text-zinc-400">
+            ${totalCaptured}/${entryProgress.length * (totalMatchesInPool || 0)} picks
+          </span>
+        </div>
+      `;
+    }
+
+    if (allComplete) {
+      statusEmoji = "✅";
+      statusTitle = "Todas las boletas completas";
+      statusKey = "complete";
+      cardClass = "bg-emerald-500/5 border-emerald-500/20";
+      iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
+    } else if (allEmpty) {
       statusEmoji = "⏳";
       statusTitle = "Pendiente";
       statusKey = "pending";
       cardClass = "bg-amber-500/5 border-amber-500/20";
       iconWrapClass = "border-amber-500/30 bg-amber-500/10";
-    }
-
-    // Generar botones por cada boleta del participante
-    const multiEntry = pEntries.length > 1;
-
-    if (pEntries.length > 0) {
-      const btns = pEntries.map(function(e, idx) {
-        const label = multiEntry ? (idx + 1) : "";
-        const pickCountE = picksCountByEntry.get(e.id) || 0;
-        const isComplete = totalMatchesInPool > 0 && pickCountE >= totalMatchesInPool;
-        const btnColor = isComplete
-          ? "bg-emerald-600/20 border border-emerald-500/30 text-emerald-300"
-          : "bg-zinc-800 hover:bg-zinc-700";
-        const boletaLabel = multiEntry
-          ? `<span style="font-size:10px;font-weight:700;margin-left:3px;opacity:.85;">#${idx+1}</span>`
-          : "";
-        const openBtnClass = isComplete
-          ? "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-sm font-semibold"
-          : "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-semibold";
-        return `
-          <button type="button"
-            class="${openBtnClass}"
-            data-participant-id="${participant.id}"
-            data-entry-id="${e.id}"
-            title="Abrir boleta ${multiEntry ? (idx+1) : ""}">
-            👁️${boletaLabel}
-          </button>
-          ${pickCountE > 0 ? `
-          <button type="button"
-            class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
-            data-participant-id="${participant.id}"
-            data-entry-id="${e.id}"
-            title="Descargar boleta ${multiEntry ? (idx+1) : ""}">
-            🖼️
-          </button>
-          <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">\u{1F4F2}</button>
-          <button type="button" class="pick-status-physical flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Ver boleta con resultados">🎯</button>` : ""}
-        `;
-      }).join("");
-      actionBtn = btns;
     } else {
-      actionBtn = "";
+      statusEmoji = "🟡";
+      statusTitle = "Una o más boletas incompletas";
+      statusKey = "partial";
+      cardClass = "bg-yellow-500/5 border-yellow-500/20";
+      iconWrapClass = "border-yellow-500/30 bg-yellow-500/10";
     }
+
+    const multiEntry = pEntries.length > 1;
+    actionBtn = pEntries.map(function(e, idx) {
+      const pickCountE = picksCountByEntry.get(e.id) || 0;
+      const isComplete = totalMatchesInPool > 0 && pickCountE >= totalMatchesInPool;
+      const boletaLabel = multiEntry
+        ? `<span style="font-size:10px;font-weight:700;margin-left:3px;opacity:.85;">#${idx + 1}</span>`
+        : "";
+      const openBtnClass = isComplete
+        ? "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-sm font-semibold"
+        : "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-semibold";
+
+      return `
+        <button type="button"
+          class="${openBtnClass}"
+          data-participant-id="${participant.id}"
+          data-entry-id="${e.id}"
+          title="Abrir boleta ${multiEntry ? idx + 1 : ""}">
+          👁️${boletaLabel}
+        </button>
+        ${pickCountE > 0 ? `
+        <button type="button"
+          class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
+          data-participant-id="${participant.id}"
+          data-entry-id="${e.id}"
+          title="Descargar boleta ${multiEntry ? idx + 1 : ""}">
+          🖼️
+        </button>
+        <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">📲</button>
+        <button type="button" class="pick-status-physical flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Ver boleta con resultados">🎯</button>` : ""}
+      `;
+    }).join("");
   }
 
   const hiddenByFilter =
@@ -2264,8 +2300,9 @@ function attachPickStatusOpenEvents() {
   document.querySelectorAll(".pick-status-open").forEach(function(btn) {
     btn.addEventListener("click", async function() {
       const participantId = btn.getAttribute("data-participant-id");
+      const entryId = btn.getAttribute("data-entry-id") || null;
       $("pickParticipant").value = participantId;
-      await loadEntryForPick($("pickPool").value, participantId);
+      await loadEntryForPick($("pickPool").value, participantId, entryId);
     });
   });
 }
@@ -6887,14 +6924,28 @@ async function loadParticipantPicksStatus() {
     pickCount[p.entry_id] = (pickCount[p.entry_id] || 0) + 1;
   });
 
-  // Map by participant
+  // Map by participant: considerar TODAS sus boletas de la jornada.
   _picksStatusCache = {};
+  var entriesByParticipant = {};
   entries.forEach(function(e) {
-    var cnt = pickCount[e.id] || 0;
-    _picksStatusCache[e.participant_id] = {
-      complete: cnt >= total && total > 0,
-      partial:  cnt > 0 && cnt < total,
-      none:     cnt === 0
+    if (!entriesByParticipant[e.participant_id]) {
+      entriesByParticipant[e.participant_id] = [];
+    }
+    entriesByParticipant[e.participant_id].push(e);
+  });
+
+  Object.keys(entriesByParticipant).forEach(function(participantId) {
+    var participantEntries = entriesByParticipant[participantId];
+    var counts = participantEntries.map(function(e) {
+      return pickCount[e.id] || 0;
+    });
+    var allComplete = total > 0 && counts.every(function(cnt) { return cnt >= total; });
+    var allEmpty = counts.every(function(cnt) { return cnt === 0; });
+
+    _picksStatusCache[participantId] = {
+      complete: allComplete,
+      partial: !allComplete && !allEmpty,
+      none: allEmpty
     };
   });
 
