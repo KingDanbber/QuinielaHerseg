@@ -285,6 +285,70 @@ function escapeHTML(value) {
     .replace(/'/g, "&#39;");
 }
 
+
+const _externalScriptPromises = new Map();
+
+function loadExternalScriptOnce(src, isReady) {
+  if (typeof isReady === "function" && isReady()) {
+    return Promise.resolve();
+  }
+
+  if (_externalScriptPromises.has(src)) {
+    return _externalScriptPromises.get(src);
+  }
+
+  const promise = new Promise(function(resolve, reject) {
+    const existing = document.querySelector(`script[data-lazy-src="${src}"]`);
+
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", function() {
+        reject(new Error("No se pudo cargar: " + src));
+      }, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.lazySrc = src;
+    script.onload = resolve;
+    script.onerror = function() {
+      _externalScriptPromises.delete(src);
+      reject(new Error("No se pudo cargar: " + src));
+    };
+    document.head.appendChild(script);
+  });
+
+  _externalScriptPromises.set(src, promise);
+  return promise;
+}
+
+async function ensureExportLibraries(options = {}) {
+  const needsPdf = options.pdf === true;
+  const tasks = [];
+
+  if (typeof window.html2canvas !== "function") {
+    tasks.push(loadExternalScriptOnce(
+      "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+      function() { return typeof window.html2canvas === "function"; }
+    ));
+  }
+
+  if (needsPdf && !(window.jspdf && window.jspdf.jsPDF)) {
+    tasks.push(loadExternalScriptOnce(
+      "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
+      function() { return !!(window.jspdf && window.jspdf.jsPDF); }
+    ));
+  }
+
+  if (tasks.length) {
+    showAlert("Preparando herramientas de exportación…", "info");
+    await Promise.all(tasks);
+    hideAlert();
+  }
+}
+
 function setBusy(btn, busy, textBusy="Procesando…") {
   if (!btn) return;
   if (!btn.dataset.text) btn.dataset.text = btn.textContent;
@@ -419,6 +483,58 @@ async function upsertProfile(userId, displayName) {
   if (error) throw error;
 }
 
+
+// ═══════════════════════════════════════════════
+// CARGA DIFERIDA — contenido secundario del Inicio
+// ═══════════════════════════════════════════════
+let _dashboardExtrasScheduled = false;
+let _dashboardExtrasInFlight = null;
+let _dashboardExtrasLoadedAt = 0;
+const DASHBOARD_EXTRAS_TTL_MS = 60000;
+
+function runWhenBrowserIdle(callback, timeout = 1200) {
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(callback, { timeout: timeout });
+  } else {
+    window.setTimeout(callback, 250);
+  }
+}
+
+function scheduleDashboardExtras(options = {}) {
+  const force = options.force === true;
+  const isFresh = Date.now() - _dashboardExtrasLoadedAt < DASHBOARD_EXTRAS_TTL_MS;
+
+  if (!force && isFresh) return;
+  if (_dashboardExtrasScheduled || _dashboardExtrasInFlight) return;
+
+  _dashboardExtrasScheduled = true;
+
+  runWhenBrowserIdle(function() {
+    _dashboardExtrasScheduled = false;
+
+    _dashboardExtrasInFlight = Promise.allSettled([
+      loadDashboardEnhanced(),
+      loadWinnersHistory(),
+      loadHistoricalStandings(),
+      loadWeeklySummary(),
+      loadAccuracyChart()
+    ]).then(function(results) {
+      results.forEach(function(result) {
+        if (result.status === "rejected") {
+          console.warn("Dashboard extra:", result.reason?.message || result.reason);
+        }
+      });
+      _dashboardExtrasLoadedAt = Date.now();
+    }).finally(function() {
+      _dashboardExtrasInFlight = null;
+    });
+  });
+}
+
+function invalidateDashboardExtras() {
+  _dashboardExtrasLoadedAt = 0;
+}
+
 // =========================
 // ShowAppTab
 
@@ -471,13 +587,12 @@ async function showAppTab(tabId) {
 
   try {
 
-    // INICIO — siempre refresca (datos críticos)
+    // INICIO — primero pinta KPIs críticos; lo histórico se difiere
     if (tabId === "tab-home") {
+      const homeWasLoaded = isTabLoaded("tab-home");
       await loadDashboardSummary();
-      await loadHistoricalStandings();
-      await loadWeeklySummary();
-      await loadAccuracyChart();
       markTabLoaded("tab-home");
+      scheduleDashboardExtras({ force: homeWasLoaded });
     }
 
     // PARTICIPANTES — lazy: solo carga si no estaba cargado
@@ -496,10 +611,12 @@ async function showAppTab(tabId) {
       }
     }
 
-    // PLANTILLAS — lazy
+    // PLANTILLAS — carga completa solo al abrir esta sección
     if (tabId === "tab-templates") {
       if (!isTabLoaded("tab-templates")) {
         await fillTplPools();
+        await loadTemplateIntoEditor();
+        await renderPreview();
         markTabLoaded("tab-templates");
       }
     }
@@ -544,7 +661,18 @@ async function showAppTab(tabId) {
     showAlert("Error cargando sección: " + (err?.message || err), "error");
   }
 
-  await updateNavBadges();
+  // No bloquear la navegación por una insignia secundaria.
+  const refreshBadgesWithoutBlocking = function() {
+    updateNavBadges().catch(function(err) {
+      console.warn("Badges en navegación:", err?.message || err);
+    });
+  };
+
+  if (!appInitialized) {
+    runWhenBrowserIdle(refreshBadgesWithoutBlocking, 1800);
+  } else {
+    refreshBadgesWithoutBlocking();
+  }
 window.scrollTo({
   top: 0,
   behavior: "smooth"
@@ -763,62 +891,64 @@ function formatModeLabel(mode) {
 
 // Cargar Dashboard
 async function loadDashboardSummary() {
-  // jornada activa
-  const { data: activePool, error: poolErr } = await supabaseClient
-    .from("pools")
-    .select("id, name, mode_code, carryover_amount")
-    .eq("status", "open")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // La jornada activa y el total de participantes son independientes.
+  const [poolRes, participantsRes] = await Promise.all([
+    supabaseClient
+      .from("pools")
+      .select("id, name, mode_code, carryover_amount")
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabaseClient
+      .from("participants")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+  ]);
 
-  if (poolErr) {
-    showAlert(poolErr.message, "error");
+  if (poolRes.error) {
+    showAlert(poolRes.error.message, "error");
     return;
   }
+
+  if (participantsRes.error) {
+    showAlert(participantsRes.error.message, "error");
+    return;
+  }
+
+  const activePool = poolRes.data;
+  const participantsCount = participantsRes.count || 0;
 
   $("dashActivePool").textContent = activePool?.name || "Sin activa";
   $("dashMode").textContent = formatModeLabel(activePool?.mode_code);
   $("dashCarryover").textContent = money(activePool?.carryover_amount || 0);
+  $("dashParticipants").textContent = participantsCount;
 
-  // participantes activos
-  const { count: participantsCount, error: partErr } = await supabaseClient
-    .from("participants")
-    .select("*", { count: "exact", head: true })
-    .eq("is_active", true);
-
-  if (partErr) {
-    showAlert(partErr.message, "error");
-    return;
-  }
-
-  $("dashParticipants").textContent = participantsCount || 0;
-
-  // stats de la jornada activa
   if (activePool?.id) {
-    const { data: stats, error: statsErr } = await supabaseClient
-      .from("pool_stats")
-      .select("paid_count, prize_pool")
-      .eq("pool_id", activePool.id)
-      .maybeSingle();
+    // Stats y número de jugadores también pueden resolverse en paralelo.
+    const [statsRes, jugandoRes] = await Promise.all([
+      supabaseClient
+        .from("pool_stats")
+        .select("paid_count, prize_pool")
+        .eq("pool_id", activePool.id)
+        .maybeSingle(),
+      supabaseClient
+        .from("entries")
+        .select("participant_id", { count: "exact", head: true })
+        .eq("pool_id", activePool.id)
+    ]);
 
-    if (statsErr) {
-      showAlert(statsErr.message, "error");
+    if (statsRes.error) {
+      showAlert(statsRes.error.message, "error");
       return;
     }
 
-    $("dashPaidEntries").textContent = stats?.paid_count || 0;
-    $("dashPrize").textContent = money(stats?.prize_pool || 0);
+    $("dashPaidEntries").textContent = statsRes.data?.paid_count || 0;
+    $("dashPrize").textContent = money(statsRes.data?.prize_pool || 0);
 
-    // Participantes jugando esta jornada (con boleto registrado)
-    const { count: jugandoCount, error: jugandoErr } = await supabaseClient
-      .from("entries")
-      .select("participant_id", { count: "exact", head: true })
-      .eq("pool_id", activePool.id);
-
-    if (!jugandoErr) {
+    if (!jugandoRes.error) {
       const elJ = $("dashJugandoJornada");
-      if (elJ) elJ.textContent = jugandoCount || 0;
+      if (elJ) elJ.textContent = jugandoRes.count || 0;
     }
   } else {
     $("dashPaidEntries").textContent = "0";
@@ -826,11 +956,6 @@ async function loadDashboardSummary() {
     const elJ = $("dashJugandoJornada");
     if (elJ) elJ.textContent = "0";
   }
-
-  // Dashboard mejorado (stats historicos)
-  loadDashboardEnhanced();
-  // Historial de ganadores
-  loadWinnersHistory();
 }
 
 // Guardar Participantes 
@@ -2430,6 +2555,7 @@ function attachPickStatusWaEvents() {
 }
 
 async function exportParticipantPickImage(poolId, participantId, entryId) {
+  await ensureExportLibraries();
   hideAlert();
 
   if (!poolId || !participantId) {
@@ -3557,6 +3683,7 @@ async function renderPreview() {
 }
 
 async function exportAllToPDF() {
+  await ensureExportLibraries({ pdf: true });
   hideAlert();
 
   // trae pools que tengan plantilla
@@ -3635,6 +3762,7 @@ exportMode: true
 }
 
 async function exportCurrentTemplatePNG() {
+  await ensureExportLibraries();
   hideAlert();
 
   const pool_id = $("tplPool").value;
@@ -3703,6 +3831,7 @@ async function exportCurrentTemplatePNG() {
 }
 
 async function exportStoryTemplatePNG() {
+  await ensureExportLibraries();
   hideAlert();
 
   const pool_id = $("tplPool").value;
@@ -3871,6 +4000,7 @@ async function exportStoryTemplatePNG() {
 }
 
 async function exportAllToPNGs() {
+  await ensureExportLibraries();
   hideAlert();
 
   const { data: pools, error } = await supabaseClient
@@ -4713,6 +4843,7 @@ function makeStandingsCard(opts) {
 
 // Funcion Exportar Imagen Tabla de Aciertos
 async function exportStandingsImage() {
+  await ensureExportLibraries();
   hideAlert();
   const pool_id = $("standingsPool").value;
   if (!pool_id) return showAlert("Selecciona una jornada.", "error");
@@ -4927,6 +5058,7 @@ function makeWinnerCard(opts) {
 
 // Exportar Cartel Ganador
 async function exportWinnerCard() {
+  await ensureExportLibraries();
   hideAlert();
 
   const pool_id = $("standingsPool").value;
@@ -6381,6 +6513,7 @@ async function deleteTestParticipants() {
 // para imprimir y repartir físicamente
 // ═══════════════════════════════════════════════════
 async function printTemplateCopiesPage() {
+  await ensureExportLibraries({ pdf: true });
   hideAlert();
 
   var pool_id = $("tplPool").value;
@@ -8470,6 +8603,7 @@ async function saveResultsAndCalc() {
 // CARTEL TOP 3 — Visual para grupo WA
 // ═══════════════════════════════════════════════
 async function exportTop3Card() {
+  await ensureExportLibraries();
   hideAlert();
   var pool_id = $("standingsPool").value;
   if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
@@ -9111,13 +9245,13 @@ async function init() {
     return;
   }
 
-  // Solo redibujar la vista si no estamos ya en el dashboard
-  if (!appInitialized) {
+  const firstStart = !appInitialized;
+
+  if (firstStart) {
     setView("viewDash");
-    // Solicitar permisos de notificación al primer login
-    if (typeof requestPushPermission === "function") {
-      setTimeout(requestPushPermission, 2000);
-    }
+    resetAllTabs();
+    initBottomNav();
+    initPicksSearch();
   }
 
   const now = new Date();
@@ -9126,33 +9260,25 @@ async function init() {
   $("greetingMain").textContent = `👋 ${saludo}, ${profile.display_name}`;
   $("greetingDate").textContent = fecha;
 
-  await loadPools();
-  await loadParticipants();
-
-  await fillEntryPoolsSelect();
-  await fillEntryParticipantsSelect();
-  await loadEntriesAndStats();
-
-  await fillTplPools();
-  await loadTemplateIntoEditor();
-  await renderPreview();
-
-  await fillPickPoolsSelect();
-  await fillPickParticipantsSelect();
-
-  await loadDashboardSummary();
-
-  initBottomNav();
-
-  // Solo navegar a Inicio en el primer arranque
-  if (!appInitialized) {
+  // La pantalla aparece de inmediato. Cada módulo consulta sus datos al abrirse.
+  if (firstStart) {
     await showAppTab("tab-home");
-  }
+    appInitialized = true;
 
-  appInitialized = true;
-  await updateNavBadges();
-  // Init picks search
-  initPicksSearch();
+    // Notificaciones después del primer render, nunca durante la ruta crítica.
+    if (typeof requestPushPermission === "function") {
+      runWhenBrowserIdle(function() {
+        window.setTimeout(requestPushPermission, 1500);
+      }, 2500);
+    }
+  } else {
+    // Reinicios reales de sesión: solo refrescar el resumen visible.
+    await loadDashboardSummary();
+    scheduleDashboardExtras({ force: true });
+    updateNavBadges({ force: true }).catch(function(err) {
+      console.warn("Badges al reiniciar:", err?.message || err);
+    });
+  }
 }
 
 // Arranque
