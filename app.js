@@ -6273,6 +6273,30 @@ async function printTemplateCopiesPage() {
   if (!matches || !matches.length)
     return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
+  // ── Auto-detect Goleo pool for same round ──
+  var hasGoleoPool = false;
+  var goleoPoolPrice = "";
+  try {
+    var currentRound = pool && pool.round ? String(pool.round) : null;
+    if (currentRound) {
+      var { data: goleoPools } = await supabaseClient
+        .from("pools")
+        .select("id, round, price, status, mode_code")
+        .eq("mode_code", "GOLEO")
+        .in("status", ["open", "draft"])
+        .limit(10);
+      if (goleoPools && goleoPools.length) {
+        var matched = goleoPools.find(function(p) {
+          return String(p.round) === currentRound;
+        });
+        if (matched) {
+          hasGoleoPool = true;
+          goleoPoolPrice = matched.price ? "$" + matched.price : "";
+        }
+      }
+    }
+  } catch(e) { /* silent — goleo section optional */ }
+
   // A4 → 794×1123px
   // Auto-layout: ≤15 partidos → 2×4 = 8 copias | >15 partidos → 2×3 = 6 copias (más espacio)
   var matchCount = matches.length;
@@ -8586,9 +8610,9 @@ async function loadGoalChampionStandings() {
   var rows = preds.map(function(pred) {
     var entry = entMap[pred.entry_id] || {};
     var part  = partMap[entry.participant_id] || { name: "?", area: "" };
-    var diff     = actualGoals !== null ? Math.abs(pred.predicted_goals - actualGoals) : null;
+    var diff  = actualGoals !== null ? Math.abs(pred.predicted_goals - actualGoals) : null;
+    var isWinner = diff !== null && diff <= 5;
     var isExact  = diff === 0;
-    var isWinner = isExact;  // Ganador solo si acierta exactamente
     return {
       name: part.name, area: part.area || "",
       predicted: pred.predicted_goals,
@@ -8614,16 +8638,16 @@ async function loadGoalChampionStandings() {
           : '<span class="text-xs text-zinc-400">Sin goles capturados aún</span>',
       '</div>',
       (actualGoals !== null
-        ? '<div class="text-xs text-zinc-400 mb-3">🎯 Ganador: quien acierte <strong class=\"text-white\">exactamente</strong> el total de goles</div>'
+        ? '<div class="text-xs text-zinc-400 mb-3">Ganador: pronóstico exacto o ±5 goles del total real</div>'
         : '<div class="text-xs text-zinc-400 mb-3">Captura los resultados para ver el ganador</div>'),
       rows.length
         ? rows.map(function(r, i) {
-            var bg = r.isExact
-                   ? "bg-emerald-500/20 border-emerald-500/40"
+            var bg = r.isExact ? "bg-emerald-500/20 border-emerald-500/40"
+                   : r.isWinner ? "bg-sky-500/10 border-sky-500/20"
                    : "bg-zinc-950 border-zinc-800";
-            var badge = r.isExact
-                      ? '<span class="text-xs text-emerald-400 font-bold">🏆 GANADOR EXACTO ✅</span>'
-                      : (r.diff !== null ? '<span class="text-xs text-zinc-500">Diferencia: ' + r.diff + ' gol' + (r.diff === 1 ? '' : 'es') + '</span>' : '');
+            var badge = r.isExact ? '<span class="text-xs text-emerald-400 font-bold">EXACTO ✅</span>'
+                      : r.isWinner ? '<span class="text-xs text-sky-400 font-bold">GANADOR ±' + r.diff + '</span>'
+                      : (r.diff !== null ? '<span class="text-xs text-zinc-500">±' + r.diff + '</span>' : '');
             return [
               '<div class="flex items-center justify-between p-3 border rounded-xl mb-2 ' + bg + '">',
                 '<div>',
