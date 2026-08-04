@@ -1314,8 +1314,10 @@ async function loadPools() {
   if (error) return showAlert(error.message, "error");
 
   const rows = data || [];
-  const active = rows.find(p => p.status === "open");
-  $("activePoolName").textContent = active ? active.name : "—";
+  const actives = rows.filter(p => p.status === "open");
+$("activePoolName").textContent = actives.length
+  ? actives.map(p => p.name + " (" + formatModeLabel(p.mode_code) + ")").join(" · ")
+  : "—";
 
   $("poolsList").innerHTML = rows.map(p => {
     const badge =
@@ -1527,16 +1529,38 @@ async function editPoolPrice(poolId, currentPrice, currentComm) {
 async function setPoolOpen(poolId) {
   hideAlert();
 
-  const ok = confirm("¿Activar esta jornada? La jornada activa actual se cerrará.");
+  // 1. Leer la jornada a activar para saber su modo
+  const { data: targetPool, error: fetchErr } = await supabaseClient
+    .from("pools")
+    .select("id, name, mode_code, status")
+    .eq("id", poolId)
+    .maybeSingle();
+
+  if (fetchErr) return showAlert(fetchErr.message, "error");
+  if (!targetPool) return showAlert("Jornada no encontrada.", "error");
+
+  const mode = targetPool.mode_code || "SENCILLA";
+  const modeLabel = formatModeLabel(mode);
+
+  const ok = confirm(
+    "¿Activar esta jornada?\n\n" +
+    targetPool.name + "\n" +
+    "Modo: " + modeLabel + "\n\n" +
+    "Solo se cerrarán otras jornadas del MISMO modo (" + modeLabel + ").\n" +
+    "Las de otro modo (ej. Sencilla + Goleó) seguirán activas."
+  );
   if (!ok) return;
 
+  // 2. Cerrar SOLO las abiertas del mismo mode_code
   const { error: closeErr } = await supabaseClient
     .from("pools")
     .update({ status: "closed" })
-    .eq("status", "open");
+    .eq("status", "open")
+    .eq("mode_code", mode);
 
   if (closeErr) return showAlert(closeErr.message, "error");
 
+  // 3. Abrir la jornada objetivo
   const { error } = await supabaseClient
     .from("pools")
     .update({ status: "open" })
@@ -1544,13 +1568,15 @@ async function setPoolOpen(poolId) {
 
   if (error) return showAlert(error.message, "error");
 
-  showAlert("Jornada activada ✅", "ok");
+  showAlert("Jornada activada ✅ (" + modeLabel + ")", "ok");
 
   await loadPools();
   await fillTplPools();
   await fillEntryPoolsSelect();
   await fillPickPoolsSelect();
   await loadDashboardSummary();
+  clearNavBadgesCache();
+  await updateNavBadges({ force: true });
 }
 
 // Cerrar Jornada Activa
@@ -2854,26 +2880,32 @@ async function openLatestClosedPool() {
 
   const { data: closedPool, error: findErr } = await supabaseClient
     .from("pools")
-    .select("id, name, status")
+    .select("id, name, status, mode_code")
     .eq("status", "closed")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (findErr) return showAlert(findErr.message, "error");
+  if (!closedPool) return showAlert("No hay jornada cerrada para reabrir.", "error");
 
-  if (!closedPool) {
-    return showAlert("No hay jornada cerrada para reabrir.", "error");
-  }
+  const mode = closedPool.mode_code || "SENCILLA";
+  const modeLabel = formatModeLabel(mode);
 
-  const ok = confirm(`¿Seguro que quieres reabrir esta jornada?\n\n${closedPool.name}`);
+  const ok = confirm(
+    "¿Reabrir esta jornada?\n\n" +
+    closedPool.name + "\n" +
+    "Modo: " + modeLabel + "\n\n" +
+    "Solo se cerrarán otras del mismo modo."
+  );
   if (!ok) return;
 
-  // opcional: cerrar otras abiertas antes
+  // Cerrar solo las abiertas del mismo modo
   await supabaseClient
     .from("pools")
     .update({ status: "closed" })
-    .eq("status", "open");
+    .eq("status", "open")
+    .eq("mode_code", mode);
 
   const { error } = await supabaseClient
     .from("pools")
@@ -2882,7 +2914,7 @@ async function openLatestClosedPool() {
 
   if (error) return showAlert(error.message, "error");
 
-  showAlert("Jornada reabierta ✅", "ok");
+  showAlert("Jornada reabierta ✅ (" + modeLabel + ")", "ok");
 
   await loadPools();
   await loadDashboardSummary();
