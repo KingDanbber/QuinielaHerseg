@@ -644,27 +644,19 @@
     </div>
 
 <div class="mt-4">
-  <div class="flex items-center justify-between gap-3 mb-2">
-    <div class="text-sm font-semibold">Estado de captura</div>
-
-    <div class="flex items-center gap-2">
-      <button id="btnPickLegend" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
-  💬
-</button>
-
-<button id="btnRefreshPickStatus" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
-  🔄
-</button>
-
-<button onclick="sendPicksReminder()" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Recordatorio a pendientes">
-  ⏰
-</button>
-<button id="btnExportAllPicks" type="button" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Exportar lista de picks por WhatsApp">
-  📋
-</button>
-<button onclick="showPicksCompactView()" type="button" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Vista compacta de todos los picks">
-  📊
-</button>
+  <div class="mb-2">
+    <div class="text-sm font-semibold mb-2">Estado de captura</div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <button id="btnPickLegend" type="button" title="Leyenda"
+        class="w-10 h-10 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center">💬</button>
+      <button id="btnRefreshPickStatus" type="button" title="Actualizar"
+        class="w-10 h-10 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center">🔄</button>
+      <button type="button" onclick="sendPicksReminder()" title="Recordatorio a pendientes"
+        class="w-10 h-10 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center">⏰</button>
+      <button id="btnExportAllPicks" type="button" title="Exportar lista de picks por WhatsApp"
+        class="w-10 h-10 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center">📋</button>
+      <button type="button" onclick="showPicksCompactView()" title="Vista compacta de todos los picks"
+        class="w-10 h-10 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base flex items-center justify-center">📊</button>
     </div>
   </div>
 
