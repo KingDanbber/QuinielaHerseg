@@ -978,6 +978,262 @@ function formatPoolOptionLabel(p, opts) {
     return parts.join(" · ");
 }
 
+// ═══════════════════════════════════════════════
+// SELECTORES PREMIUM (bottom sheet al tema de la app)
+// Sustituye el picker nativo del SO por UI propia.
+// ═══════════════════════════════════════════════
+var PREMIUM_SELECT_IDS = [
+    "tplPool",
+    "entryPool",
+    "entryParticipant",
+    "pickPool",
+    "pickParticipant",
+    "resultsPool",
+    "standingsPool",
+    "poolMode",
+    "areaFilter"
+];
+
+var PREMIUM_SELECT_TITLES = {
+    tplPool: "Seleccionar jornada",
+    entryPool: "Jornada (pagos)",
+    entryParticipant: "Participante",
+    pickPool: "Jornada (pronósticos)",
+    pickParticipant: "Participante",
+    resultsPool: "Jornada (resultados)",
+    standingsPool: "Jornada (aciertos)",
+    poolMode: "Modo de juego",
+    areaFilter: "Filtrar por área"
+};
+
+function parsePoolOptionMeta(label) {
+    // "Name · Mode · Status" from formatPoolOptionLabel
+    var parts = String(label || "").split(" · ").map(function(s) {
+        return s.trim();
+    }).filter(Boolean);
+    if (parts.length >= 3) {
+        return {
+            title: parts[0],
+            subtitle: parts.slice(1).join(" · "),
+            mode: parts[1],
+            status: parts[2]
+        };
+    }
+    if (parts.length === 2) {
+        return {
+            title: parts[0],
+            subtitle: parts[1],
+            mode: parts[1],
+            status: ""
+        };
+    }
+    return {
+        title: label || "—",
+        subtitle: "",
+        mode: "",
+        status: ""
+    };
+}
+
+function modeBadgeClass(modeText) {
+    var m = String(modeText || "").toLowerCase();
+    if (m.indexOf("goleo") >= 0) return "ps-badge-goleo";
+    if (m.indexOf("acumul") >= 0) return "ps-badge-acum";
+    if (m.indexOf("campeon") >= 0 || m.indexOf("campeón") >= 0) return "ps-badge-cc";
+    return "ps-badge-sencilla";
+}
+
+function closePremiumSelectSheet() {
+    var sheet = document.getElementById("premiumSelectSheet");
+    if (sheet) sheet.remove();
+    document.body.classList.remove("overflow-hidden");
+}
+
+function openPremiumSelectSheet(selectId) {
+    var sel = $(selectId);
+    if (!sel || !sel.options || !sel.options.length) return;
+
+    closePremiumSelectSheet();
+
+    var title = PREMIUM_SELECT_TITLES[selectId] || "Seleccionar";
+    var options = Array.from(sel.options);
+    var current = sel.value;
+
+    var sheet = document.createElement("div");
+    sheet.id = "premiumSelectSheet";
+    sheet.className = "ps-sheet-root";
+
+    var listHtml = options.map(function(opt, idx) {
+        var val = opt.value;
+        var label = opt.textContent || opt.label || "";
+        var selected = val === current;
+        var meta = parsePoolOptionMeta(label);
+        var isPoolLike = ["tplPool", "entryPool", "pickPool", "resultsPool", "standingsPool"].indexOf(selectId) >= 0;
+        var badge = "";
+        if (isPoolLike && meta.mode) {
+            badge = '<span class="ps-badge ' + modeBadgeClass(meta.mode) + '">' + escapeHTML(meta.mode) + '</span>';
+        }
+        var statusLine = meta.status
+            ? '<div class="ps-opt-sub">' + escapeHTML(meta.status) + '</div>'
+            : (meta.subtitle && !isPoolLike
+                ? '<div class="ps-opt-sub">' + escapeHTML(meta.subtitle) + '</div>'
+                : "");
+
+        return [
+            '<button type="button" class="ps-opt' + (selected ? " ps-opt-on" : "") + '" data-value="' + escapeHTML(val) + '" data-idx="' + idx + '">',
+            '<div class="ps-opt-main">',
+            '<div class="ps-opt-title">' + escapeHTML(isPoolLike ? meta.title : label) + '</div>',
+            statusLine,
+            '</div>',
+            badge,
+            selected ? '<span class="ps-check">✓</span>' : '<span class="ps-radio"></span>',
+            '</button>'
+        ].join("");
+    }).join("");
+
+    sheet.innerHTML = [
+        '<div class="ps-backdrop" id="psBackdrop"></div>',
+        '<div class="ps-panel" role="dialog" aria-modal="true">',
+        '<div class="ps-handle"></div>',
+        '<div class="ps-header">',
+        '<div class="ps-title">' + escapeHTML(title) + '</div>',
+        '<button type="button" class="ps-close" id="psCloseBtn" aria-label="Cerrar">✕</button>',
+        '</div>',
+        '<div class="ps-list">' + listHtml + '</div>',
+        '</div>'
+    ].join("");
+
+    document.body.appendChild(sheet);
+    document.body.classList.add("overflow-hidden");
+
+    // animate in
+    requestAnimationFrame(function() {
+        sheet.classList.add("ps-open");
+    });
+
+    function pick(val) {
+        var prev = sel.value;
+        sel.value = val;
+        syncPremiumSelectTrigger(selectId);
+        if (prev !== val) {
+            sel.dispatchEvent(new Event("change", {
+                bubbles: true
+            }));
+        }
+        closePremiumSelectSheet();
+    }
+
+    document.getElementById("psBackdrop").addEventListener("click", closePremiumSelectSheet);
+    document.getElementById("psCloseBtn").addEventListener("click", closePremiumSelectSheet);
+    sheet.querySelectorAll(".ps-opt").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            pick(btn.getAttribute("data-value") || "");
+        });
+    });
+}
+
+function syncPremiumSelectTrigger(selectId) {
+    var sel = $(selectId);
+    var trigger = document.querySelector('[data-ps-for="' + selectId + '"]');
+    if (!sel || !trigger) return;
+
+    var opt = sel.options[sel.selectedIndex];
+    var label = opt ? (opt.textContent || opt.label || "—") : "—";
+    var meta = parsePoolOptionMeta(label);
+    var isPoolLike = ["tplPool", "entryPool", "pickPool", "resultsPool", "standingsPool"].indexOf(selectId) >= 0;
+
+    var titleEl = trigger.querySelector(".ps-trigger-title");
+    var subEl = trigger.querySelector(".ps-trigger-sub");
+    var badgeEl = trigger.querySelector(".ps-trigger-badge");
+
+    if (titleEl) titleEl.textContent = isPoolLike ? (meta.title || label) : label;
+    if (subEl) {
+        if (isPoolLike && meta.status) {
+            subEl.textContent = meta.status;
+            subEl.classList.remove("hidden");
+        } else if (!isPoolLike && meta.subtitle) {
+            subEl.textContent = meta.subtitle;
+            subEl.classList.remove("hidden");
+        } else {
+            subEl.textContent = "";
+            subEl.classList.add("hidden");
+        }
+    }
+    if (badgeEl) {
+        if (isPoolLike && meta.mode) {
+            badgeEl.textContent = meta.mode;
+            badgeEl.className = "ps-trigger-badge ps-badge " + modeBadgeClass(meta.mode);
+            badgeEl.classList.remove("hidden");
+        } else {
+            badgeEl.textContent = "";
+            badgeEl.classList.add("hidden");
+        }
+    }
+
+    if (!sel.options.length || (sel.options.length === 1 && !sel.options[0].value && /sin|selecciona|—/i.test(label))) {
+        trigger.classList.add("ps-trigger-empty");
+    } else {
+        trigger.classList.remove("ps-trigger-empty");
+    }
+}
+
+function enhancePremiumSelect(selectId) {
+    var sel = $(selectId);
+    if (!sel) return;
+
+    // Already enhanced?
+    var existing = document.querySelector('[data-ps-for="' + selectId + '"]');
+    if (existing) {
+        syncPremiumSelectTrigger(selectId);
+        return;
+    }
+
+    sel.classList.add("ps-native-hidden");
+    sel.setAttribute("aria-hidden", "true");
+    sel.tabIndex = -1;
+
+    var trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "ps-trigger";
+    trigger.setAttribute("data-ps-for", selectId);
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.innerHTML = [
+        '<div class="ps-trigger-text">',
+        '<div class="ps-trigger-title">—</div>',
+        '<div class="ps-trigger-sub hidden"></div>',
+        '</div>',
+        '<span class="ps-trigger-badge hidden"></span>',
+        '<span class="ps-trigger-chevron" aria-hidden="true"></span>'
+    ].join("");
+
+    trigger.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (sel.disabled) return;
+        openPremiumSelectSheet(selectId);
+    });
+
+    // Insert trigger right after the select
+    if (sel.parentNode) {
+        sel.parentNode.insertBefore(trigger, sel.nextSibling);
+    }
+
+    syncPremiumSelectTrigger(selectId);
+}
+
+function refreshPremiumSelect(selectId) {
+    enhancePremiumSelect(selectId);
+    syncPremiumSelectTrigger(selectId);
+}
+
+function initPremiumSelects() {
+    PREMIUM_SELECT_IDS.forEach(function(id) {
+        enhancePremiumSelect(id);
+    });
+}
+
+
+
 // Cargar Dashboard
 async function loadDashboardSummary() {
     const [poolsRes, participantsRes] = await Promise.all([
@@ -1885,6 +2141,8 @@ async function fillEntryPoolsSelect() {
     }).join("");
 
     if ((data || [])[0]) sel.value = data[0].id;
+
+    refreshPremiumSelect("entryPool");
 }
 
 async function fillEntryParticipantsSelect() {
@@ -1907,6 +2165,8 @@ async function fillEntryParticipantsSelect() {
         const safeArea = p.area ? ` • ${escapeHTML(p.area)}`: "";
         return `<option value="${p.id}">${safeName}${safeArea}</option>`;
     }).join("");
+
+    refreshPremiumSelect("entryParticipant");
 }
 
 async function fillPickPoolsSelect() {
@@ -1936,6 +2196,8 @@ async function fillPickPoolsSelect() {
     });
     const defaultPool = openPool || (data || [])[0];
     if (defaultPool) sel.value = defaultPool.id;
+
+    refreshPremiumSelect("pickPool");
 }
 
 async function fillPickParticipantsSelect() {
@@ -1960,6 +2222,7 @@ async function fillPickParticipantsSelect() {
         if (!partIds.length) {
             $("pickParticipant").innerHTML =
             '<option value="">Sin boletos en esta jornada</option>';
+            refreshPremiumSelect("pickParticipant");
             return;
         }
 
@@ -2006,6 +2269,8 @@ async function fillPickParticipantsSelect() {
         const safeArea = p.area ? " • " + escapeHTML(p.area): "";
         return `<option value="${p.id}">${safeName}${safeArea}</option>`;
     }).join("");
+
+    refreshPremiumSelect("pickParticipant");
 }
 
 
@@ -3693,6 +3958,8 @@ async function fillTplPools() {
     sel.innerHTML = (data || []).map(function(p) {
         return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
+
+    refreshPremiumSelect("tplPool");
 }
 
 
@@ -4619,6 +4886,8 @@ async function fillResultsPoolsSelect() {
     });
     if (active) sel.value = active.id;
     else if ((data || []).length) sel.value = data[0].id;
+
+    refreshPremiumSelect("resultsPool");
 }
 
 // Renders de Partidos
@@ -4963,6 +5232,8 @@ async function fillStandingsPoolsSelect() {
     });
     if (active) sel.value = active.id;
     else if ((data || []).length) sel.value = data[0].id;
+
+    refreshPremiumSelect("standingsPool");
 }
 
 // Preview Podio Ganadores
@@ -8581,6 +8852,7 @@ async function loadAreaFilterOptions() {
     areas.map(function(a) {
         return '<option value="' + a + '">' + a + '</option>';
     }).join("");
+    refreshPremiumSelect("areaFilter");
 }
 
 function applyAreaFilter() {
@@ -10687,6 +10959,7 @@ async function init() {
         resetAllTabs();
         initBottomNav();
         initPicksSearch();
+        initPremiumSelects();
     }
 
     const now = new Date();
