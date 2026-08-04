@@ -10992,106 +10992,476 @@ async function saveGoleoOptInFromSencilla() {
 }
 
 // ═══════════════════════════════════════════════════════
-// CAMPEÓN DE GOLEO — Tabla de resultados
+// CAMPEÓN DE GOLEO — Tabla de resultados + bolsa
+// Regla: solo gana quien acierta EXACTO el total de goles.
+// Si nadie acierta, la bolsa se acumula a la siguiente jornada Goleó.
 // ═══════════════════════════════════════════════════════
+
+/** Cuenta jornadas GOLEO cerradas consecutivas (hacia atrás) sin acertante exacto. */
+async function countConsecutiveDryGoleoJornadas(referencePool) {
+    if (!referencePool) return { dry: 0, pools: [] };
+    var q = supabaseClient.from("pools")
+        .select("id, name, round, status, carryover_amount, competition, season, mode_code")
+        .eq("mode_code", "GOLEO")
+        .eq("status", "closed")
+        .order("round", { ascending: false })
+        .limit(30);
+    if (referencePool.competition) q = q.eq("competition", referencePool.competition);
+    if (referencePool.season) q = q.eq("season", referencePool.season);
+    var { data: closedPools } = await q;
+    var list = closedPools || [];
+    var dry = 0;
+    var dryPools = [];
+    for (var i = 0; i < list.length; i++) {
+        var p = list[i];
+        var goalsRes = await supabaseClient.from("pool_goals_total")
+            .select("total_goals").eq("pool_id", p.id).maybeSingle();
+        var actual = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
+        if (actual === null || isNaN(actual)) break;
+
+        var predsRes = await supabaseClient.from("predictions_goals_total")
+            .select("entry_id, predicted_goals").eq("pool_id", p.id);
+        var preds = predsRes.data || [];
+        if (!preds.length) {
+            dry++;
+            dryPools.push(p);
+            continue;
+        }
+        var entRes = await supabaseClient.from("entries")
+            .select("id, paid").eq("pool_id", p.id).eq("paid", true);
+        var paidIds = {};
+        (entRes.data || []).forEach(function(e) { paidIds[e.id] = true; });
+        var hasExact = preds.some(function(pr) {
+            return paidIds[pr.entry_id] && Number(pr.predicted_goals) === actual;
+        });
+        if (hasExact) break;
+        dry++;
+        dryPools.push(p);
+    }
+    return { dry: dry, pools: dryPools };
+}
+
+/** Bolsa efectiva de un pool GOLEO = prize_pool (vista) + carryover_amount entrante. */
+async function getGoleoBagAmount(pool_id) {
+    var statsRes = await supabaseClient.from("pool_stats")
+        .select("prize_pool, total_collected, commission_amount, paid_count")
+        .eq("pool_id", pool_id).maybeSingle();
+    var poolRes = await supabaseClient.from("pools")
+        .select("carryover_amount, carryover_enabled, status, name")
+        .eq("id", pool_id).maybeSingle();
+    var prize = statsRes.data ? Number(statsRes.data.prize_pool || 0) : 0;
+    var carry = poolRes.data ? Number(poolRes.data.carryover_amount || 0) : 0;
+    return {
+        prize_pool: prize,
+        carryover_amount: carry,
+        total_bag: prize + carry,
+        paid_count: statsRes.data ? Number(statsRes.data.paid_count || 0) : 0,
+        total_collected: statsRes.data ? Number(statsRes.data.total_collected || 0) : 0,
+        commission_amount: statsRes.data ? Number(statsRes.data.commission_amount || 0) : 0
+    };
+}
+
 async function loadGoalChampionStandings() {
     var pool_id = $("standingsPool").value;
-    if (!pool_id) return;
-
-    var poolRes = await supabaseClient.from("pools")
-    .select("id, mode_code, name, round").eq("id", pool_id).maybeSingle();
-    if (!poolRes.data || poolRes.data.mode_code !== "GOLEO") return;
-
     var goalWrap = $("goalChampionResults");
     if (!goalWrap) return;
+
+    if (!pool_id) {
+        goalWrap.classList.add("hidden");
+        goalWrap.innerHTML = "";
+        return;
+    }
+
+    var poolRes = await supabaseClient.from("pools")
+        .select("id, mode_code, name, round, status, competition, season, carryover_amount, carryover_enabled, price")
+        .eq("id", pool_id).maybeSingle();
+
+    if (!poolRes.data || String(poolRes.data.mode_code || "").toUpperCase() !== "GOLEO") {
+        goalWrap.classList.add("hidden");
+        goalWrap.innerHTML = "";
+        return;
+    }
+
+    var pool = poolRes.data;
     goalWrap.classList.remove("hidden");
 
-    // Actual total goals
     var goalsRes = await supabaseClient.from("pool_goals_total")
-    .select("total_goals").eq("pool_id", pool_id).maybeSingle();
-    var actualGoals = goalsRes.data ? Number(goalsRes.data.total_goals): null;
+        .select("total_goals").eq("pool_id", pool_id).maybeSingle();
+    var actualGoals = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
 
-    // All predictions
     var predsRes = await supabaseClient.from("predictions_goals_total")
-    .select("entry_id, pool_id, predicted_goals").eq("pool_id", pool_id);
+        .select("entry_id, pool_id, predicted_goals").eq("pool_id", pool_id);
     var preds = predsRes.data || [];
 
-    // Entries with participants
     var entRes = await supabaseClient.from("entries")
-    .select("id, participant_id, paid").eq("pool_id", pool_id);
+        .select("id, participant_id, paid").eq("pool_id", pool_id);
     var entMap = {};
-    (entRes.data || []).forEach(function(e) {
-        entMap[e.id] = e;
-    });
+    (entRes.data || []).forEach(function(e) { entMap[e.id] = e; });
 
-    var partIds = [...new Set((entRes.data || []).map(function(e) {
-        return e.participant_id;
-    }))];
-    var partRes = await supabaseClient.from("participants")
-    .select("id, name, area").in("id", partIds);
+    var partIds = [...new Set((entRes.data || []).map(function(e) { return e.participant_id; }))];
     var partMap = {};
-    (partRes.data || []).forEach(function(p) {
-        partMap[p.id] = p;
-    });
+    if (partIds.length) {
+        var partRes = await supabaseClient.from("participants")
+            .select("id, name, area").in("id", partIds);
+        (partRes.data || []).forEach(function(p) { partMap[p.id] = p; });
+    }
 
-    // Build ranking
+    // Solo boletos pagados. Ganador = acierto EXACTO (diff === 0).
     var rows = preds.map(function(pred) {
         var entry = entMap[pred.entry_id] || {};
-        var part = partMap[entry.participant_id] || {
-            name: "?", area: ""
-        };
-        var diff = actualGoals !== null ? Math.abs(pred.predicted_goals - actualGoals): null;
-        var isWinner = diff !== null && diff <= 5;
+        var part = partMap[entry.participant_id] || { name: "?", area: "" };
+        var diff = actualGoals !== null ? Math.abs(Number(pred.predicted_goals) - actualGoals) : null;
         var isExact = diff === 0;
         return {
-            name: part.name, area: part.area || "",
+            name: part.name,
+            area: part.area || "",
             predicted: pred.predicted_goals,
-            diff: diff, isWinner: isWinner, isExact: isExact,
+            diff: diff,
+            isExact: isExact,
+            isWinner: isExact,
             paid: !!entry.paid
         };
     }).filter(function(r) {
         return r.paid;
-    }) // Only paid entries
-    .sort(function(a, b) {
+    }).sort(function(a, b) {
         if (a.diff === null && b.diff === null) return a.name.localeCompare(b.name);
         if (a.diff === null) return 1;
         if (b.diff === null) return -1;
-        return a.diff - b.diff;
+        return a.diff - b.diff || a.name.localeCompare(b.name);
     });
 
-    var jornada = poolRes.data.round ? "Jornada " + poolRes.data.round: poolRes.data.name;
+    var exactWinners = rows.filter(function(r) { return r.isExact; });
+    var hasExact = exactWinners.length > 0;
+    var bag = await getGoleoBagAmount(pool_id);
+    var dryInfo = { dry: 0, pools: [] };
+    try {
+        dryInfo = await countConsecutiveDryGoleoJornadas(pool);
+    } catch (e) {
+        console.warn("countConsecutiveDryGoleoJornadas", e);
+    }
+
+    var jornada = pool.round != null && pool.round !== "" ? ("Jornada " + pool.round) : pool.name;
+    var ruleText = actualGoals !== null
+        ? (hasExact
+            ? ("✅ " + exactWinners.length + " acertante" + (exactWinners.length > 1 ? "s" : "") + " exacto" + (exactWinners.length > 1 ? "s" : "") + " · se reparte la bolsa")
+            : "❌ Sin acertante exacto · la bolsa se acumula a la próxima jornada Goleó")
+        : "Captura los resultados para definir ganador (solo acierto exacto)";
+
+    var bagHtml = [
+        '<div class="grid grid-cols-2 gap-2 mb-3">',
+        '<div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">',
+        '<div class="text-[10px] text-zinc-500 uppercase tracking-wide">Bolsa total</div>',
+        '<div class="text-lg font-black text-amber-400">' + money(bag.total_bag) + '</div>',
+        '<div class="text-[10px] text-zinc-500 mt-0.5">premio ' + money(bag.prize_pool) + ' + acum. ' + money(bag.carryover_amount) + '</div>',
+        '</div>',
+        '<div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">',
+        '<div class="text-[10px] text-zinc-500 uppercase tracking-wide">Sin acertante</div>',
+        '<div class="text-lg font-black text-sky-400">' + dryInfo.dry + ' jornada' + (dryInfo.dry === 1 ? "" : "s") + '</div>',
+        '<div class="text-[10px] text-zinc-500 mt-0.5">consecutivas cerradas</div>',
+        '</div>',
+        '</div>'
+    ].join("");
+
+    // Herramientas de bolsa (solo si hay algo que mover)
+    var toolsHtml = [
+        '<div class="mt-3 p-3 bg-zinc-950/80 border border-amber-500/20 rounded-xl space-y-2">',
+        '<div class="text-xs font-bold text-amber-400">Bolsa acumulada · acciones</div>',
+        '<div class="text-[11px] text-zinc-400 leading-relaxed">',
+        'Si nadie acierta exacto, la bolsa pasa al siguiente Goleó. ',
+        'Tras varias jornadas en seco puedes transferirla a una <b>Sencilla en borrador</b>.',
+        '</div>',
+        '<button type="button" id="btnGoleoCarryToNext" class="w-full bg-sky-700 hover:bg-sky-600 rounded-xl font-semibold py-2.5 text-sm">',
+        '📦 Acumular bolsa de esta jornada → siguiente Goleó',
+        '</button>',
+        '<div class="grid gap-2">',
+        '<select id="goleoTransferTarget" class="p-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-sm"></select>',
+        '<button type="button" id="btnGoleoTransferToSencilla" class="w-full bg-amber-700 hover:bg-amber-600 rounded-xl font-semibold py-2.5 text-sm">',
+        '➡️ Transferir bolsa acumulada a Sencilla (borrador)',
+        '</button>',
+        '</div>',
+        '<div id="goleoBagActionMsg" class="text-[11px] text-zinc-500"></div>',
+        '</div>'
+    ].join("");
 
     goalWrap.innerHTML = [
         '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mt-4">',
-        '<div class="flex items-center justify-between mb-3">',
+        '<div class="flex items-center justify-between mb-3 gap-2 flex-wrap">',
         '<h3 class="font-semibold">⚽ Campeón de Goleo \u2014 ' + jornada + '</h3>',
         actualGoals !== null
-        ? '<span class="text-sm font-black text-emerald-400">' + actualGoals + ' goles reales</span>': '<span class="text-xs text-zinc-400">Sin goles capturados aún</span>',
+            ? '<span class="text-sm font-black text-emerald-400">' + actualGoals + ' goles reales</span>'
+            : '<span class="text-xs text-zinc-400">Sin goles capturados aún</span>',
         '</div>',
-        (actualGoals !== null
-            ? '<div class="text-xs text-zinc-400 mb-3">Ganador: pronóstico exacto o ±5 goles del total real</div>': '<div class="text-xs text-zinc-400 mb-3">Captura los resultados para ver el ganador</div>'),
+        '<div class="text-xs mb-3 ' + (hasExact ? "text-emerald-400" : (actualGoals !== null ? "text-amber-400" : "text-zinc-400")) + '">' + ruleText + '</div>',
+        bagHtml,
         rows.length
-        ? rows.map(function(r, i) {
-            var bg = r.isExact ? "bg-emerald-500/20 border-emerald-500/40": r.isWinner ? "bg-sky-500/10 border-sky-500/20": "bg-zinc-950 border-zinc-800";
-            var badge = r.isExact ? '<span class="text-xs text-emerald-400 font-bold">EXACTO ✅</span>': r.isWinner ? '<span class="text-xs text-sky-400 font-bold">GANADOR ±' + r.diff + '</span>': (r.diff !== null ? '<span class="text-xs text-zinc-500">±' + r.diff + '</span>': '');
-            return [
-                '<div class="flex items-center justify-between p-3 border rounded-xl mb-2 ' + bg + '">',
-                '<div>',
-                '<div class="font-semibold text-sm">' + (i+1) + '. ' + r.name + '</div>',
-                '<div class="text-xs text-zinc-400">' + r.area + '</div>',
-                '</div>',
-                '<div class="text-right flex items-center gap-3">',
-                '<div>',
-                '<div class="text-lg font-black">' + r.predicted + '</div>',
-                '<div class="text-xs text-zinc-400">goles pred.</div>',
-                '</div>',
-                badge,
-                '</div>',
-                '</div>'
-            ].join("");
-        }).join(""): '<div class="text-sm text-zinc-400">Sin pronósticos registrados aún.</div>',
+            ? rows.map(function(r, i) {
+                var bg = r.isExact
+                    ? "bg-emerald-500/20 border-emerald-500/40"
+                    : "bg-zinc-950 border-zinc-800";
+                var badge = r.isExact
+                    ? '<span class="text-xs text-emerald-400 font-bold">EXACTO ✅</span>'
+                    : (r.diff !== null ? '<span class="text-xs text-zinc-500">±' + r.diff + '</span>' : '');
+                return [
+                    '<div class="flex items-center justify-between p-3 border rounded-xl mb-2 ' + bg + '">',
+                    '<div>',
+                    '<div class="font-semibold text-sm">' + (i + 1) + '. ' + r.name + '</div>',
+                    '<div class="text-xs text-zinc-400">' + r.area + '</div>',
+                    '</div>',
+                    '<div class="text-right flex items-center gap-3">',
+                    '<div>',
+                    '<div class="text-lg font-black">' + r.predicted + '</div>',
+                    '<div class="text-xs text-zinc-400">goles pred.</div>',
+                    '</div>',
+                    badge,
+                    '</div>',
+                    '</div>'
+                ].join("");
+            }).join("")
+            : '<div class="text-sm text-zinc-400">Sin pronósticos registrados aún.</div>',
+        toolsHtml,
         '</div>'
     ].join("");
+
+    // Llenar select de destinos: Sencillas en borrador
+    await fillGoleoTransferTargets();
+
+    var btnCarry = $("btnGoleoCarryToNext");
+    if (btnCarry) {
+        btnCarry.onclick = function() {
+            processGoleoCarryToNext(pool_id);
+        };
+    }
+    var btnTransfer = $("btnGoleoTransferToSencilla");
+    if (btnTransfer) {
+        btnTransfer.onclick = function() {
+            processGoleoTransferToSencilla(pool_id);
+        };
+    }
+}
+
+async function fillGoleoTransferTargets() {
+    var sel = $("goleoTransferTarget");
+    if (!sel) return;
+    var { data } = await supabaseClient.from("pools")
+        .select("id, name, mode_code, status, round, carryover_amount")
+        .eq("status", "draft")
+        .order("created_at", { ascending: false })
+        .limit(40);
+    var drafts = (data || []).filter(function(p) {
+        return String(p.mode_code || "SENCILLA").toUpperCase() !== "GOLEO";
+    });
+    if (!drafts.length) {
+        sel.innerHTML = '<option value="">No hay Sencillas en borrador</option>';
+        return;
+    }
+    sel.innerHTML = '<option value="">Elige Sencilla (borrador) destino…</option>' +
+        drafts.map(function(p) {
+            var label = (p.name || p.id) + (p.carryover_amount ? (" · acum. " + money(Number(p.carryover_amount))) : "");
+            return '<option value="' + p.id + '">' + label + '</option>';
+        }).join("");
+}
+
+/**
+ * Acumula la bolsa de ESTE Goleó (sin acertante exacto) hacia el siguiente Goleó
+ * (borrador u open, misma competition/season, round mayor; si no, el más reciente draft/open).
+ */
+async function processGoleoCarryToNext(sourcePoolId) {
+    hideAlert();
+    var msg = $("goleoBagActionMsg");
+    if (msg) msg.textContent = "Procesando…";
+
+    var { data: source } = await supabaseClient.from("pools")
+        .select("id, name, round, status, competition, season, mode_code, carryover_amount")
+        .eq("id", sourcePoolId).maybeSingle();
+    if (!source || String(source.mode_code || "").toUpperCase() !== "GOLEO") {
+        return showAlert("Pool origen no es Goleó.", "error");
+    }
+
+    var goalsRes = await supabaseClient.from("pool_goals_total")
+        .select("total_goals").eq("pool_id", sourcePoolId).maybeSingle();
+    var actual = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
+    if (actual === null || isNaN(actual)) {
+        return showAlert("Aún no hay total de goles capturado en esta jornada.", "error");
+    }
+
+    // Verificar que no haya acertante exacto (solo pagados)
+    var predsRes = await supabaseClient.from("predictions_goals_total")
+        .select("entry_id, predicted_goals").eq("pool_id", sourcePoolId);
+    var entRes = await supabaseClient.from("entries")
+        .select("id").eq("pool_id", sourcePoolId).eq("paid", true);
+    var paidIds = {};
+    (entRes.data || []).forEach(function(e) { paidIds[e.id] = true; });
+    var hasExact = (predsRes.data || []).some(function(pr) {
+        return paidIds[pr.entry_id] && Number(pr.predicted_goals) === actual;
+    });
+    if (hasExact) {
+        return showAlert("Hay acertante(s) exacto(s). La bolsa se reparte; no se acumula.", "error");
+    }
+
+    var bag = await getGoleoBagAmount(sourcePoolId);
+    var already = null;
+    try {
+        var flags0 = JSON.parse(localStorage.getItem("qa_goleo_carried") || "{}");
+        already = flags0[sourcePoolId] || null;
+    } catch (e) { already = null; }
+
+    // Si ya se movió el prize de este pool, solo permitir mover carryover residual
+    var amountToMove = bag.total_bag;
+    if (already && already.amount) {
+        amountToMove = bag.carryover_amount;
+        if (amountToMove <= 0) {
+            return showAlert("Esta jornada ya transfirió su bolsa (" + money(already.amount) + "). No hay acum. residual.", "error");
+        }
+    }
+    if (amountToMove <= 0) {
+        return showAlert("No hay bolsa que acumular (0).", "error");
+    }
+
+    // Buscar siguiente Goleó (draft u open), preferir round mayor
+    var q = supabaseClient.from("pools")
+        .select("id, name, round, status, carryover_amount")
+        .eq("mode_code", "GOLEO")
+        .neq("id", sourcePoolId)
+        .in("status", ["draft", "open"])
+        .order("round", { ascending: true })
+        .limit(20);
+    if (source.competition) q = q.eq("competition", source.competition);
+    if (source.season) q = q.eq("season", source.season);
+    var { data: candidates } = await q;
+    var next = null;
+    var srcRound = source.round;
+    if (candidates && candidates.length) {
+        if (srcRound != null && srcRound !== "" && !isNaN(Number(srcRound))) {
+            next = candidates.find(function(c) {
+                return !isNaN(Number(c.round)) && Number(c.round) > Number(srcRound);
+            }) || null;
+        }
+        if (!next) next = candidates[0];
+    }
+    if (!next) {
+        return showAlert("No hay otro Goleó en borrador/activo para recibir la bolsa. Crea la próxima jornada Goleó primero.", "error");
+    }
+
+    var ok = window.confirm(
+        "¿Acumular " + money(amountToMove) + " de «" + (source.name || "") + "»\n" +
+        "hacia «" + (next.name || "") + "»?\n\n" +
+        "Se sumará a su carryover_amount y se limpiará el acum. de origen."
+    );
+    if (!ok) {
+        if (msg) msg.textContent = "Cancelado.";
+        return;
+    }
+
+    var newCarry = Number(next.carryover_amount || 0) + amountToMove;
+    var { error: e1 } = await supabaseClient.from("pools")
+        .update({ carryover_amount: newCarry })
+        .eq("id", next.id);
+    if (e1) return showAlert(e1.message, "error");
+
+    // Limpiar carryover del origen (prize_pool de la vista es histórico de cobros)
+    var { error: e2 } = await supabaseClient.from("pools")
+        .update({ carryover_amount: 0 })
+        .eq("id", sourcePoolId);
+    if (e2) return showAlert(e2.message, "error");
+
+    try {
+        var flags = JSON.parse(localStorage.getItem("qa_goleo_carried") || "{}");
+        var prevAmt = (flags[sourcePoolId] && flags[sourcePoolId].amount) ? Number(flags[sourcePoolId].amount) : 0;
+        flags[sourcePoolId] = {
+            to: next.id,
+            amount: prevAmt + amountToMove,
+            at: new Date().toISOString()
+        };
+        localStorage.setItem("qa_goleo_carried", JSON.stringify(flags));
+    } catch (e) { /* ignore */ }
+
+    showAlert("Bolsa " + money(amountToMove) + " acumulada en «" + next.name + "» ✅", "ok");
+    if (msg) msg.textContent = "Listo → " + (next.name || next.id);
+    await loadGoalChampionStandings();
+}
+
+/**
+ * Transfiere la bolsa acumulada (carryover del origen + prize si sin acertante)
+ * a una Sencilla en borrador elegida.
+ */
+async function processGoleoTransferToSencilla(sourcePoolId) {
+    hideAlert();
+    var targetId = $("goleoTransferTarget") && $("goleoTransferTarget").value;
+    if (!targetId) return showAlert("Elige una Sencilla en borrador como destino.", "error");
+
+    var { data: source } = await supabaseClient.from("pools")
+        .select("id, name, mode_code, status, carryover_amount, competition, season, round")
+        .eq("id", sourcePoolId).maybeSingle();
+    if (!source || String(source.mode_code || "").toUpperCase() !== "GOLEO") {
+        return showAlert("Origen no es Goleó.", "error");
+    }
+
+    var { data: target } = await supabaseClient.from("pools")
+        .select("id, name, mode_code, status, carryover_amount")
+        .eq("id", targetId).maybeSingle();
+    if (!target || target.status !== "draft") {
+        return showAlert("El destino debe ser una jornada en borrador.", "error");
+    }
+    if (String(target.mode_code || "").toUpperCase() === "GOLEO") {
+        return showAlert("El destino debe ser Sencilla (u otro modo no Goleó).", "error");
+    }
+
+    var bag = await getGoleoBagAmount(sourcePoolId);
+
+    // Si hay goles y acertante exacto, solo transferimos el carryover entrante (no el prize a repartir)
+    var goalsRes = await supabaseClient.from("pool_goals_total")
+        .select("total_goals").eq("pool_id", sourcePoolId).maybeSingle();
+    var actual = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
+    var transferAmount = bag.carryover_amount;
+    if (actual !== null && !isNaN(actual)) {
+        var predsRes = await supabaseClient.from("predictions_goals_total")
+            .select("entry_id, predicted_goals").eq("pool_id", sourcePoolId);
+        var entRes = await supabaseClient.from("entries")
+            .select("id").eq("pool_id", sourcePoolId).eq("paid", true);
+        var paidIds = {};
+        (entRes.data || []).forEach(function(e) { paidIds[e.id] = true; });
+        var hasExact = (predsRes.data || []).some(function(pr) {
+            return paidIds[pr.entry_id] && Number(pr.predicted_goals) === actual;
+        });
+        if (!hasExact) {
+            // Sin acertante: se puede mover toda la bolsa (prize + carry)
+            transferAmount = bag.total_bag;
+        }
+    } else {
+        // Sin resultados aún: solo carryover explícito
+        transferAmount = bag.carryover_amount;
+    }
+
+    if (transferAmount <= 0) {
+        return showAlert("No hay monto acumulado para transferir.", "error");
+    }
+
+    var ok = window.confirm(
+        "¿Transferir " + money(transferAmount) + " desde Goleó «" + (source.name || "") + "»\n" +
+        "hacia Sencilla borrador «" + (target.name || "") + "»?\n\n" +
+        "Se sumará al carryover_amount del destino."
+    );
+    if (!ok) return;
+
+    var newCarry = Number(target.carryover_amount || 0) + transferAmount;
+    var { error: e1 } = await supabaseClient.from("pools")
+        .update({ carryover_amount: newCarry, carryover_enabled: true })
+        .eq("id", target.id);
+    if (e1) return showAlert(e1.message, "error");
+
+    var { error: e2 } = await supabaseClient.from("pools")
+        .update({ carryover_amount: 0 })
+        .eq("id", sourcePoolId);
+    if (e2) return showAlert(e2.message, "error");
+
+    try {
+        var flags = JSON.parse(localStorage.getItem("qa_goleo_transferred") || "{}");
+        flags[sourcePoolId] = { to: target.id, amount: transferAmount, at: new Date().toISOString() };
+        localStorage.setItem("qa_goleo_transferred", JSON.stringify(flags));
+    } catch (e) { /* ignore */ }
+
+    showAlert("Transferidos " + money(transferAmount) + " a «" + target.name + "» ✅", "ok");
+    await loadGoalChampionStandings();
 }
 
 
