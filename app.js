@@ -4327,11 +4327,29 @@ async function getPoolInfo(pool_id) {
         error
     } = await supabaseClient
     .from("pools")
-    .select("name, round, competition, season, price, date_label")
+    .select("id, name, round, competition, season, price, date_label, mode_code, status")
     .eq("id", pool_id)
     .maybeSingle();
     if (error) throw error;
     return data;
+}
+
+/** Busca pool hermano GOLEO de la misma jornada (round + competition + season). */
+async function findSiblingGoleoPool(sourcePool) {
+    if (!sourcePool || sourcePool.round == null || sourcePool.round === "") return null;
+    var q = supabaseClient
+        .from("pools")
+        .select("id, name, mode_code, status, price, round")
+        .eq("round", sourcePool.round)
+        .eq("mode_code", "GOLEO");
+    if (sourcePool.id) q = q.neq("id", sourcePool.id);
+    if (sourcePool.competition) q = q.eq("competition", sourcePool.competition);
+    if (sourcePool.season) q = q.eq("season", sourcePool.season);
+    // Preferir abiertos; si no hay, cualquiera de esa jornada
+    var { data, error } = await q.order("status", { ascending: true }).limit(5);
+    if (error || !data || !data.length) return null;
+    var open = data.find(function(p) { return p.status === "open"; });
+    return open || data[0];
 }
 
 function clearTemplateEditor() {
@@ -7888,10 +7906,24 @@ async function printTemplateCopiesPage() {
     if (!matches || !matches.length)
         return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
+    // Detectar Goleó hermano de la misma jornada (solo si la plantilla no es ya GOLEO)
+    var goleoSibling = null;
+    var isGoleoTemplate = (pool && String(pool.mode_code || "").toUpperCase() === "GOLEO");
+    if (!isGoleoTemplate) {
+        try {
+            goleoSibling = await findSiblingGoleoPool(pool);
+        } catch (e) {
+            console.warn("findSiblingGoleoPool", e);
+        }
+    }
+    var showGoleoOnTicket = !!goleoSibling;
+    var goleoPrice = goleoSibling && goleoSibling.price != null ? ("$" + goleoSibling.price) : "";
+
     // A4 → 794×1123px
     // Auto-layout: ≤15 partidos → 2×4 = 8 copias | >15 partidos → 2×3 = 6 copias (más espacio)
+    // Con bloque Goleó extra, si hay muchos partidos preferir 6 copias para no apretar
     var matchCount = matches.length;
-    var ROWS = matchCount > 15 ? 3: 4;
+    var ROWS = (matchCount > 15 || (showGoleoOnTicket && matchCount > 12)) ? 3 : 4;
     var COPIES = 2 * ROWS;
     var PAGE_W = 794;
     var PAGE_H = 1123;
@@ -8032,6 +8064,32 @@ async function printTemplateCopiesPage() {
         div2.style.cssText = "height:1px;background:#ccc;margin-top:4px;margin-bottom:4px;";
         copy.appendChild(div2);
 
+        // ── BLOQUE CAMPEÓN DE GOLEÓ (si hay pool GOLEO hermano activo) ──
+        if (showGoleoOnTicket) {
+            var goleoBox = document.createElement("div");
+            goleoBox.style.cssText = [
+                "border:1px solid #999",
+                "border-radius:4px",
+                "padding:3px 5px",
+                "margin-bottom:4px",
+                "background:#f7f7f7",
+                "box-sizing:border-box"
+            ].join(";");
+            var BOX_G = '<div style="width:11px;height:11px;border:1.3px solid #222;border-radius:2px;background:#fff;flex-shrink:0;box-sizing:border-box;display:inline-block;vertical-align:middle;"></div>';
+            goleoBox.innerHTML =
+                '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">' +
+                BOX_G +
+                '<span style="font-size:7.5px;font-weight:800;color:#111;line-height:1.2;">Campe\u00f3n de Gole\u00f3' +
+                (goleoPrice ? ' <span style="font-weight:600;color:#444;">(' + goleoPrice + ')</span>' : '') +
+                '</span>' +
+                '</div>' +
+                '<div style="display:flex;align-items:center;gap:4px;padding-left:1px;">' +
+                '<span style="font-size:7px;font-weight:700;color:#222;white-space:nowrap;">Total de Goles Jornada:</span>' +
+                '<div style="flex:1;height:11px;border-bottom:1px solid #333;min-width:28px;"></div>' +
+                '</div>';
+            copy.appendChild(goleoBox);
+        }
+
         var footer = document.createElement("div");
         footer.style.cssText = "display:flex;flex-direction:column;gap:4px;";
 
@@ -8079,7 +8137,8 @@ async function printTemplateCopiesPage() {
         var safeName = (pool && pool.name ? pool.name: "Plantilla")
         .replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
         pdf.save(safeName + "-copias-imprimir.pdf");
-        showAlert("PDF generado \u2014 " + COPIES + " copias en A4 \u2705", "ok");
+        var extra = showGoleoOnTicket ? " + bloque Campe\u00f3n de Gole\u00f3" : "";
+        showAlert("PDF generado \u2014 " + COPIES + " copias en A4" + extra + " \u2705", "ok");
     } catch(err) {
         showAlert("Error: " + (err && err.message ? err.message: String(err)), "error");
     } finally {
