@@ -4726,6 +4726,102 @@ function updateResultsGoalsSummary() {
 }
 
 // Guardar Resultados
+
+// ═══════════════════════════════════════════════
+// Sincronizar resultados de partidos a pools hermanos
+// (misma jornada/round + competition + season, distinto mode_code)
+// Así Sencilla ↔ Goleó (y otros modos) comparten goles reales.
+// updates: Array<{ match_no, home_goals, away_goals }>
+// ═══════════════════════════════════════════════
+async function syncMatchResultsToSiblingPools(sourcePoolId, updates) {
+    if (!sourcePoolId || !updates || !updates.length) return { synced: 0, siblings: 0 };
+
+    const { data: sourcePool, error: poolErr } = await supabaseClient
+        .from("pools")
+        .select("id, round, competition, season, mode_code, name")
+        .eq("id", sourcePoolId)
+        .maybeSingle();
+
+    if (poolErr || !sourcePool) {
+        console.warn("syncMatchResultsToSiblingPools: no se pudo cargar pool origen", poolErr);
+        return { synced: 0, siblings: 0 };
+    }
+
+    // Seguridad: sin round no sincronizamos (evitar tocar todo el catálogo)
+    if (sourcePool.round == null || sourcePool.round === "") {
+        return { synced: 0, siblings: 0 };
+    }
+
+    let q = supabaseClient
+        .from("pools")
+        .select("id, name, mode_code, round")
+        .neq("id", sourcePoolId)
+        .eq("round", sourcePool.round);
+
+    if (sourcePool.competition) {
+        q = q.eq("competition", sourcePool.competition);
+    }
+    if (sourcePool.season) {
+        q = q.eq("season", sourcePool.season);
+    }
+
+    const { data: siblings, error: sibErr } = await q;
+    if (sibErr) {
+        console.warn("syncMatchResultsToSiblingPools: error buscando hermanos", sibErr);
+        return { synced: 0, siblings: 0 };
+    }
+
+    const siblingPools = siblings || [];
+    if (!siblingPools.length) {
+        return { synced: 0, siblings: 0 };
+    }
+
+    let totalSynced = 0;
+
+    for (const sib of siblingPools) {
+        const { data: sibMatches, error: mErr } = await supabaseClient
+            .from("matches")
+            .select("id, match_no, home_goals, away_goals")
+            .eq("pool_id", sib.id);
+
+        if (mErr || !sibMatches || !sibMatches.length) continue;
+
+        const byNo = {};
+        sibMatches.forEach(function (m) {
+            byNo[String(m.match_no)] = m;
+        });
+
+        for (const u of updates) {
+            if (u.match_no == null) continue;
+            const target = byNo[String(u.match_no)];
+            if (!target) continue;
+
+            const sameHome = target.home_goals === u.home_goals ||
+                (target.home_goals == null && u.home_goals == null);
+            const sameAway = target.away_goals === u.away_goals ||
+                (target.away_goals == null && u.away_goals == null);
+            if (sameHome && sameAway) continue;
+
+            const { error: updErr } = await supabaseClient
+                .from("matches")
+                .update({
+                    home_goals: u.home_goals,
+                    away_goals: u.away_goals
+                })
+                .eq("id", target.id);
+
+            if (updErr) {
+                console.warn("syncMatchResultsToSiblingPools: error actualizando match", target.id, updErr);
+                continue;
+            }
+            totalSynced++;
+        }
+    }
+
+    return { synced: totalSynced, siblings: siblingPools.length };
+}
+
+
 async function saveResultsMatches() {
     hideAlert();
 
@@ -4737,7 +4833,7 @@ async function saveResultsMatches() {
         error: loadErr
     } = await supabaseClient
     .from("matches")
-    .select("id")
+    .select("id, match_no")
     .eq("pool_id", pool_id)
     .order("match_no", {
         ascending: true
@@ -4750,6 +4846,8 @@ async function saveResultsMatches() {
     if (!rows.length) {
         return showAlert("Esta jornada no tiene partidos cargados.", "error");
     }
+
+    const syncUpdates = [];
 
     for (let i = 0; i < rows.length; i++) {
         const matchId = rows[i].id;
@@ -4771,9 +4869,29 @@ async function saveResultsMatches() {
         if (error) {
             return showAlert("Error guardando partido: " + error.message, "error");
         }
+
+        syncUpdates.push({
+            match_no: rows[i].match_no,
+            home_goals,
+            away_goals
+        });
     }
 
-    showAlert("Resultados guardados ✅", "ok");
+    // Propagar a jornadas hermanas (mismo round/competition/season, otro mode)
+    try {
+        const syncRes = await syncMatchResultsToSiblingPools(pool_id, syncUpdates);
+        if (syncRes && syncRes.synced > 0) {
+            showAlert("Resultados guardados ✅ (sincronizados " + syncRes.synced + " en " + syncRes.siblings + " jornada(s) hermana(s))", "ok");
+        } else {
+            showAlert("Resultados guardados ✅", "ok");
+        }
+    } catch (syncErr) {
+        console.warn("syncMatchResultsToSiblingPools falló", syncErr);
+        showAlert("Resultados guardados ✅ (sin sincronizar hermanos)", "ok");
+    }
+
+    clearNavBadgesCache();
+    await updateNavBadges({ force: true });
 }
 
 // =====================
@@ -8313,6 +8431,26 @@ async function saveOneResult(matchId) {
 
     updateResultsGoalsSummary();
     showAlert("Resultado guardado ✅", "ok");
+
+    // Sincronizar este partido a pools hermanos
+    try {
+        const { data: matchRow } = await supabaseClient
+            .from("matches")
+            .select("id, pool_id, match_no")
+            .eq("id", matchId)
+            .maybeSingle();
+
+        if (matchRow && matchRow.pool_id != null) {
+            await syncMatchResultsToSiblingPools(matchRow.pool_id, [{
+                match_no: matchRow.match_no,
+                home_goals: home,
+                away_goals: away
+            }]);
+        }
+    } catch (syncErr) {
+        console.warn("syncMatchResultsToSiblingPools (one) falló", syncErr);
+    }
+
     clearNavBadgesCache();
     await updateNavBadges( {
         force: true
