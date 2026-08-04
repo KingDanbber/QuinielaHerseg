@@ -971,17 +971,17 @@ async function loadDashboardSummary() {
 
     // Helpers UI
     function setEmpty() {
-        $("dashActivePool").textContent = "Sin activa";
-        $("dashMode").textContent = "—";
-        $("dashPrizesByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
-        $("dashPlayingByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
-        $("dashPaidByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
-        $("dashUnpaidByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
-        $("dashPrize").textContent = "$0";
-        $("dashPaidEntries").textContent = "0";
+        if ($("dashActivePool")) $("dashActivePool").textContent = "Sin activa";
+        if ($("dashMode")) $("dashMode").textContent = "—";
+        if ($("dashPrizesByMode")) $("dashPrizesByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
+        if ($("dashPlayingByMode")) $("dashPlayingByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
+        if ($("dashPaidByMode")) $("dashPaidByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
+        if ($("dashUnpaidByMode")) $("dashUnpaidByMode").innerHTML = '<div class="text-zinc-500 text-xs">—</div>';
+        if ($("dashPrize")) $("dashPrize").textContent = "$0";
+        if ($("dashPaidEntries")) $("dashPaidEntries").textContent = "0";
         if ($("dashUnpaidEntries")) $("dashUnpaidEntries").textContent = "0";
         if ($("dashJugandoJornada")) $("dashJugandoJornada").textContent = "0";
-        $("dashCarryover").textContent = money(0);
+        if ($("dashCarryover")) $("dashCarryover").textContent = money(0);
     }
 
     if (!activePools.length) {
@@ -990,29 +990,31 @@ async function loadDashboardSummary() {
     }
 
     // ── Jornadas activas ──
-    $("dashActivePool").innerHTML = activePools.map(function(p) {
-        const mode = formatModeLabel(p.mode_code || "SENCILLA");
-        return (
-            '<div class="flex items-center gap-2">' +
-            '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>' +
-            '<span>' + (p.name || "—") +
-            ' <span class="text-xs text-emerald-300/90">(' + mode + ')</span>' +
-            '</span>' +
-            '</div>'
-        );
-    }).join("");
+    if ($("dashActivePool")) {
+        $("dashActivePool").innerHTML = activePools.map(function(p) {
+            const mode = formatModeLabel(p.mode_code || "SENCILLA");
+            return (
+                '<div class="flex items-center gap-2">' +
+                '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>' +
+                '<span>' + (p.name || "—") +
+                ' <span class="text-xs text-emerald-300/90">(' + mode + ')</span>' +
+                '</span>' +
+                '</div>'
+            );
+        }).join("");
+    }
 
     // ── Modos activos ──
     const modes = [...new Set(activePools.map(function(p) {
         return formatModeLabel(p.mode_code || "SENCILLA");
     }))];
-    $("dashMode").textContent = modes.join(" · ");
+    if ($("dashMode")) $("dashMode").textContent = modes.join(" · ");
 
     // ── Acumulado ──
     const totalCarryover = activePools.reduce(function(sum, p) {
         return sum + Number(p.carryover_amount || 0);
     }, 0);
-    $("dashCarryover").textContent = money(totalCarryover);
+    if ($("dashCarryover")) $("dashCarryover").textContent = money(totalCarryover);
 
     // ── Stats por pool en paralelo ──
     const perPool = await Promise.all(activePools.map(async function(pool) {
@@ -1049,29 +1051,33 @@ async function loadDashboardSummary() {
     }));
 
     // ── Bolsas separadas + total ──
-    $("dashPrizesByMode").innerHTML = perPool.map(function(row) {
-        return (
-            '<div class="flex items-center justify-between gap-2">' +
-            '<span class="text-zinc-300">' + row.mode + '</span>' +
-            '<span class="font-semibold text-white">' + money(row.prize) + '</span>' +
-            '</div>'
-        );
-    }).join("");
+    if ($("dashPrizesByMode")) {
+        $("dashPrizesByMode").innerHTML = perPool.map(function(row) {
+            return (
+                '<div class="flex items-center justify-between gap-2">' +
+                '<span class="text-zinc-300">' + row.mode + '</span>' +
+                '<span class="font-semibold text-white">' + money(row.prize) + '</span>' +
+                '</div>'
+            );
+        }).join("");
+    }
 
     const totalPrize = perPool.reduce(function(s, r) {
         return s + r.prize;
     }, 0);
-    $("dashPrize").textContent = money(totalPrize);
+    if ($("dashPrize")) $("dashPrize").textContent = money(totalPrize);
 
     // ── Jugando separado + total ──
-    $("dashPlayingByMode").innerHTML = perPool.map(function(row) {
-        return (
-            '<div class="flex items-center justify-between gap-2">' +
-            '<span class="text-zinc-300">' + row.mode + '</span>' +
-            '<span class="font-semibold text-white">' + row.playing + '</span>' +
-            '</div>'
-        );
-    }).join("");
+    if ($("dashPlayingByMode")) {
+        $("dashPlayingByMode").innerHTML = perPool.map(function(row) {
+            return (
+                '<div class="flex items-center justify-between gap-2">' +
+                '<span class="text-zinc-300">' + row.mode + '</span>' +
+                '<span class="font-semibold text-white">' + row.playing + '</span>' +
+                '</div>'
+            );
+        }).join("");
+    }
 
     const totalPlaying = perPool.reduce(function(s, r) {
         return s + r.playing;
@@ -1079,29 +1085,33 @@ async function loadDashboardSummary() {
     if ($("dashJugandoJornada")) $("dashJugandoJornada").textContent = totalPlaying;
 
     // ── Pagados separado + total ──
-    $("dashPaidByMode").innerHTML = perPool.map(function(row) {
-        return (
-            '<div class="flex items-center justify-between gap-2">' +
-            '<span class="text-zinc-400 text-xs">' + row.mode + '</span>' +
-            '<span class="font-semibold text-emerald-300">' + row.paid + '</span>' +
-            '</div>'
-        );
-    }).join("");
+    if ($("dashPaidByMode")) {
+        $("dashPaidByMode").innerHTML = perPool.map(function(row) {
+            return (
+                '<div class="flex items-center justify-between gap-2">' +
+                '<span class="text-zinc-400 text-xs">' + row.mode + '</span>' +
+                '<span class="font-semibold text-emerald-300">' + row.paid + '</span>' +
+                '</div>'
+            );
+        }).join("");
+    }
 
     const totalPaid = perPool.reduce(function(s, r) {
         return s + r.paid;
     }, 0);
-    $("dashPaidEntries").textContent = totalPaid;
+    if ($("dashPaidEntries")) $("dashPaidEntries").textContent = totalPaid;
 
     // ── Sin pagar separado + total ──
-    $("dashUnpaidByMode").innerHTML = perPool.map(function(row) {
-        return (
-            '<div class="flex items-center justify-between gap-2">' +
-            '<span class="text-zinc-400 text-xs">' + row.mode + '</span>' +
-            '<span class="font-semibold text-amber-300">' + row.unpaid + '</span>' +
-            '</div>'
-        );
-    }).join("");
+    if ($("dashUnpaidByMode")) {
+        $("dashUnpaidByMode").innerHTML = perPool.map(function(row) {
+            return (
+                '<div class="flex items-center justify-between gap-2">' +
+                '<span class="text-zinc-400 text-xs">' + row.mode + '</span>' +
+                '<span class="font-semibold text-amber-300">' + row.unpaid + '</span>' +
+                '</div>'
+            );
+        }).join("");
+    }
 
     const totalUnpaid = perPool.reduce(function(s, r) {
         return s + r.unpaid;
