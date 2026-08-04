@@ -715,17 +715,37 @@
       🔒 Esta jornada está cerrada. Los pronósticos son de solo lectura.
     </div>
 
-    <!-- Campeón de Goleo: input de goles totales -->
+    <!-- Campeón de Goleo: puro (pool GOLEO) u opt-in desde Sencilla -->
     <div id="goalChampionSection" class="hidden mt-4 p-4 bg-zinc-900 border border-amber-500/30 rounded-2xl">
-      <div class="text-sm font-bold text-amber-400 mb-1">⚽ Campeón de Goleo</div>
-      <div class="text-xs text-zinc-400 mb-3">¿Cuántos goles crees que habrá en total en esta jornada?</div>
-      <div class="flex gap-2">
-        <input id="goalChampionInput" type="number" min="0" max="300" placeholder="Ej: 42"
-          class="flex-1 p-3 bg-zinc-950 border border-amber-500/30 rounded-xl text-center text-lg font-black text-amber-400" />
-        <button id="btnSaveGoalChampion" type="button"
-          class="px-4 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold text-sm text-white">
-          💾 Guardar
-        </button>
+      <!-- Modo pool GOLEO puro -->
+      <div id="goalChampionPureBlock">
+        <div class="text-sm font-bold text-amber-400 mb-1">⚽ Campeón de Goleo</div>
+        <div class="text-xs text-zinc-400 mb-3">¿Cuántos goles crees que habrá en total en esta jornada?</div>
+        <div class="flex gap-2">
+          <input id="goalChampionInput" type="number" min="0" max="300" placeholder="Ej: 42"
+            class="flex-1 p-3 bg-zinc-950 border border-amber-500/30 rounded-xl text-center text-lg font-black text-amber-400" />
+          <button id="btnSaveGoalChampion" type="button"
+            class="px-4 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold text-sm text-white">
+            💾 Guardar
+          </button>
+        </div>
+      </div>
+      <!-- Opt-in desde Sencilla (misma jornada con Goleó hermano) -->
+      <div id="goalChampionOptInBlock" class="hidden">
+        <label class="flex items-start gap-3 cursor-pointer select-none">
+          <input id="goalChampionOptIn" type="checkbox"
+            class="mt-1 w-5 h-5 rounded border-amber-500/50 bg-zinc-950 text-amber-500 focus:ring-amber-500/40" />
+          <span>
+            <span class="block text-sm font-bold text-amber-400">También jugar Campeón de Goleó</span>
+            <span id="goalChampionOptInHint" class="block text-xs text-zinc-400 mt-0.5">Misma jornada · escribe tu total de goles</span>
+          </span>
+        </label>
+        <div id="goalChampionOptInFields" class="hidden mt-3">
+          <div class="text-xs text-zinc-400 mb-2">Total de goles de la jornada</div>
+          <input id="goalChampionOptInInput" type="number" min="0" max="300" placeholder="Ej: 42"
+            class="w-full p-3 bg-zinc-950 border border-amber-500/30 rounded-xl text-center text-lg font-black text-amber-400" />
+          <div id="goalChampionOptInStatus" class="text-xs text-zinc-500 mt-2"></div>
+        </div>
       </div>
     </div>
 

@@ -2508,6 +2508,7 @@ async function loadEntryForPick(poolId, partId, entryId = null) {
 
         $("pickEntryLabel").textContent = "Sin boleto";
         $("pickMatches").innerHTML = "";
+        if (typeof hideGoalChampionSection === "function") hideGoalChampionSection();
 
         $("btnSavePicks").disabled = true;
         $("btnSavePicks").classList.add("opacity-50", "cursor-not-allowed");
@@ -2902,12 +2903,34 @@ async function savePicks() {
 
     if (error) return showAlert(error.message, "error");
 
-    showAlert("Pronósticos guardados ✅", "ok");
+    // Opt-in Campeón de Goleó (si Sencilla tiene hermano GOLEO y el usuario marcó la casilla)
+    var goleoResult = null;
+    try {
+        goleoResult = await saveGoleoOptInFromSencilla();
+    } catch (gErr) {
+        console.warn("saveGoleoOptInFromSencilla", gErr);
+        goleoResult = { ok: false, msg: (gErr && gErr.message) ? gErr.message : String(gErr) };
+    }
+    if (goleoResult && goleoResult.ok === false) {
+        showAlert("Picks 1X2 guardados, pero Goleó falló: " + (goleoResult.msg || "error"), "error");
+        await loadPickStatusList();
+        return;
+    }
+
+    var msg = "Pronósticos guardados ✅";
+    if (goleoResult && goleoResult.ok && !goleoResult.skipped) {
+        msg += goleoResult.created
+            ? " · Goleó registrado (" + goleoResult.predicted + " goles)"
+            : " · Goleó actualizado (" + goleoResult.predicted + " goles)";
+    }
+    showAlert(msg, "ok");
     await loadPickStatusList();
     clearNavBadgesCache();
     await updateNavBadges( {
         force: true
     });
+    // Refrescar UI del opt-in (estado de boleto / pago)
+    try { await loadGoalChampionPick(); } catch (e) { /* ignore */ }
 }
 
 // Limpiar Selección de Pronosticos
@@ -10691,35 +10714,185 @@ function quickFillPool(round, competition, price, season, mode) {
 // CAMPEÓN DE GOLEO — Captura y cálculo
 // ═══════════════════════════════════════════════════════
 
-// Show goals champion input for current entry
+/** Estado del opt-in Goleó cuando se capturan picks de Sencilla */
+var _goleoOptIn = {
+    siblingPoolId: null,
+    siblingPrice: null,
+    siblingOpen: false,
+    goleoEntryId: null
+};
+
+function resetGoleoOptInState() {
+    _goleoOptIn = {
+        siblingPoolId: null,
+        siblingPrice: null,
+        siblingOpen: false,
+        goleoEntryId: null
+    };
+}
+
+function hideGoalChampionSection() {
+    var goalSection = $("goalChampionSection");
+    if (goalSection) goalSection.classList.add("hidden");
+    var pure = $("goalChampionPureBlock");
+    var opt = $("goalChampionOptInBlock");
+    if (pure) pure.classList.remove("hidden");
+    if (opt) opt.classList.add("hidden");
+    var fields = $("goalChampionOptInFields");
+    if (fields) fields.classList.add("hidden");
+    var chk = $("goalChampionOptIn");
+    if (chk) chk.checked = false;
+    var pureIn = $("goalChampionInput");
+    if (pureIn) pureIn.value = "";
+    var optIn = $("goalChampionOptInInput");
+    if (optIn) optIn.value = "";
+    var st = $("goalChampionOptInStatus");
+    if (st) st.textContent = "";
+    resetGoleoOptInState();
+}
+
+function wireGoleoOptInToggle() {
+    var chk = $("goalChampionOptIn");
+    var fields = $("goalChampionOptInFields");
+    if (!chk || !fields) return;
+    if (chk._goleoWired) return;
+    chk._goleoWired = true;
+    chk.addEventListener("change", function() {
+        if (chk.checked) {
+            fields.classList.remove("hidden");
+            var inp = $("goalChampionOptInInput");
+            if (inp) setTimeout(function() { inp.focus(); }, 50);
+        } else {
+            fields.classList.add("hidden");
+        }
+    });
+}
+
+// Show goals champion UI for current entry (pool GOLEO puro u opt-in desde Sencilla)
 async function loadGoalChampionPick() {
+    hideGoalChampionSection();
+
     var pool_id = currentPickPoolId || $("pickPool").value;
     var entry_id = currentPickEntryId;
+    var participant_id = currentPickParticipantId || ($("pickParticipant") && $("pickParticipant").value);
     if (!pool_id || !entry_id) return;
 
-    // Check if pool is GOLEO mode
     var poolRes = await supabaseClient.from("pools")
-    .select("id, mode_code, status").eq("id", pool_id).maybeSingle();
-    if (!poolRes.data || poolRes.data.mode_code !== "GOLEO") return;
+        .select("id, mode_code, status, round, competition, season, price, name")
+        .eq("id", pool_id)
+        .maybeSingle();
+    if (!poolRes.data) return;
 
+    var pool = poolRes.data;
+    var mode = String(pool.mode_code || "SENCILLA").toUpperCase();
     var goalSection = $("goalChampionSection");
     if (!goalSection) return;
 
+    var pureBlock = $("goalChampionPureBlock");
+    var optBlock = $("goalChampionOptInBlock");
+
+    // ── Caso 1: el pool actual ES Goleó ──
+    if (mode === "GOLEO") {
+        if (pureBlock) pureBlock.classList.remove("hidden");
+        if (optBlock) optBlock.classList.add("hidden");
+        goalSection.classList.remove("hidden");
+
+        var { data: existing } = await supabaseClient.from("predictions_goals_total")
+            .select("predicted_goals").eq("entry_id", entry_id).maybeSingle();
+
+        var input = $("goalChampionInput");
+        if (input) {
+            input.value = existing && existing.predicted_goals != null ? existing.predicted_goals : "";
+            input.disabled = pool.status !== "open";
+        }
+        var saveBtn = $("btnSaveGoalChampion");
+        if (saveBtn) saveBtn.disabled = pool.status !== "open";
+        return;
+    }
+
+    // ── Caso 2: Sencilla (u otro modo) → buscar Goleó hermano ──
+    var sibling = null;
+    try {
+        sibling = await findSiblingGoleoPool(pool);
+    } catch (e) {
+        console.warn("loadGoalChampionPick sibling", e);
+    }
+    if (!sibling) return;
+
+    _goleoOptIn.siblingPoolId = sibling.id;
+    _goleoOptIn.siblingPrice = sibling.price;
+    _goleoOptIn.siblingOpen = sibling.status === "open";
+    _goleoOptIn.goleoEntryId = null;
+
+    if (pureBlock) pureBlock.classList.add("hidden");
+    if (optBlock) optBlock.classList.remove("hidden");
     goalSection.classList.remove("hidden");
+    wireGoleoOptInToggle();
 
-    // Load existing prediction
-    var {
-        data: existing
-    } = await supabaseClient.from("predictions_goals_total")
-    .select("predicted_goals").eq("entry_id", entry_id).maybeSingle();
+    var hint = $("goalChampionOptInHint");
+    if (hint) {
+        var priceTxt = sibling.price != null ? (" · $" + sibling.price) : "";
+        var stTxt = sibling.status === "open" ? "abierto" : "cerrado";
+        hint.textContent = "Misma jornada · Goleó " + stTxt + priceTxt;
+    }
 
-    var input = $("goalChampionInput");
-    if (input && existing) input.value = existing.predicted_goals;
+    // ¿Ya tiene boleto / pronóstico en Goleó?
+    var goleoEntry = null;
+    if (participant_id) {
+        var { data: gEnt } = await supabaseClient.from("entries")
+            .select("id, paid")
+            .eq("pool_id", sibling.id)
+            .eq("participant_id", participant_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        goleoEntry = gEnt || null;
+    }
+    if (goleoEntry) {
+        _goleoOptIn.goleoEntryId = goleoEntry.id;
+        var { data: gPred } = await supabaseClient.from("predictions_goals_total")
+            .select("predicted_goals")
+            .eq("entry_id", goleoEntry.id)
+            .maybeSingle();
 
-    var isClosed = poolRes.data.status !== "open";
-    if (input) input.disabled = isClosed;
-    var saveBtn = $("btnSaveGoalChampion");
-    if (saveBtn) saveBtn.disabled = isClosed;
+        var chk = $("goalChampionOptIn");
+        var fields = $("goalChampionOptInFields");
+        var optIn = $("goalChampionOptInInput");
+        var st = $("goalChampionOptInStatus");
+        if (chk) chk.checked = true;
+        if (fields) fields.classList.remove("hidden");
+        if (optIn) {
+            optIn.value = gPred && gPred.predicted_goals != null ? gPred.predicted_goals : "";
+            optIn.disabled = !_goleoOptIn.siblingOpen;
+        }
+        if (st) {
+            st.textContent = goleoEntry.paid
+                ? "Ya tiene boleto Goleó · Pagado ✅"
+                : "Ya tiene boleto Goleó · Pendiente de pago ⏳";
+        }
+    } else {
+        var chk2 = $("goalChampionOptIn");
+        var fields2 = $("goalChampionOptInFields");
+        var optIn2 = $("goalChampionOptInInput");
+        var st2 = $("goalChampionOptInStatus");
+        if (chk2) chk2.checked = false;
+        if (fields2) fields2.classList.add("hidden");
+        if (optIn2) {
+            optIn2.value = "";
+            optIn2.disabled = !_goleoOptIn.siblingOpen;
+        }
+        if (st2) st2.textContent = _goleoOptIn.siblingOpen
+            ? "Al guardar picks se creará el boleto Goleó si marcas la casilla."
+            : "El Goleó de esta jornada ya está cerrado.";
+    }
+
+    // Si Goleó cerrado y no tenía boleto, deshabilitar opt-in
+    var chk3 = $("goalChampionOptIn");
+    if (chk3 && !_goleoOptIn.siblingOpen && !_goleoOptIn.goleoEntryId) {
+        chk3.disabled = true;
+    } else if (chk3) {
+        chk3.disabled = false;
+    }
 }
 
 async function saveGoalChampionPick() {
@@ -10744,6 +10917,78 @@ async function saveGoalChampionPick() {
 
     if (error) return showAlert(error.message, "error");
     showAlert("Pronóstico de goles guardado ✅ (" + predicted + " goles)", "ok");
+}
+
+/**
+ * Si el usuario marcó "También jugar Campeón de Goleó" en picks de Sencilla:
+ * crea/usa boleto en el pool GOLEO hermano y guarda predicted_goals.
+ * @returns {{ ok: boolean, msg?: string, created?: boolean, predicted?: number }}
+ */
+async function saveGoleoOptInFromSencilla() {
+    var chk = $("goalChampionOptIn");
+    if (!chk || !chk.checked) return { ok: true, skipped: true };
+    if (!_goleoOptIn.siblingPoolId) return { ok: true, skipped: true };
+
+    if (!_goleoOptIn.siblingOpen && !_goleoOptIn.goleoEntryId) {
+        return { ok: false, msg: "El Goleó de esta jornada está cerrado." };
+    }
+
+    var optIn = $("goalChampionOptInInput");
+    var predicted = optIn ? parseInt(optIn.value, 10) : NaN;
+    if (isNaN(predicted) || predicted < 0) {
+        return { ok: false, msg: "Marca Campeón de Goleó e ingresa un total de goles válido." };
+    }
+
+    var participant_id = currentPickParticipantId || ($("pickParticipant") && $("pickParticipant").value);
+    if (!participant_id) {
+        return { ok: false, msg: "Falta el participante para registrar Goleó." };
+    }
+
+    var goleoEntryId = _goleoOptIn.goleoEntryId;
+    var created = false;
+
+    if (!goleoEntryId) {
+        // ¿Ya existe boleto? (por si se creó en otra pestaña)
+        var { data: existingEnt } = await supabaseClient.from("entries")
+            .select("id")
+            .eq("pool_id", _goleoOptIn.siblingPoolId)
+            .eq("participant_id", participant_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (existingEnt && existingEnt.id) {
+            goleoEntryId = existingEnt.id;
+        } else {
+            if (!_goleoOptIn.siblingOpen) {
+                return { ok: false, msg: "El Goleó está cerrado; no se puede crear boleto nuevo." };
+            }
+            var { data: createdEnt, error: insErr } = await supabaseClient.from("entries")
+                .insert({
+                    pool_id: _goleoOptIn.siblingPoolId,
+                    participant_id: participant_id,
+                    paid: false,
+                    paid_at: null
+                })
+                .select("id")
+                .single();
+            if (insErr) return { ok: false, msg: "Goleó: " + insErr.message };
+            goleoEntryId = createdEnt.id;
+            created = true;
+        }
+        _goleoOptIn.goleoEntryId = goleoEntryId;
+    }
+
+    var { error: predErr } = await supabaseClient.from("predictions_goals_total")
+        .upsert([{
+            entry_id: goleoEntryId,
+            pool_id: _goleoOptIn.siblingPoolId,
+            predicted_goals: predicted
+        }], { onConflict: "entry_id" });
+
+    if (predErr) return { ok: false, msg: "Goleó: " + predErr.message };
+
+    return { ok: true, created: created, predicted: predicted, entryId: goleoEntryId };
 }
 
 // ═══════════════════════════════════════════════════════
