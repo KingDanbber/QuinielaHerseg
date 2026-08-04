@@ -262,8 +262,51 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 2.75rem !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #34d399 50%),
+    linear-gradient(135deg, #34d399 50%, transparent 50%),
+    linear-gradient(to right, rgba(255,255,255,0.06), rgba(255,255,255,0.06));
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px),
+    calc(100% - 2.4rem) 50%;
+  background-size:
+    6px 6px,
+    6px 6px,
+    1px 60%;
+  background-repeat: no-repeat;
+  background-color: rgba(5,8,16,0.6) !important;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
 }
-select option { background: #0c1018; }
+select:hover {
+  border-color: rgba(16,185,129,0.35) !important;
+  background-color: rgba(5,8,16,0.75) !important;
+}
+select option {
+  background: #0c1018;
+  color: #f0f4f8;
+  font-weight: 500;
+  padding: 10px;
+}
+/* Selects de jornadas / participantes: más altura táctil */
+select#tplPool,
+select#entryPool,
+select#entryParticipant,
+select#pickPool,
+select#pickParticipant,
+select#resultsPool,
+select#standingsPool,
+select#poolMode,
+select#areaFilter {
+  min-height: 48px;
+  font-size: 0.9rem;
+}
 
 /* ============================================================
    BUTTONS

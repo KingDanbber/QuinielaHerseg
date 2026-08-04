@@ -944,6 +944,40 @@ function formatModeLabel(mode) {
     }
 }
 
+/** Etiqueta corta de modo para selects (móvil) */
+function formatModeShort(mode) {
+    switch (mode) {
+        case "SENCILLA":
+            return "Sencilla";
+        case "ACUMULADA":
+            return "Acumulada";
+        case "GOLEO":
+            return "Goleo";
+        case "CAMPEON_CAMPEONES":
+            return "C. Campeones";
+        default:
+            return mode || "—";
+    }
+}
+
+function formatPoolStatusTag(status) {
+    if (status === "open") return "✅ Activa";
+    if (status === "draft") return "📝 Borrador";
+    return "🔒 Cerrada";
+}
+
+/** Label premium unificado para <option> de jornadas */
+function formatPoolOptionLabel(p, opts) {
+    opts = opts || {};
+    const name = (p && p.name) ? String(p.name) : "Jornada";
+    const mode = formatModeShort((p && p.mode_code) || "SENCILLA");
+    const parts = [name, mode];
+    if (opts.showStatus !== false) {
+        parts.push(formatPoolStatusTag(p && p.status));
+    }
+    return parts.join(" · ");
+}
+
 // Cargar Dashboard
 async function loadDashboardSummary() {
     const [poolsRes, participantsRes] = await Promise.all([
@@ -1835,7 +1869,7 @@ async function fillEntryPoolsSelect() {
         error
     } = await supabaseClient
     .from("pools")
-    .select("id, name, status, price, commission_pct, created_at")
+    .select("id, name, status, price, commission_pct, mode_code, created_at")
     .eq("status", "open")
     .order("created_at", {
         ascending: false
@@ -1845,9 +1879,10 @@ async function fillEntryPoolsSelect() {
     if (error) return showAlert(error.message, "error");
 
     const sel = $("entryPool");
-    sel.innerHTML = (data || []).map(p =>
-        `<option value="${p.id}">${p.name} (Activa)</option>`
-    ).join("");
+    if (!sel) return;
+    sel.innerHTML = (data || []).map(function(p) {
+        return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
+    }).join("");
 
     if ((data || [])[0]) sel.value = data[0].id;
 }
@@ -1880,7 +1915,7 @@ async function fillPickPoolsSelect() {
         error
     } = await supabaseClient
     .from("pools")
-    .select("id, name, status, created_at")
+    .select("id, name, status, mode_code, created_at")
     .order("created_at", {
         ascending: false
     })
@@ -1889,18 +1924,16 @@ async function fillPickPoolsSelect() {
     if (error) return showAlert(error.message, "error");
 
     const sel = $("pickPool");
+    if (!sel) return;
 
-    // Build options: label by status
-    sel.innerHTML = (data || []).map(p => {
-        const label =
-        p.status === "open" ? " ✅ Activa":
-        p.status === "draft" ? " 📝 Borrador":
-        " 🔒 Cerrada";
-        return `<option value="${p.id}">${p.name}${label}</option>`;
+    sel.innerHTML = (data || []).map(function(p) {
+        return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
-    // Auto-select the active (open) pool if present, otherwise first
-    const openPool = (data || []).find(p => p.status === "open");
+    // Preferir activa; si hay varias activas, la más reciente
+    const openPool = (data || []).find(function(p) {
+        return p.status === "open";
+    });
     const defaultPool = openPool || (data || [])[0];
     if (defaultPool) sel.value = defaultPool.id;
 }
@@ -3647,7 +3680,7 @@ async function fillTplPools() {
         error
     } = await supabaseClient
     .from("pools")
-    .select("id, name, status, round, competition, season, price")
+    .select("id, name, status, round, competition, season, price, mode_code")
     .order("created_at", {
         ascending: false
     })
@@ -3656,12 +3689,9 @@ async function fillTplPools() {
     if (error) return showAlert(error.message, "error");
 
     const sel = $("tplPool");
-    sel.innerHTML = (data || []).map(p => {
-        const tag =
-        p.status === "open" ? " (Activa)":
-        p.status === "draft" ? " (Borrador)":
-        " (Cerrada)";
-        return `<option value="${p.id}">${p.name}${tag}</option>`;
+    if (!sel) return;
+    sel.innerHTML = (data || []).map(function(p) {
+        return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 }
 
@@ -4531,7 +4561,7 @@ async function fillPickSelectors() {
     // reutiliza tus pools/participants si ya tienes funciones; si no:
     const poolsRes = await supabaseClient
     .from("pools")
-    .select("id, name, status, created_at")
+    .select("id, name, status, mode_code, created_at")
     .order("created_at", {
         ascending: false
     })
@@ -4539,9 +4569,9 @@ async function fillPickSelectors() {
 
     if (poolsRes.error) return showAlert(poolsRes.error.message, "error");
 
-    $("pickPool").innerHTML = (poolsRes.data || []).map(p =>
-        `<option value="${p.id}">${p.name}${p.status === "open" ? " (Activa)": ""}</option>`
-    ).join("");
+    $("pickPool").innerHTML = (poolsRes.data || []).map(function(p) {
+        return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
+    }).join("");
 
     const partsRes = await supabaseClient
     .from("participants")
@@ -4570,7 +4600,7 @@ async function fillResultsPoolsSelect() {
         error
     } = await supabaseClient
     .from("pools")
-    .select("id, name, status, created_at")
+    .select("id, name, status, mode_code, created_at")
     .order("created_at", {
         ascending: false
     })
@@ -4579,12 +4609,11 @@ async function fillResultsPoolsSelect() {
     if (error) return showAlert(error.message, "error");
 
     const sel = $("resultsPool");
+    if (!sel) return;
     sel.innerHTML = (data || []).map(function(p) {
-        const tag = p.status === "open" ? " ✅ Activa": "";
-        return `<option value="${p.id}">${p.name}${tag}</option>`;
+        return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
-    // Auto-seleccionar jornada activa, si no la primera
     const active = (data || []).find(function(p) {
         return p.status === "open";
     });
@@ -4915,7 +4944,7 @@ async function fillStandingsPoolsSelect() {
         error
     } = await supabaseClient
     .from("pools")
-    .select("id, name, status, created_at")
+    .select("id, name, status, mode_code, created_at")
     .order("created_at", {
         ascending: false
     })
@@ -4924,16 +4953,16 @@ async function fillStandingsPoolsSelect() {
     if (error) return showAlert(error.message, "error");
 
     const sel = $("standingsPool");
+    if (!sel) return;
     sel.innerHTML = (data || []).map(function(p) {
-        const tag = p.status === "open" ? " (Activa)": "";
-        return `<option value="${p.id}">${p.name}${tag}</option>`;
+        return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
     const active = (data || []).find(function(p) {
         return p.status === "open";
     });
-
     if (active) sel.value = active.id;
+    else if ((data || []).length) sel.value = data[0].id;
 }
 
 // Preview Podio Ganadores
