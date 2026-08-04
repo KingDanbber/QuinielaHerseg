@@ -2175,7 +2175,17 @@ async function setPoolOpen(poolId) {
     );
     if (!ok) return;
 
-    // 2. Cerrar SOLO las abiertas del mismo mode_code
+    // 2. Listar abiertas del mismo modo (para acumular Goleó al cerrarlas)
+    const {
+        data: toClose
+    } = await supabaseClient
+    .from("pools")
+    .select("id, mode_code")
+    .eq("status", "open")
+    .eq("mode_code", mode)
+    .neq("id", poolId);
+
+    // 3. Cerrar SOLO las abiertas del mismo mode_code
     const {
         error: closeErr
     } = await supabaseClient
@@ -2184,11 +2194,25 @@ async function setPoolOpen(poolId) {
         status: "closed"
     })
     .eq("status", "open")
-    .eq("mode_code", mode);
+    .eq("mode_code", mode)
+    .neq("id", poolId);
 
     if (closeErr) return showAlert(closeErr.message, "error");
 
-    // 3. Abrir la jornada objetivo
+    // 3b. Acumulación automática si se cerraron Goleó sin acertante
+    var goleoNotes = [];
+    if (toClose && toClose.length) {
+        for (var ci = 0; ci < toClose.length; ci++) {
+            try {
+                var note = await onGoleoPoolClosed(toClose[ci].id);
+                if (note) goleoNotes.push(note.trim());
+            } catch (e) {
+                console.warn("onGoleoPoolClosed", e);
+            }
+        }
+    }
+
+    // 4. Abrir la jornada objetivo
     const {
         error
     } = await supabaseClient
@@ -2200,7 +2224,9 @@ async function setPoolOpen(poolId) {
 
     if (error) return showAlert(error.message, "error");
 
-    showAlert("Jornada activada ✅ (" + modeLabel + ")", "ok");
+    // Si la jornada que abrimos es Goleó, la bolsa de las cerradas ya apuntó aquí (si aplica)
+    var extra = goleoNotes.length ? (" " + goleoNotes.join(" ")) : "";
+    showAlert("Jornada activada ✅ (" + modeLabel + ")" + extra, "ok");
 
     await loadPools();
     await fillTplPools();
@@ -2231,7 +2257,14 @@ async function setPoolClosed(poolId) {
 
     if (error) return showAlert(error.message, "error");
 
-    showAlert("Jornada cerrada ✅", "ok");
+    var goleoNote = "";
+    try {
+        goleoNote = await onGoleoPoolClosed(poolId);
+    } catch (e) {
+        console.warn(e);
+    }
+
+    showAlert("Jornada cerrada ✅" + (goleoNote || ""), "ok");
 
     await loadPools();
     await fillTplPools();
@@ -3682,7 +3715,14 @@ async function closeActivePool() {
 
     if (error) return showAlert(error.message, "error");
 
-    showAlert("Jornada cerrada ✅", "ok");
+    var goleoNote = "";
+    try {
+        goleoNote = await onGoleoPoolClosed(activePool.id);
+    } catch (e) {
+        console.warn(e);
+    }
+
+    showAlert("Jornada cerrada ✅" + (goleoNote || ""), "ok");
 
     await loadPools();
     await loadDashboardSummary();
@@ -3727,14 +3767,36 @@ async function openLatestClosedPool() {
     );
     if (!ok) return;
 
-    // Cerrar solo las abiertas del mismo modo
+    // Listar y cerrar solo las abiertas del mismo modo
+    const {
+        data: toCloseReopen
+    } = await supabaseClient
+    .from("pools")
+    .select("id, mode_code")
+    .eq("status", "open")
+    .eq("mode_code", mode)
+    .neq("id", closedPool.id);
+
     await supabaseClient
     .from("pools")
     .update({
         status: "closed"
     })
     .eq("status", "open")
-    .eq("mode_code", mode);
+    .eq("mode_code", mode)
+    .neq("id", closedPool.id);
+
+    var goleoNotesRe = [];
+    if (toCloseReopen && toCloseReopen.length) {
+        for (var ri = 0; ri < toCloseReopen.length; ri++) {
+            try {
+                var n = await onGoleoPoolClosed(toCloseReopen[ri].id);
+                if (n) goleoNotesRe.push(n.trim());
+            } catch (e) {
+                console.warn(e);
+            }
+        }
+    }
 
     const {
         error
@@ -3747,7 +3809,8 @@ async function openLatestClosedPool() {
 
     if (error) return showAlert(error.message, "error");
 
-    showAlert("Jornada reabierta ✅ (" + modeLabel + ")", "ok");
+    var extraRe = goleoNotesRe.length ? (" " + goleoNotesRe.join(" ")) : "";
+    showAlert("Jornada reabierta ✅ (" + modeLabel + ")" + extraRe, "ok");
 
     await loadPools();
     await loadDashboardSummary();
@@ -11262,29 +11325,29 @@ async function fillGoleoTransferTargets() {
 }
 
 /**
- * Acumula la bolsa de ESTE Goleó (sin acertante exacto) hacia el siguiente Goleó
- * (borrador u open, misma competition/season, round mayor; si no, el más reciente draft/open).
+ * Núcleo: acumula bolsa de un Goleó sin acertante exacto hacia el siguiente Goleó.
+ * @param {string} sourcePoolId
+ * @param {{ silent?: boolean, preferTargetId?: string|null }} opts
+ * @returns {Promise<{ ok: boolean, skipped?: boolean, reason?: string, amount?: number, toName?: string, toId?: string }>}
  */
-async function processGoleoCarryToNext(sourcePoolId) {
-    hideAlert();
-    var msg = $("goleoBagActionMsg");
-    if (msg) msg.textContent = "Procesando…";
-
+async function tryAutoCarryGoleoBag(sourcePoolId, opts) {
+    opts = opts || {};
     var { data: source } = await supabaseClient.from("pools")
         .select("id, name, round, status, competition, season, mode_code, carryover_amount")
         .eq("id", sourcePoolId).maybeSingle();
-    if (!source || String(source.mode_code || "").toUpperCase() !== "GOLEO") {
-        return showAlert("Pool origen no es Goleó.", "error");
+
+    if (!source) return { ok: false, reason: "Pool no encontrado" };
+    if (String(source.mode_code || "").toUpperCase() !== "GOLEO") {
+        return { ok: true, skipped: true, reason: "no_goleo" };
     }
 
     var goalsRes = await supabaseClient.from("pool_goals_total")
         .select("total_goals").eq("pool_id", sourcePoolId).maybeSingle();
     var actual = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
     if (actual === null || isNaN(actual)) {
-        return showAlert("Aún no hay total de goles capturado en esta jornada.", "error");
+        return { ok: false, skipped: true, reason: "sin_goles", msg: "Sin total de goles; no se pudo acumular automáticamente." };
     }
 
-    // Verificar que no haya acertante exacto (solo pagados)
     var predsRes = await supabaseClient.from("predictions_goals_total")
         .select("entry_id, predicted_goals").eq("pool_id", sourcePoolId);
     var entRes = await supabaseClient.from("entries")
@@ -11295,7 +11358,7 @@ async function processGoleoCarryToNext(sourcePoolId) {
         return paidIds[pr.entry_id] && Number(pr.predicted_goals) === actual;
     });
     if (hasExact) {
-        return showAlert("Hay acertante(s) exacto(s). La bolsa se reparte; no se acumula.", "error");
+        return { ok: true, skipped: true, reason: "hay_acertante", msg: "Hay acertante exacto; la bolsa se reparte." };
     }
 
     var bag = await getGoleoBagAmount(sourcePoolId);
@@ -11305,19 +11368,124 @@ async function processGoleoCarryToNext(sourcePoolId) {
         already = flags0[sourcePoolId] || null;
     } catch (e) { already = null; }
 
-    // Si ya se movió el prize de este pool, solo permitir mover carryover residual
     var amountToMove = bag.total_bag;
     if (already && already.amount) {
         amountToMove = bag.carryover_amount;
         if (amountToMove <= 0) {
-            return showAlert("Esta jornada ya transfirió su bolsa (" + money(already.amount) + "). No hay acum. residual.", "error");
+            return { ok: true, skipped: true, reason: "ya_transferido", msg: "Bolsa ya acumulada antes." };
         }
     }
     if (amountToMove <= 0) {
-        return showAlert("No hay bolsa que acumular (0).", "error");
+        return { ok: true, skipped: true, reason: "bolsa_cero", msg: "Bolsa en 0." };
     }
 
-    // Buscar siguiente Goleó (draft u open), preferir round mayor
+    var next = null;
+    if (opts.preferTargetId) {
+        var { data: pref } = await supabaseClient.from("pools")
+            .select("id, name, round, status, carryover_amount, mode_code")
+            .eq("id", opts.preferTargetId).maybeSingle();
+        if (pref && String(pref.mode_code || "").toUpperCase() === "GOLEO") next = pref;
+    }
+    if (!next) {
+        var q = supabaseClient.from("pools")
+            .select("id, name, round, status, carryover_amount")
+            .eq("mode_code", "GOLEO")
+            .neq("id", sourcePoolId)
+            .in("status", ["draft", "open"])
+            .order("round", { ascending: true })
+            .limit(20);
+        if (source.competition) q = q.eq("competition", source.competition);
+        if (source.season) q = q.eq("season", source.season);
+        var { data: candidates } = await q;
+        var srcRound = source.round;
+        if (candidates && candidates.length) {
+            if (srcRound != null && srcRound !== "" && !isNaN(Number(srcRound))) {
+                next = candidates.find(function(c) {
+                    return !isNaN(Number(c.round)) && Number(c.round) > Number(srcRound);
+                }) || null;
+            }
+            if (!next) next = candidates[0];
+        }
+    }
+    if (!next) {
+        return {
+            ok: false,
+            skipped: true,
+            reason: "sin_destino",
+            msg: "No hay Goleó borrador/activo para recibir la bolsa. Crea la próxima jornada Goleó."
+        };
+    }
+
+    var newCarry = Number(next.carryover_amount || 0) + amountToMove;
+    var { error: e1 } = await supabaseClient.from("pools")
+        .update({ carryover_amount: newCarry })
+        .eq("id", next.id);
+    if (e1) return { ok: false, reason: "error", msg: e1.message };
+
+    var { error: e2 } = await supabaseClient.from("pools")
+        .update({ carryover_amount: 0 })
+        .eq("id", sourcePoolId);
+    if (e2) return { ok: false, reason: "error", msg: e2.message };
+
+    try {
+        var flags = JSON.parse(localStorage.getItem("qa_goleo_carried") || "{}");
+        var prevAmt = (flags[sourcePoolId] && flags[sourcePoolId].amount) ? Number(flags[sourcePoolId].amount) : 0;
+        flags[sourcePoolId] = {
+            to: next.id,
+            amount: prevAmt + amountToMove,
+            at: new Date().toISOString(),
+            auto: !!opts.silent
+        };
+        localStorage.setItem("qa_goleo_carried", JSON.stringify(flags));
+    } catch (e) { /* ignore */ }
+
+    return {
+        ok: true,
+        amount: amountToMove,
+        toId: next.id,
+        toName: next.name || next.id,
+        fromName: source.name || source.id
+    };
+}
+
+/**
+ * Valida si se puede acumular (sin escribir). Luego processGoleoCarryToNext confirma y llama try.
+ */
+async function previewGoleoCarry(sourcePoolId) {
+    var { data: source } = await supabaseClient.from("pools")
+        .select("id, name, round, competition, season, mode_code, carryover_amount")
+        .eq("id", sourcePoolId).maybeSingle();
+    if (!source || String(source.mode_code || "").toUpperCase() !== "GOLEO") {
+        return { ok: false, msg: "Pool origen no es Goleó." };
+    }
+    var goalsRes = await supabaseClient.from("pool_goals_total")
+        .select("total_goals").eq("pool_id", sourcePoolId).maybeSingle();
+    var actual = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
+    if (actual === null || isNaN(actual)) {
+        return { ok: false, msg: "Aún no hay total de goles capturado en esta jornada." };
+    }
+    var predsRes = await supabaseClient.from("predictions_goals_total")
+        .select("entry_id, predicted_goals").eq("pool_id", sourcePoolId);
+    var entRes = await supabaseClient.from("entries")
+        .select("id").eq("pool_id", sourcePoolId).eq("paid", true);
+    var paidIds = {};
+    (entRes.data || []).forEach(function(e) { paidIds[e.id] = true; });
+    var hasExact = (predsRes.data || []).some(function(pr) {
+        return paidIds[pr.entry_id] && Number(pr.predicted_goals) === actual;
+    });
+    if (hasExact) return { ok: false, msg: "Hay acertante(s) exacto(s). La bolsa se reparte; no se acumula." };
+
+    var bag = await getGoleoBagAmount(sourcePoolId);
+    var already = null;
+    try {
+        already = JSON.parse(localStorage.getItem("qa_goleo_carried") || "{}")[sourcePoolId] || null;
+    } catch (e) { already = null; }
+    var amountToMove = bag.total_bag;
+    if (already && already.amount) amountToMove = bag.carryover_amount;
+    if (amountToMove <= 0) {
+        return { ok: false, msg: already ? "Esta jornada ya transfirió su bolsa." : "No hay bolsa que acumular (0)." };
+    }
+
     var q = supabaseClient.from("pools")
         .select("id, name, round, status, carryover_amount")
         .eq("mode_code", "GOLEO")
@@ -11329,55 +11497,78 @@ async function processGoleoCarryToNext(sourcePoolId) {
     if (source.season) q = q.eq("season", source.season);
     var { data: candidates } = await q;
     var next = null;
-    var srcRound = source.round;
     if (candidates && candidates.length) {
-        if (srcRound != null && srcRound !== "" && !isNaN(Number(srcRound))) {
+        if (source.round != null && source.round !== "" && !isNaN(Number(source.round))) {
             next = candidates.find(function(c) {
-                return !isNaN(Number(c.round)) && Number(c.round) > Number(srcRound);
+                return !isNaN(Number(c.round)) && Number(c.round) > Number(source.round);
             }) || null;
         }
         if (!next) next = candidates[0];
     }
     if (!next) {
-        return showAlert("No hay otro Goleó en borrador/activo para recibir la bolsa. Crea la próxima jornada Goleó primero.", "error");
+        return { ok: false, msg: "No hay otro Goleó en borrador/activo. Crea la próxima jornada Goleó primero." };
+    }
+    return { ok: true, amount: amountToMove, source: source, next: next };
+}
+
+async function processGoleoCarryToNext(sourcePoolId) {
+    hideAlert();
+    var msgEl = $("goleoBagActionMsg");
+    if (msgEl) msgEl.textContent = "Procesando…";
+
+    var prev = await previewGoleoCarry(sourcePoolId);
+    if (!prev.ok) {
+        if (msgEl) msgEl.textContent = prev.msg || "";
+        return showAlert(prev.msg || "No se puede acumular.", "error");
     }
 
     var ok = window.confirm(
-        "¿Acumular " + money(amountToMove) + " de «" + (source.name || "") + "»\n" +
-        "hacia «" + (next.name || "") + "»?\n\n" +
+        "¿Acumular " + money(prev.amount) + " de «" + (prev.source.name || "") + "»\n" +
+        "hacia «" + (prev.next.name || "") + "»?\n\n" +
         "Se sumará a su carryover_amount y se limpiará el acum. de origen."
     );
     if (!ok) {
-        if (msg) msg.textContent = "Cancelado.";
+        if (msgEl) msgEl.textContent = "Cancelado.";
         return;
     }
 
-    var newCarry = Number(next.carryover_amount || 0) + amountToMove;
-    var { error: e1 } = await supabaseClient.from("pools")
-        .update({ carryover_amount: newCarry })
-        .eq("id", next.id);
-    if (e1) return showAlert(e1.message, "error");
+    var result = await tryAutoCarryGoleoBag(sourcePoolId, { silent: false, preferTargetId: prev.next.id });
+    if (!result.ok) {
+        if (msgEl) msgEl.textContent = result.msg || result.reason || "";
+        return showAlert(result.msg || "Error al acumular.", "error");
+    }
+    if (result.skipped) {
+        if (msgEl) msgEl.textContent = result.msg || result.reason || "";
+        return showAlert(result.msg || "Nada que acumular.", "error");
+    }
 
-    // Limpiar carryover del origen (prize_pool de la vista es histórico de cobros)
-    var { error: e2 } = await supabaseClient.from("pools")
-        .update({ carryover_amount: 0 })
-        .eq("id", sourcePoolId);
-    if (e2) return showAlert(e2.message, "error");
-
-    try {
-        var flags = JSON.parse(localStorage.getItem("qa_goleo_carried") || "{}");
-        var prevAmt = (flags[sourcePoolId] && flags[sourcePoolId].amount) ? Number(flags[sourcePoolId].amount) : 0;
-        flags[sourcePoolId] = {
-            to: next.id,
-            amount: prevAmt + amountToMove,
-            at: new Date().toISOString()
-        };
-        localStorage.setItem("qa_goleo_carried", JSON.stringify(flags));
-    } catch (e) { /* ignore */ }
-
-    showAlert("Bolsa " + money(amountToMove) + " acumulada en «" + next.name + "» ✅", "ok");
-    if (msg) msg.textContent = "Listo → " + (next.name || next.id);
+    showAlert("Bolsa " + money(result.amount) + " acumulada en «" + result.toName + "» ✅", "ok");
+    if (msgEl) msgEl.textContent = "Listo → " + result.toName;
     await loadGoalChampionStandings();
+}
+
+/**
+ * Llamar al cerrar un pool: si es GOLEO sin acertante exacto, acumula sola.
+ * @returns {Promise<string>} texto corto para el alert (puede ser "").
+ */
+async function onGoleoPoolClosed(poolId) {
+    if (!poolId) return "";
+    try {
+        var result = await tryAutoCarryGoleoBag(poolId, { silent: true });
+        if (result && result.ok && !result.skipped && result.amount) {
+            return " · Bolsa Goleó " + money(result.amount) + " → «" + result.toName + "»";
+        }
+        if (result && result.reason === "sin_destino") {
+            return " · ⚠️ Goleó sin acertante: crea la próxima jornada para acumular la bolsa";
+        }
+        if (result && result.reason === "sin_goles") {
+            return " · Goleó cerrado sin goles capturados (acumula manual luego en Aciertos)";
+        }
+        return "";
+    } catch (e) {
+        console.warn("onGoleoPoolClosed", e);
+        return "";
+    }
 }
 
 /**
