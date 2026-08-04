@@ -376,6 +376,161 @@ async function ensureExportLibraries(options = {}) {
     }
 }
 
+/** Sanitiza todos los <canvas> del documento: evita createPattern con tamaño 0. */
+function sanitizeZeroSizeCanvases(root) {
+    var scope = root || document;
+    var list = scope.querySelectorAll ? scope.querySelectorAll("canvas") : [];
+    Array.prototype.forEach.call(list, function(c) {
+        var w = Number(c.width) || 0;
+        var h = Number(c.height) || 0;
+        if (w < 2 || h < 2) {
+            try {
+                c.width = Math.max(2, w);
+                c.height = Math.max(2, h);
+            } catch (e) { /* ignore */ }
+            if ((Number(c.width) || 0) < 2 || (Number(c.height) || 0) < 2) {
+                c.setAttribute("data-export-skip", "1");
+                if (c.style) c.style.display = "none";
+            }
+        }
+    });
+}
+
+/** Monta el nodo en un contenedor aislado fuera de pantalla (layout real). */
+function mountForExport(node) {
+    var printArea = $("printArea");
+    if (!printArea) throw new Error("No existe #printArea");
+    printArea.classList.remove("hidden");
+    printArea.innerHTML = "";
+    printArea.style.cssText = [
+        "position:fixed",
+        "left:-10000px",
+        "top:0",
+        "opacity:1",
+        "visibility:visible",
+        "pointer-events:none",
+        "z-index:-1",
+        "width:auto",
+        "height:auto",
+        "max-width:none",
+        "overflow:visible",
+        "background:transparent",
+        "display:block"
+    ].join(";");
+    printArea.appendChild(node);
+    void printArea.offsetWidth;
+    void node.offsetWidth;
+    return printArea;
+}
+
+function unmountExport() {
+    var printArea = $("printArea");
+    if (!printArea) return;
+    printArea.innerHTML = "";
+    printArea.style.cssText = "";
+    printArea.classList.add("hidden");
+}
+
+async function waitForExportImages(root) {
+    var imgs = Array.from((root && root.querySelectorAll) ? root.querySelectorAll("img") : []);
+    await Promise.all(imgs.map(function(img) {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise(function(resolve) {
+            var done = function() { resolve(); };
+            img.addEventListener("load", done, { once: true });
+            img.addEventListener("error", done, { once: true });
+            setTimeout(done, 2500);
+        });
+    }));
+    await new Promise(function(r) {
+        requestAnimationFrame(function() {
+            requestAnimationFrame(r);
+        });
+    });
+}
+
+async function captureElementPng(el, html2canvasOpts) {
+    if (!el) throw new Error("Nada que exportar");
+    await ensureExportLibraries();
+
+    // 1) Arreglar canvas 0x0 en el DOM vivo (causa clásica de createPattern)
+    sanitizeZeroSizeCanvases(document);
+
+    await waitForExportImages(el);
+
+    var w = el.offsetWidth || el.scrollWidth || 0;
+    var h = el.offsetHeight || el.scrollHeight || 0;
+    if (w < 8 || h < 8) {
+        if (el.style) {
+            el.style.width = el.style.width || "900px";
+            el.style.minWidth = "320px";
+            el.style.display = "block";
+        }
+        void el.offsetWidth;
+        w = el.offsetWidth || el.scrollWidth || 0;
+        h = el.offsetHeight || el.scrollHeight || 0;
+    }
+    if (w < 8 || h < 8) {
+        throw new Error("El cartel no tiene tamaño aún. Intenta de nuevo.");
+    }
+
+    var userOpts = html2canvasOpts || {};
+    var userIgnore = userOpts.ignoreElements;
+    var userOnclone = userOpts.onclone;
+
+    var opts = Object.assign({
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: "#050810",
+        foreignObjectRendering: false,
+        windowWidth: Math.ceil(w) + 40,
+        windowHeight: Math.ceil(h) + 40
+    }, userOpts);
+
+    opts.ignoreElements = function(node) {
+        if (!node) return false;
+        if (node.getAttribute && node.getAttribute("data-export-skip") === "1") return true;
+        if (node.tagName === "CANVAS") {
+            var cw = Number(node.width) || 0;
+            var ch = Number(node.height) || 0;
+            if (cw < 2 || ch < 2) return true;
+            if (node.id === "accuracyCanvas") return true;
+        }
+        if (typeof userIgnore === "function" && userIgnore(node)) return true;
+        return false;
+    };
+
+    opts.onclone = function(clonedDoc, clonedEl) {
+        try {
+            var canvases = clonedDoc.querySelectorAll("canvas");
+            Array.prototype.forEach.call(canvases, function(c) {
+                var cw = Number(c.width) || 0;
+                var ch = Number(c.height) || 0;
+                if (cw < 2 || ch < 2 || c.id === "accuracyCanvas" ||
+                    (c.getAttribute && c.getAttribute("data-export-skip") === "1")) {
+                    if (c.parentNode) c.parentNode.removeChild(c);
+                }
+            });
+            var imgs = clonedDoc.querySelectorAll("img");
+            Array.prototype.forEach.call(imgs, function(img) {
+                if (!img.complete || img.naturalWidth < 1) {
+                    img.style.display = "none";
+                    img.removeAttribute("src");
+                }
+            });
+        } catch (e) {
+            console.warn("onclone sanitize", e);
+        }
+        if (typeof userOnclone === "function") {
+            try { userOnclone(clonedDoc, clonedEl); } catch (e2) { /* ignore */ }
+        }
+    };
+
+    return html2canvas(el, opts);
+}
+
 function setBusy(btn, busy, textBusy = "Procesando…") {
     if (!btn) return;
     if (!btn.dataset.text) btn.dataset.text = btn.textContent;
@@ -5670,7 +5825,7 @@ function makeStandingsCard(opts) {
     var poolName = opts.poolName || "Jornada";
     var totalGoals = opts.totalGoals || 0;
     var rows = opts.rows || [];
-    var logoUrl = (typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL: "";
+    var logoUrl = opts.logoUrl || ((typeof QUINIELA_LOGO_URL !== "undefined") ? QUINIELA_LOGO_URL : "");
 
     var card = document.createElement("div");
     card.style.cssText = [
@@ -5716,7 +5871,8 @@ function makeStandingsCard(opts) {
     header.innerHTML = [
         // Logo + nombre
         '<div style="display:flex;align-items:center;gap:16px;">',
-        '<img src="' + logoUrl + '" crossorigin="anonymous"',
+        '<img src="' + logoUrl + '" crossorigin="anonymous" width="64" height="64"',
+        ' onerror="this.style.display=\'none\'"',
         ' style="width:64px;height:64px;object-fit:contain;border-radius:12px;',
         'box-shadow:0 0 24px rgba(16,185,129,.4);" />',
         '<div>',
@@ -5869,21 +6025,46 @@ async function exportStandingsImage() {
         return b.points - a.points || a.name.localeCompare(b.name);
     });
 
-    const printArea = $("printArea");
-    printArea.classList.remove("hidden");
-    printArea.innerHTML = "";
+    // Precargar logo como data URL para evitar fallos de CORS / naturalWidth 0
+    var logoBase64 = QUINIELA_LOGO_URL;
+    try {
+        var logoResp = await fetch(QUINIELA_LOGO_URL);
+        if (logoResp && logoResp.ok) {
+            var logoBlob = await logoResp.blob();
+            logoBase64 = await new Promise(function(res) {
+                var reader = new FileReader();
+                reader.onload = function() { res(reader.result); };
+                reader.onerror = function() { res(QUINIELA_LOGO_URL); };
+                reader.readAsDataURL(logoBlob);
+            });
+        }
+    } catch (logoErr) {
+        console.warn("Logo preload failed:", logoErr);
+    }
 
-    const card = makeStandingsCard( {
+    const card = makeStandingsCard({
         poolName: pool?.name || "Jornada",
         totalGoals: goalsData?.total_goals || 0,
-        rows: rows
+        rows: rows,
+        logoUrl: logoBase64
     });
 
-    printArea.appendChild(card);
+    // Quitar temporalmente el canvas del Dashboard para que html2canvas no lo toque
+    var accCanvas = document.getElementById("accuracyCanvas");
+    var accParent = accCanvas ? accCanvas.parentNode : null;
+    var accNext = accCanvas ? accCanvas.nextSibling : null;
+    if (accCanvas && accParent) {
+        accParent.removeChild(accCanvas);
+    }
 
     try {
-        const canvas = await html2canvas(card, {
-            scale: 2, backgroundColor: "#050810", useCORS: true
+        mountForExport(card);
+        if (!card.style.width) card.style.width = "900px";
+        card.style.minHeight = "200px";
+        void card.offsetWidth;
+        const canvas = await captureElementPng(card, {
+            scale: 2,
+            backgroundColor: "#050810"
         });
         const a = document.createElement("a");
         const safeName = (pool?.name || "tabla").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
@@ -5891,11 +6072,17 @@ async function exportStandingsImage() {
         a.href = canvas.toDataURL("image/png");
         a.click();
         showAlert("Tabla de aciertos exportada ✅", "ok");
-    } catch(err) {
-        showAlert("Error: " + (err?.message || err), "error");
+    } catch (err) {
+        showAlert("Error exportando tabla: " + (err?.message || err), "error");
     } finally {
-        printArea.innerHTML = "";
-        printArea.classList.add("hidden");
+        unmountExport();
+        // Restaurar canvas del Dashboard si lo quitamos
+        if (accCanvas && accParent) {
+            try {
+                if (accNext) accParent.insertBefore(accCanvas, accNext);
+                else accParent.appendChild(accCanvas);
+            } catch (e) { /* ignore */ }
+        }
     }
 }
 
@@ -8925,6 +9112,21 @@ async function loadAccuracyChart() {
         wrap.innerHTML = ""; return;
     }
 
+    // Si el contenedor está oculto (otra pestaña), no crear canvas:
+    // un canvas en display:none o con tamaño 0 provoca createPattern en html2canvas.
+    var measured = Math.floor(wrap.getBoundingClientRect().width || wrap.clientWidth || 0);
+    if (measured < 40) {
+        wrap.innerHTML = [
+            '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">',
+            '<div class="flex items-center justify-between mb-3">',
+            '<h3 class="font-semibold text-sm">📈 Aciertos por Jornada</h3>',
+            '</div>',
+            '<div class="text-xs text-zinc-500 py-6 text-center">Se mostrará al volver a Inicio</div>',
+            '</div>'
+        ].join("");
+        return;
+    }
+
     wrap.innerHTML = [
         '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">',
         '<div class="flex items-center justify-between mb-3">',
@@ -8934,15 +9136,17 @@ async function loadAccuracyChart() {
         '<span><span class="inline-block w-3 h-1 bg-sky-400 rounded mr-1"></span>Máximo</span>',
         '</div>',
         '</div>',
-        '<canvas id="accuracyCanvas" height="140"></canvas>',
+        '<canvas id="accuracyCanvas" width="300" height="140" style="width:100%;max-width:100%;display:block;"></canvas>',
         '</div>'
     ].join("");
 
-    var ctx = document.getElementById("accuracyCanvas").getContext("2d");
-
-    // Simple canvas chart (no Chart.js dependency)
     var canvas = document.getElementById("accuracyCanvas");
-    canvas.width = wrap.offsetWidth - 32;
+    if (!canvas) return;
+
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = Math.max(260, measured - 32);
     canvas.height = 140;
 
     var W = canvas.width,
