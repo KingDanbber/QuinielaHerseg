@@ -19,7 +19,7 @@
   <!-- Supabase UMD (más compatible en Android/previsualizadores) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -129,35 +129,63 @@
     <!-- TAB: DASHBOARD -->
     <section id="tab-home" class="app-tab space-y-4">
 
-      <!-- KPIs jornada activa -->
+    <!-- KPIs multi-modo -->
+      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+        <div class="text-xs text-zinc-400 mb-2">Jornadas activas</div>
+        <div id="dashActivePool" class="text-sm font-semibold space-y-1">—</div>
+      </div>
+
+      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+        <div class="text-xs text-zinc-400 mb-1">Modos activos</div>
+        <div id="dashMode" class="text-sm font-semibold">—</div>
+      </div>
+
+      <!-- Bolsas por modo + total -->
+      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+        <div class="text-xs text-zinc-400 mb-2">Bolsas por modo</div>
+        <div id="dashPrizesByMode" class="space-y-2 text-sm"></div>
+        <div class="mt-3 pt-3 border-t border-zinc-800 flex items-center justify-between">
+          <span class="text-xs text-zinc-400">Bolsa total</span>
+          <span id="dashPrize" class="text-base font-black text-emerald-400">$0</span>
+        </div>
+      </div>
+
+      <!-- Jugando / Pagados / Sin pagar por modo -->
+      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+        <div class="text-xs text-zinc-400 mb-2">Participantes jugando</div>
+        <div id="dashPlayingByMode" class="space-y-2 text-sm"></div>
+        <div class="mt-3 pt-3 border-t border-zinc-800 flex items-center justify-between">
+          <span class="text-xs text-zinc-400">Total jugando</span>
+          <span id="dashJugandoJornada" class="text-base font-black text-emerald-400">0</span>
+        </div>
+      </div>
+
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-          <div class="text-xs text-zinc-400">Jornada activa</div>
-          <div id="dashActivePool" class="text-sm font-semibold mt-1">—</div>
+          <div class="text-xs text-zinc-400 mb-2">Boletos pagados</div>
+          <div id="dashPaidByMode" class="space-y-1 text-sm"></div>
+          <div class="mt-2 pt-2 border-t border-zinc-800 flex justify-between items-center">
+            <span class="text-xs text-zinc-500">Total</span>
+            <span id="dashPaidEntries" class="font-bold text-emerald-300">0</span>
+          </div>
         </div>
         <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-          <div class="text-xs text-zinc-400">Bolsa actual</div>
-          <div id="dashPrize" class="text-sm font-semibold mt-1">$0</div>
+          <div class="text-xs text-zinc-400 mb-2">Boletos sin pagar</div>
+          <div id="dashUnpaidByMode" class="space-y-1 text-sm"></div>
+          <div class="mt-2 pt-2 border-t border-zinc-800 flex justify-between items-center">
+            <span class="text-xs text-zinc-500">Total</span>
+            <span id="dashUnpaidEntries" class="font-bold text-amber-300">0</span>
+          </div>
         </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
         <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
           <div class="text-xs text-zinc-400">En BD (activos)</div>
           <div id="dashParticipants" class="text-sm font-semibold mt-1">0</div>
         </div>
         <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-          <div class="text-xs text-zinc-400">Boletos pagados</div>
-          <div id="dashPaidEntries" class="text-sm font-semibold mt-1">0</div>
-        </div>
-        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 col-span-2">
-          <div class="text-xs text-zinc-400">⚽ Jugando esta jornada</div>
-          <div id="dashJugandoJornada" class="text-xl font-black mt-1 text-emerald-400">0</div>
-          <div class="text-xs text-zinc-500 mt-1">Participantes con boleto registrado</div>
-        </div>
-        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-          <div class="text-xs text-zinc-400">Modo activo</div>
-          <div id="dashMode" class="text-sm font-semibold mt-1">—</div>
-        </div>
-        <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-          <div class="text-xs text-zinc-400">Acumulado</div>
+          <div class="text-xs text-zinc-400">Acumulado total</div>
           <div id="dashCarryover" class="text-sm font-semibold mt-1">$0</div>
         </div>
       </div>
@@ -532,7 +560,7 @@
         <div class="mt-4">
   <div class="flex items-center justify-between gap-2 mb-2">
     <div class="text-zinc-400 text-sm">Boletos registrados</div>
-    <button id="btnRefreshEntriesList" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" type="button" title="Actualizar">
+    <button id="btnRefreshEntriesList" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" type="button" title="Actualizar">
       🔄
     </button>
   </div>
@@ -616,25 +644,25 @@
     </div>
 
 <div class="mt-4">
-  <div class="pick-status-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+  <div class="flex items-center justify-between gap-3 mb-2">
     <div class="text-sm font-semibold">Estado de captura</div>
 
-    <div class="pick-status-toolbar flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
-      <button id="btnPickLegend" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
+    <div class="flex items-center gap-2">
+      <button id="btnPickLegend" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
   💬
 </button>
 
-<button id="btnRefreshPickStatus" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
+<button id="btnRefreshPickStatus" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center">
   🔄
 </button>
 
-<button onclick="sendPicksReminder()" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Recordatorio a pendientes">
+<button onclick="sendPicksReminder()" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Recordatorio a pendientes">
   ⏰
 </button>
-<button id="btnExportAllPicks" type="button" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Exportar lista de picks por WhatsApp">
+<button id="btnExportAllPicks" type="button" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Exportar lista de picks por WhatsApp">
   📋
 </button>
-<button onclick="showPicksCompactView()" type="button" class="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Vista compacta de todos los picks">
+<button onclick="showPicksCompactView()" type="button" class="w-11 h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-lg flex items-center justify-center" title="Vista compacta de todos los picks">
   📊
 </button>
     </div>
@@ -1020,7 +1048,7 @@ function showLocalNotification(title, body) {
 window.requestPushPermission = requestPushPermission;
 window.showLocalNotification = showLocalNotification;
 </script>
-<script src="./app.js?v=790"></script>
+<script src="./app.js?v=779"></script>
 
   <!--script src="./app.js"></script-->
 </body>
