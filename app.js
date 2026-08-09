@@ -6073,120 +6073,274 @@ function makeStandingsCard(opts) {
 
 
 // Funcion Exportar Imagen Tabla de Aciertos
+/** Precarga el logo como Image (o null). */
+async function loadLogoImage() {
+    var logoUrl = typeof QUINIELA_LOGO_URL !== "undefined" ? QUINIELA_LOGO_URL : "";
+    if (!logoUrl) return null;
+    return new Promise(function(resolve) {
+        var img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = function() { resolve(img.naturalWidth > 0 ? img : null); };
+        img.onerror = function() { resolve(null); };
+        img.src = logoUrl;
+        setTimeout(function() { resolve(img.complete && img.naturalWidth > 0 ? img : null); }, 2000);
+    });
+}
+
+/**
+ * Tabla de aciertos premium — Canvas 2D nativo (sin html2canvas).
+ */
+function drawStandingsCanvas(opts) {
+    opts = opts || {};
+    var rows = opts.rows || [];
+    var poolName = opts.poolName || "Jornada";
+    var totalGoals = opts.totalGoals != null ? opts.totalGoals : 0;
+    var logoImg = opts.logoImg || null;
+
+    var W = 900;
+    var padX = 36;
+    var rowH = 64;
+    var headerH = 200;
+    var footerH = 90;
+    var H = headerH + Math.max(rows.length, 1) * rowH + footerH + 24;
+    H = Math.max(H, 520);
+
+    var scale = 2;
+    var canvas = document.createElement("canvas");
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo crear el canvas");
+    ctx.scale(scale, scale);
+
+    // Fondo
+    var bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#071220");
+    bg.addColorStop(0.5, "#050810");
+    bg.addColorStop(1, "#040c10");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Glows
+    function glow(x, y, r, c) {
+        var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, c);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    glow(80, 60, 180, "rgba(16,185,129,0.14)");
+    glow(W - 70, H - 80, 160, "rgba(6,182,212,0.10)");
+
+    // Línea top
+    var lg = ctx.createLinearGradient(W * 0.12, 0, W * 0.88, 0);
+    lg.addColorStop(0, "transparent");
+    lg.addColorStop(0.5, "#10b981");
+    lg.addColorStop(1, "transparent");
+    ctx.fillStyle = lg;
+    ctx.fillRect(W * 0.12, 0, W * 0.76, 3);
+
+    // Header
+    var hy = 32;
+    if (logoImg && logoImg.naturalWidth > 0) {
+        try {
+            ctx.drawImage(logoImg, padX, hy, 52, 52);
+        } catch (e) { /* ignore */ }
+    }
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 22px Arial";
+    ctx.fillText("Quiniela Arcángel", padX + 64, hy + 22);
+    ctx.fillStyle = "#34d399";
+    ctx.font = "600 13px Arial";
+    ctx.fillText('"Pasión X Ganar"', padX + 64, hy + 42);
+
+    // Badge goles
+    var goalsTxt = "⚽  " + totalGoals + " goles";
+    ctx.font = "700 14px Arial";
+    var gw = ctx.measureText(goalsTxt).width + 28;
+    var gx = W - padX - gw;
+    ctx.fillStyle = "rgba(16,185,129,0.12)";
+    ctx.strokeStyle = "rgba(16,185,129,0.35)";
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, gx, hy + 8, gw, 32, 16);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#34d399";
+    ctx.textAlign = "center";
+    ctx.fillText(goalsTxt, gx + gw / 2, hy + 29);
+
+    // Título
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 36px Arial";
+    ctx.fillText("Tabla de Aciertos", W / 2, 120);
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 16px Arial";
+    ctx.fillText(poolName, W / 2, 148);
+
+    // Separador
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padX, 168);
+    ctx.lineTo(W - padX, 168);
+    ctx.stroke();
+
+    // Filas
+    var y0 = 184;
+    var medals = ["#fbbf24", "#9ca3af", "#c2410c"];
+    rows.forEach(function(r, i) {
+        var y = y0 + i * rowH;
+        var isFirst = i === 0;
+        var isTop3 = i < 3;
+
+        // Fondo fila
+        if (isFirst) {
+            ctx.fillStyle = "rgba(16,185,129,0.14)";
+            ctx.strokeStyle = "rgba(16,185,129,0.32)";
+        } else if (isTop3) {
+            ctx.fillStyle = "rgba(255,255,255,0.05)";
+            ctx.strokeStyle = "rgba(255,255,255,0.10)";
+        } else {
+            ctx.fillStyle = "rgba(255,255,255,0.03)";
+            ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        }
+        ctx.lineWidth = 1;
+        roundRect(ctx, padX, y, W - padX * 2, rowH - 8, 14);
+        ctx.fill();
+        ctx.stroke();
+
+        var cy = y + (rowH - 8) / 2;
+
+        // Posición
+        if (i < 3) {
+            ctx.beginPath();
+            ctx.arc(padX + 28, cy, 16, 0, Math.PI * 2);
+            ctx.fillStyle = medals[i];
+            ctx.globalAlpha = 0.25;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = medals[i];
+            ctx.font = "900 16px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(i + 1), padX + 28, cy + 1);
+            ctx.textBaseline = "alphabetic";
+        } else {
+            ctx.fillStyle = "rgba(255,255,255,0.08)";
+            ctx.beginPath();
+            ctx.arc(padX + 28, cy, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#6b7280";
+            ctx.font = "800 13px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(i + 1), padX + 28, cy + 1);
+            ctx.textBaseline = "alphabetic";
+        }
+
+        // Nombre + área
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "800 17px Arial";
+        ctx.fillText(r.name || "?", padX + 56, cy - 6);
+        ctx.fillStyle = "#8a94a6";
+        ctx.font = "600 12px Arial";
+        var sub = (r.area || "Sin área") + "  ·  " + (r.captured_picks || 0) + " picks  ·  " + (r.played_matches || 0) + " jugados";
+        ctx.fillText(sub, padX + 56, cy + 14);
+
+        // Puntos
+        var ptsColor = isFirst ? "#34d399" : (isTop3 ? "#a3e635" : "#f0f4f8");
+        ctx.textAlign = "right";
+        ctx.fillStyle = ptsColor;
+        ctx.font = "900 28px Arial";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(r.points || 0), W - padX - 16, cy - 4);
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "600 10px Arial";
+        ctx.fillText("aciertos", W - padX - 16, cy + 16);
+    });
+
+    // Footer
+    var fy = H - 56;
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(padX, fy - 12);
+    ctx.lineTo(W - padX, fy - 12);
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 16px Arial";
+    ctx.fillText("¡Gracias por participar! 🏆", W / 2, fy + 8);
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 12px Arial";
+    ctx.fillText("Quiniela Arcángel — Pasión X Ganar", W / 2, fy + 28);
+
+    return canvas;
+}
+
 async function exportStandingsImage() {
-    await ensureExportLibraries();
     hideAlert();
     const pool_id = $("standingsPool").value;
     if (!pool_id) return showAlert("Selecciona una jornada.", "error");
 
-    const {
-        data: pool
-    } = await supabaseClient.from("pools")
-    .select("id, name").eq("id", pool_id).maybeSingle();
+    const { data: pool } = await supabaseClient.from("pools")
+        .select("id, name").eq("id", pool_id).maybeSingle();
 
-    const {
-        data: paidEntries
-    } = await supabaseClient.from("entries")
-    .select("id, participant_id").eq("pool_id", pool_id).eq("paid", true);
+    const { data: paidEntries } = await supabaseClient.from("entries")
+        .select("id, participant_id").eq("pool_id", pool_id).eq("paid", true);
 
     if (!paidEntries || !paidEntries.length)
         return showAlert("No hay boletos pagados para exportar.", "error");
 
-    const paidEntryIds = paidEntries.map(function(e) {
-        return e.id;
-    });
-    const paidPartIds = paidEntries.map(function(e) {
-        return e.participant_id;
-    });
+    const paidEntryIds = paidEntries.map(function(e) { return e.id; });
+    const paidPartIds = paidEntries.map(function(e) { return e.participant_id; });
 
-    const {
-        data: pointsRows
-    } = await supabaseClient.from("entry_points")
-    .select("entry_id, participant_id, points, played_matches, captured_picks")
-    .eq("pool_id", pool_id).in("entry_id", paidEntryIds);
+    const { data: pointsRows } = await supabaseClient.from("entry_points")
+        .select("entry_id, participant_id, points, played_matches, captured_picks")
+        .eq("pool_id", pool_id).in("entry_id", paidEntryIds);
 
-    const {
-        data: participants
-    } = await supabaseClient.from("participants")
-    .select("id, name, area").in("id", paidPartIds);
+    const { data: participants } = await supabaseClient.from("participants")
+        .select("id, name, area").in("id", paidPartIds);
 
-    const {
-        data: goalsData
-    } = await supabaseClient.from("pool_goals_total")
-    .select("total_goals").eq("pool_id", pool_id).maybeSingle();
+    const { data: goalsData } = await supabaseClient.from("pool_goals_total")
+        .select("total_goals").eq("pool_id", pool_id).maybeSingle();
 
-    const partMap = new Map((participants || []).map(function(p) {
-        return [p.id, p];
-    }));
+    const partMap = new Map((participants || []).map(function(p) { return [p.id, p]; }));
 
     const rows = (pointsRows || []).map(function(r) {
         const p = partMap.get(r.participant_id) || {};
         return {
-            name: p.name || "Sin nombre", area: p.area || "", points: Number(r.points || 0),
-            played_matches: Number(r.played_matches || 0), captured_picks: Number(r.captured_picks || 0)
+            name: p.name || "Sin nombre",
+            area: p.area || "",
+            points: Number(r.points || 0),
+            played_matches: Number(r.played_matches || 0),
+            captured_picks: Number(r.captured_picks || 0)
         };
     }).sort(function(a, b) {
         return b.points - a.points || a.name.localeCompare(b.name);
     });
 
-    // Precargar logo como data URL para evitar fallos de CORS / naturalWidth 0
-    var logoBase64 = QUINIELA_LOGO_URL;
     try {
-        var logoResp = await fetch(QUINIELA_LOGO_URL);
-        if (logoResp && logoResp.ok) {
-            var logoBlob = await logoResp.blob();
-            logoBase64 = await new Promise(function(res) {
-                var reader = new FileReader();
-                reader.onload = function() { res(reader.result); };
-                reader.onerror = function() { res(QUINIELA_LOGO_URL); };
-                reader.readAsDataURL(logoBlob);
-            });
-        }
-    } catch (logoErr) {
-        console.warn("Logo preload failed:", logoErr);
-    }
-
-    const card = makeStandingsCard({
-        poolName: pool?.name || "Jornada",
-        totalGoals: goalsData?.total_goals || 0,
-        rows: rows,
-        logoUrl: logoBase64
-    });
-
-    // Quitar temporalmente el canvas del Dashboard para que html2canvas no lo toque
-    var accCanvas = document.getElementById("accuracyCanvas");
-    var accParent = accCanvas ? accCanvas.parentNode : null;
-    var accNext = accCanvas ? accCanvas.nextSibling : null;
-    if (accCanvas && accParent) {
-        accParent.removeChild(accCanvas);
-    }
-
-    try {
-        mountForExport(card);
-        if (!card.style.width) card.style.width = "900px";
-        card.style.minHeight = "200px";
-        void card.offsetWidth;
-        const canvas = await captureElementPng(card, {
-            scale: 2,
-            backgroundColor: "#050810"
+        var logoImg = await loadLogoImage();
+        var canvas = drawStandingsCanvas({
+            poolName: (pool && pool.name) || "Jornada",
+            totalGoals: (goalsData && goalsData.total_goals) || 0,
+            rows: rows,
+            logoImg: logoImg
         });
         const a = document.createElement("a");
-        const safeName = (pool?.name || "tabla").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+        const safeName = ((pool && pool.name) || "tabla").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
         a.download = safeName + "-tabla-aciertos.png";
         a.href = canvas.toDataURL("image/png");
         a.click();
         showAlert("Tabla de aciertos exportada ✅", "ok");
     } catch (err) {
-        showAlert("Error exportando tabla: " + (err?.message || err), "error");
-    } finally {
-        unmountExport();
-        // Restaurar canvas del Dashboard si lo quitamos
-        if (accCanvas && accParent) {
-            try {
-                if (accNext) accParent.insertBefore(accCanvas, accNext);
-                else accParent.appendChild(accCanvas);
-            } catch (e) { /* ignore */ }
-        }
+        showAlert("Error exportando tabla: " + (err && err.message ? err.message : err), "error");
     }
 }
 
@@ -6345,8 +6499,186 @@ function makeWinnerCard(opts) {
 }
 
 // Exportar Cartel Ganador
+/**
+ * Cartel del ganador premium — Canvas 2D nativo.
+ */
+function drawWinnerCanvas(opts) {
+    opts = opts || {};
+    var poolName = opts.poolName || "Jornada";
+    var season = opts.season || "";
+    var isFinished = !!opts.isFinished;
+    var winners = opts.winners || [];
+    var winningPoints = Number(opts.winningPoints || 0);
+    var prizePool = Number(opts.prizePool || 0);
+    var prizePerWinner = Number(opts.prizePerWinner || 0);
+    var winnersCount = Number(opts.winnersCount || winners.length || 1);
+    var logoImg = opts.logoImg || null;
+    var isTie = winnersCount > 1;
+    var names = winners.map(function(w) { return w.name || "?"; }).join(" & ");
+    var title = isTie
+        ? (isFinished ? "Empate Final" : "Empate Provisional")
+        : (isFinished ? "Ganador Final" : "Ganador Provisional");
+
+    var W = 900;
+    var H = 1000;
+    var scale = 2;
+    var canvas = document.createElement("canvas");
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo crear el canvas");
+    ctx.scale(scale, scale);
+
+    // Fondo dark premium
+    var bg = ctx.createRadialGradient(W / 2, 120, 20, W / 2, H * 0.4, H * 0.9);
+    bg.addColorStop(0, "#0c1a2e");
+    bg.addColorStop(0.5, "#050810");
+    bg.addColorStop(1, "#03060c");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    function glow(x, y, r, c) {
+        var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, c);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    glow(W / 2, 280, 240, "rgba(251,191,36,0.16)");
+    glow(60, 40, 150, "rgba(16,185,129,0.12)");
+
+    // Línea top
+    var lg = ctx.createLinearGradient(W * 0.15, 0, W * 0.85, 0);
+    lg.addColorStop(0, "transparent");
+    lg.addColorStop(0.5, "#fbbf24");
+    lg.addColorStop(1, "transparent");
+    ctx.fillStyle = lg;
+    ctx.fillRect(W * 0.15, 0, W * 0.7, 3);
+
+    // Logo + marca
+    var hy = 40;
+    ctx.textAlign = "center";
+    if (logoImg && logoImg.naturalWidth > 0) {
+        try {
+            ctx.drawImage(logoImg, W / 2 - 28, hy, 56, 56);
+            hy += 70;
+        } catch (e) {
+            hy += 10;
+        }
+    } else {
+        ctx.font = "32px Arial";
+        ctx.fillText("🏆", W / 2, hy + 28);
+        hy += 52;
+    }
+
+    ctx.fillStyle = "#34d399";
+    ctx.font = "800 13px Arial";
+    ctx.fillText("QUINIELA ARCÁNGEL", W / 2, hy);
+    hy += 40;
+
+    // Título estado
+    ctx.fillStyle = isFinished ? "#fbbf24" : "#38bdf8";
+    ctx.font = "800 14px Arial";
+    ctx.fillText(title.toUpperCase(), W / 2, hy);
+    hy += 44;
+
+    // Avatar círculo ganador
+    var avR = 64;
+    var avCy = hy + avR;
+    var ringGrad = ctx.createLinearGradient(W / 2 - avR, avCy - avR, W / 2 + avR, avCy + avR);
+    ringGrad.addColorStop(0, "#fde68a");
+    ringGrad.addColorStop(1, "#b45309");
+    ctx.beginPath();
+    ctx.arc(W / 2, avCy, avR + 6, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(251,191,36,0.25)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(W / 2, avCy, avR + 3, 0, Math.PI * 2);
+    ctx.fillStyle = ringGrad;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(W / 2, avCy, avR, 0, Math.PI * 2);
+    ctx.fillStyle = "#1c1917";
+    ctx.fill();
+
+    var initials = nameInitials(winners[0] && winners[0].name ? winners[0].name : "G");
+    if (isTie) initials = "🤝";
+    ctx.fillStyle = "#fbbf24";
+    ctx.font = isTie ? "40px Arial" : "900 36px Arial";
+    ctx.textBaseline = "middle";
+    ctx.fillText(initials, W / 2, avCy + 1);
+    ctx.textBaseline = "alphabetic";
+
+    hy = avCy + avR + 36;
+
+    // Nombres
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 32px Arial";
+    wrapText(ctx, names, W / 2, hy, W - 80, 36);
+    hy += 48;
+
+    // Subtítulo jornada
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 15px Arial";
+    ctx.fillText(poolName + (season ? "  ·  " + season : ""), W / 2, hy);
+    hy += 40;
+
+    // Stats cards
+    var cards = [
+        { label: "Aciertos", value: String(winningPoints), color: "#34d399" },
+        { label: "Bolsa", value: (typeof money === "function" ? money(prizePool) : ("$" + prizePool)), color: "#fbbf24" },
+        { label: isTie ? "Por persona" : "Premio", value: (typeof money === "function" ? money(prizePerWinner) : ("$" + prizePerWinner)), color: "#38bdf8" }
+    ];
+    var cardW = 240;
+    var cardGap = 18;
+    var cardsTotal = cards.length * cardW + (cards.length - 1) * cardGap;
+    var cx0 = (W - cardsTotal) / 2;
+    cards.forEach(function(c, i) {
+        var x = cx0 + i * (cardW + cardGap);
+        ctx.fillStyle = "rgba(255,255,255,0.04)";
+        ctx.strokeStyle = "rgba(255,255,255,0.10)";
+        ctx.lineWidth = 1;
+        roundRect(ctx, x, hy, cardW, 88, 16);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#8a94a6";
+        ctx.font = "700 12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(c.label.toUpperCase(), x + cardW / 2, hy + 28);
+        ctx.fillStyle = c.color;
+        ctx.font = "900 26px Arial";
+        ctx.fillText(c.value, x + cardW / 2, hy + 62);
+    });
+    hy += 120;
+
+    // Ganadores count
+    if (isTie) {
+        ctx.fillStyle = "#fbbf24";
+        ctx.font = "700 14px Arial";
+        ctx.fillText(winnersCount + " ganadores empatados", W / 2, hy);
+        hy += 28;
+    }
+
+    // Footer
+    var fy = H - 60;
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.beginPath();
+    ctx.moveTo(W * 0.18, fy - 10);
+    ctx.lineTo(W * 0.82, fy - 10);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 16px Arial";
+    ctx.fillText("¡Gracias por participar! 🏆", W / 2, fy + 12);
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 12px Arial";
+    ctx.fillText("Quiniela Arcángel — Pasión X Ganar", W / 2, fy + 32);
+
+    return canvas;
+}
+
 async function exportWinnerCard() {
-    await ensureExportLibraries();
     hideAlert();
 
     const pool_id = $("standingsPool").value;
@@ -6356,10 +6688,10 @@ async function exportWinnerCard() {
         data: pool,
         error: poolErr
     } = await supabaseClient
-    .from("pools")
-    .select("id, name, season")
-    .eq("id", pool_id)
-    .maybeSingle();
+        .from("pools")
+        .select("id, name, season")
+        .eq("id", pool_id)
+        .maybeSingle();
 
     if (poolErr) return showAlert(poolErr.message, "error");
 
@@ -6370,45 +6702,30 @@ async function exportWinnerCard() {
         return showAlert("No hay ganador calculado todavía para esta jornada.", "error");
     }
 
-    const printArea = $("printArea");
-    printArea.classList.remove("hidden");
-    printArea.innerHTML = "";
-
-    const card = makeWinnerCard( {
-        poolName: pool?.name || "Jornada",
-        season: pool?.season || "",
-        isFinished: completionInfo?.isFinished,
-        winners: winnerSummary.winners,
-        winningPoints: winnerSummary.winning_points,
-        prizePool: winnerSummary.prize_pool,
-        prizePerWinner: winnerSummary.prize_per_winner,
-        winnersCount: winnerSummary.winners_count
-    });
-
-    printArea.appendChild(card);
-
     try {
-        const canvas = await html2canvas(card, {
-            scale: 2,
-            backgroundColor: "#ffffff",
-            useCORS: true
+        var logoImg = await loadLogoImage();
+        var canvas = drawWinnerCanvas({
+            poolName: (pool && pool.name) || "Jornada",
+            season: (pool && pool.season) || "",
+            isFinished: completionInfo && completionInfo.isFinished,
+            winners: winnerSummary.winners,
+            winningPoints: winnerSummary.winning_points,
+            prizePool: winnerSummary.prize_pool,
+            prizePerWinner: winnerSummary.prize_per_winner,
+            winnersCount: winnerSummary.winners_count,
+            logoImg: logoImg
         });
 
         const a = document.createElement("a");
-        const safeName = (pool?.name || "ganador")
-        .replace(/[^\w\s-]/g, "")
-        .replace(/\s+/g, "-");
-
+        const safeName = ((pool && pool.name) || "ganador")
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-");
         a.download = safeName + "-ganador.png";
         a.href = canvas.toDataURL("image/png");
         a.click();
-
-        showAlert("Cartel del ganador generado ✅", "ok");
+        showAlert("Cartel del ganador premium exportado ✅", "ok");
     } catch (err) {
-        showAlert("Error generando cartel: " + (err?.message || err), "error");
-    } finally {
-        printArea.innerHTML = "";
-        printArea.classList.add("hidden");
+        showAlert("Error generando cartel: " + (err && err.message ? err.message : err), "error");
     }
 }
 
@@ -10536,46 +10853,270 @@ async function saveResultsAndCalc() {
 // ═══════════════════════════════════════════════
 // CARTEL TOP 3 — Visual para grupo WA
 // ═══════════════════════════════════════════════
+/** Escapa texto para insertar en HTML del cartel. */
+function escapeHtmlCard(str) {
+    return String(str == null ? "" : str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+/** Iniciales (máx. 2) a partir del nombre. */
+function nameInitials(name) {
+    var parts = String(name || "?").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Cartel Top 3 premium para WhatsApp.
+ * opts: { jornada, competition, season, totalGoals, ranked:[{name,area,points}], logoUrl }
+ */
+function makeTop3Card(opts) {
+    opts = opts || {};
+    var ranked = (opts.ranked || []).slice(0, 3);
+    var jornada = opts.jornada || "Jornada";
+    var competition = opts.competition || "Liga MX";
+    var season = opts.season || "";
+    var totalGoals = opts.totalGoals != null ? opts.totalGoals : 0;
+    var logoUrl = opts.logoUrl || "";
+
+    var METAL = {
+        1: {
+            ring: "#fbbf24",
+            ring2: "#f59e0b",
+            glow: "rgba(251,191,36,.45)",
+            fill: "linear-gradient(145deg,#fef3c7 0%,#f59e0b 45%,#b45309 100%)",
+            avatarBg: "linear-gradient(145deg,#292524 0%,#1c1917 100%)",
+            podium: "linear-gradient(180deg,#fbbf24 0%,#d97706 55%,#92400e 100%)",
+            podiumSide: "linear-gradient(180deg,#b45309 0%,#78350f 100%)",
+            label: "#fde68a",
+            rank: "1"
+        },
+        2: {
+            ring: "#e5e7eb",
+            ring2: "#9ca3af",
+            glow: "rgba(229,231,235,.28)",
+            fill: "linear-gradient(145deg,#f9fafb 0%,#9ca3af 50%,#6b7280 100%)",
+            avatarBg: "linear-gradient(145deg,#27272a 0%,#18181b 100%)",
+            podium: "linear-gradient(180deg,#e5e7eb 0%,#9ca3af 55%,#6b7280 100%)",
+            podiumSide: "linear-gradient(180deg,#6b7280 0%,#3f3f46 100%)",
+            label: "#e5e7eb",
+            rank: "2"
+        },
+        3: {
+            ring: "#fdba74",
+            ring2: "#c2410c",
+            glow: "rgba(234,88,12,.28)",
+            fill: "linear-gradient(145deg,#ffedd5 0%,#ea580c 50%,#9a3412 100%)",
+            avatarBg: "linear-gradient(145deg,#292524 0%,#1c1917 100%)",
+            podium: "linear-gradient(180deg,#fdba74 0%,#c2410c 55%,#7c2d12 100%)",
+            podiumSide: "linear-gradient(180deg,#9a3412 0%,#7c2d12 100%)",
+            label: "#fdba74",
+            rank: "3"
+        }
+    };
+
+    // Orden visual del podio: 2º | 1º | 3º
+    var visual = [];
+    if (ranked.length === 1) {
+        visual = [{ player: ranked[0], place: 1 }];
+    } else if (ranked.length === 2) {
+        visual = [
+            { player: ranked[1], place: 2 },
+            { player: ranked[0], place: 1 }
+        ];
+    } else {
+        visual = [
+            { player: ranked[1], place: 2 },
+            { player: ranked[0], place: 1 },
+            { player: ranked[2], place: 3 }
+        ];
+    }
+
+    var PODIUM_H = { 1: 118, 2: 86, 3: 64 };
+    var AVATAR = { 1: 112, 2: 92, 3: 84 };
+    var COL_W = { 1: 220, 2: 190, 3: 180 };
+
+    var card = document.createElement("div");
+    card.style.cssText = [
+        "width:900px",
+        "box-sizing:border-box",
+        "background:radial-gradient(ellipse 120% 80% at 50% -10%,#0c1a2e 0%,#050810 45%,#03060c 100%)",
+        "color:#f0f4f8",
+        "border-radius:28px",
+        "padding:40px 36px 32px",
+        "font-family:Arial,Helvetica,sans-serif",
+        "position:relative",
+        "overflow:hidden"
+    ].join(";");
+
+    // Capas decorativas
+    var decor = document.createElement("div");
+    decor.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;";
+    decor.innerHTML = [
+        // Glow oro centro (1er lugar)
+        '<div style="position:absolute;top:18%;left:50%;transform:translateX(-50%);width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(251,191,36,.14) 0%,transparent 68%);"></div>',
+        // Glow emerald esquina
+        '<div style="position:absolute;top:-80px;left:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(16,185,129,.16) 0%,transparent 70%);"></div>',
+        // Glow cyan
+        '<div style="position:absolute;bottom:-60px;right:-50px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(6,182,212,.12) 0%,transparent 70%);"></div>',
+        // Grid sutil
+        '<div style="position:absolute;inset:0;opacity:.35;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:48px 48px;"></div>',
+        // Línea acento superior
+        '<div style="position:absolute;top:0;left:12%;right:12%;height:3px;background:linear-gradient(90deg,transparent,#10b981 20%,#fbbf24 50%,#10b981 80%,transparent);border-radius:0 0 4px 4px;"></div>',
+        // Viñeta inferior
+        '<div style="position:absolute;bottom:0;left:0;right:0;height:140px;background:linear-gradient(transparent,rgba(0,0,0,.35));"></div>'
+    ].join("");
+    card.appendChild(decor);
+
+    // ── HEADER ──
+    var header = document.createElement("div");
+    header.style.cssText = "position:relative;text-align:center;margin-bottom:8px;";
+    var logoHtml = logoUrl
+        ? '<img src="' + logoUrl + '" crossorigin="anonymous" onerror="this.style.display=\'none\'" style="width:52px;height:52px;object-fit:contain;border-radius:12px;box-shadow:0 0 20px rgba(16,185,129,.35);margin-bottom:10px;" />'
+        : '<div style="font-size:28px;margin-bottom:6px;">🏆</div>';
+    header.innerHTML = [
+        logoHtml,
+        '<div style="font-size:12px;font-weight:800;letter-spacing:3.5px;color:#34d399;text-transform:uppercase;">Quiniela Arcángel</div>',
+        '<div style="font-size:40px;font-weight:900;color:#fff;line-height:1.15;margin-top:8px;letter-spacing:-0.5px;">Top 3</div>',
+        '<div style="display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:6px 16px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">',
+        '<span style="font-size:14px;font-weight:800;color:#f0f4f8;">' + escapeHtmlCard(jornada) + '</span>',
+        '<span style="color:#4b5563;">·</span>',
+        '<span style="font-size:12px;color:#9ca3af;">' + escapeHtmlCard(competition) + (season ? " · " + escapeHtmlCard(season) : "") + '</span>',
+        '<span style="color:#4b5563;">·</span>',
+        '<span style="font-size:12px;font-weight:700;color:#34d399;">⚽ ' + totalGoals + ' goles</span>',
+        '</div>'
+    ].join("");
+    card.appendChild(header);
+
+    // ── PODIO ──
+    var podiumWrap = document.createElement("div");
+    podiumWrap.style.cssText = [
+        "display:flex",
+        "align-items:flex-end",
+        "justify-content:center",
+        "gap:18px",
+        "margin-top:28px",
+        "margin-bottom:8px",
+        "position:relative",
+        "min-height:340px",
+        "padding:0 8px"
+    ].join(";");
+
+    visual.forEach(function(item) {
+        var place = item.place;
+        var player = item.player;
+        var m = METAL[place];
+        var avSize = AVATAR[place];
+        var pH = PODIUM_H[place];
+        var colW = COL_W[place];
+        var initials = nameInitials(player.name);
+        var isFirst = place === 1;
+
+        var col = document.createElement("div");
+        col.style.cssText = [
+            "display:flex",
+            "flex-direction:column",
+            "align-items:center",
+            "width:" + colW + "px",
+            "position:relative",
+            "z-index:" + (isFirst ? "3" : "2")
+        ].join(";");
+
+        // Corona solo 1º (sin filter: html2canvas falla con blur/drop-shadow en móvil)
+        var crownHtml = isFirst
+            ? '<div style="font-size:26px;line-height:1;margin-bottom:6px;">👑</div>'
+            : '<div style="height:32px;"></div>';
+
+        // Avatar — sin filter:blur ni background-clip:text (incompatibles con html2canvas)
+        var avatarHtml = [
+            '<div style="position:relative;width:' + avSize + 'px;height:' + avSize + 'px;margin-bottom:14px;">',
+            '<div style="position:absolute;inset:0;border-radius:50%;padding:4px;background:' + m.fill + ';box-shadow:0 0 24px ' + m.glow + ',0 8px 20px rgba(0,0,0,.45);">',
+            '<div style="width:100%;height:100%;border-radius:50%;background:' + m.avatarBg + ';display:flex;align-items:center;justify-content:center;border:2px solid rgba(0,0,0,.35);">',
+            '<span style="font-size:' + (isFirst ? 36 : 28) + 'px;font-weight:900;color:' + m.ring + ';letter-spacing:-1px;">' + escapeHtmlCard(initials) + '</span>',
+            '</div></div>',
+            '<div style="position:absolute;bottom:-2px;right:-2px;width:32px;height:32px;border-radius:50%;background:' + m.fill + ';display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.45);border:2px solid #050810;">',
+            '<span style="font-size:14px;font-weight:900;color:#111;">' + m.rank + '</span>',
+            '</div>',
+            '</div>'
+        ].join("");
+
+        var infoHtml = [
+            '<div style="text-align:center;margin-bottom:14px;min-height:72px;display:flex;flex-direction:column;justify-content:flex-end;">',
+            '<div style="font-size:' + (isFirst ? 18 : 15) + 'px;font-weight:800;color:#fff;line-height:1.25;max-width:' + (colW - 8) + 'px;">' + escapeHtmlCard(player.name) + '</div>',
+            '<div style="font-size:11px;color:#8a94a6;margin-top:3px;font-weight:600;">' + escapeHtmlCard(player.area || "Sin área") + '</div>',
+            '<div style="margin-top:8px;">',
+            '<span style="font-size:' + (isFirst ? 42 : 32) + 'px;font-weight:900;color:' + m.label + ';line-height:1;">' + Number(player.points || 0) + '</span>',
+            '</div>',
+            '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6b7280;margin-top:2px;">aciertos</div>',
+            '</div>'
+        ].join("");
+
+        var podiumHtml = [
+            '<div style="width:100%;position:relative;">',
+            '<div style="height:' + pH + 'px;border-radius:12px 12px 4px 4px;background:' + m.podium + ';box-shadow:0 10px 24px rgba(0,0,0,.4);position:relative;overflow:hidden;">',
+            '<div style="position:absolute;top:0;left:10%;right:10%;height:40%;background:linear-gradient(180deg,rgba(255,255,255,.28),transparent);border-radius:12px 12px 0 0;"></div>',
+            '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">',
+            '<span style="font-size:' + (isFirst ? 48 : 36) + 'px;font-weight:900;color:rgba(0,0,0,.22);letter-spacing:-2px;">' + m.rank + '</span>',
+            '</div>',
+            '</div>',
+            '<div style="height:8px;margin:0 10px;border-radius:0 0 6px 6px;background:rgba(0,0,0,.28);"></div>',
+            '</div>'
+        ].join("");
+
+        col.innerHTML = crownHtml + avatarHtml + infoHtml + podiumHtml;
+        podiumWrap.appendChild(col);
+    });
+
+    card.appendChild(podiumWrap);
+
+    // ── FOOTER ──
+    var footer = document.createElement("div");
+    footer.style.cssText = "position:relative;text-align:center;margin-top:20px;padding-top:18px;";
+    footer.innerHTML = [
+        '<div style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);margin-bottom:16px;"></div>',
+        '<div style="font-size:17px;font-weight:800;color:#fff;">¡Gracias por participar! 🏆</div>',
+        '<div style="font-size:13px;color:#8a94a6;margin-top:5px;font-weight:600;">Quiniela Arcángel — Pasión X Ganar</div>'
+    ].join("");
+    card.appendChild(footer);
+
+    return card;
+}
+
 async function exportTop3Card() {
     await ensureExportLibraries();
     hideAlert();
     var pool_id = $("standingsPool").value;
     if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
 
-    var [poolRes,
-        paidRes,
-        ptRes,
-        goalsRes] = await Promise.all([
-            supabaseClient.from("pools").select("id, name, round, competition, season").eq("id", pool_id).maybeSingle(),
-            supabaseClient.from("entries").select("id, participant_id").eq("pool_id", pool_id).eq("paid", true),
-            supabaseClient.from("entry_points").select("entry_id, participant_id, points, played_matches").eq("pool_id", pool_id),
-            supabaseClient.from("pool_goals_total").select("total_goals").eq("pool_id", pool_id).maybeSingle()
-        ]);
+    var [poolRes, paidRes, ptRes, goalsRes] = await Promise.all([
+        supabaseClient.from("pools").select("id, name, round, competition, season").eq("id", pool_id).maybeSingle(),
+        supabaseClient.from("entries").select("id, participant_id").eq("pool_id", pool_id).eq("paid", true),
+        supabaseClient.from("entry_points").select("entry_id, participant_id, points, played_matches").eq("pool_id", pool_id),
+        supabaseClient.from("pool_goals_total").select("total_goals").eq("pool_id", pool_id).maybeSingle()
+    ]);
 
     var pool = poolRes.data || {};
-    var paid = new Set((paidRes.data || []).map(function(e) {
-        return e.id;
-    }));
-    var points = (ptRes.data || []).filter(function(r) {
-        return paid.has(r.entry_id);
-    });
-    var totalGoals = goalsRes.data ? goalsRes.data.total_goals: 0;
+    var paid = new Set((paidRes.data || []).map(function(e) { return e.id; }));
+    var points = (ptRes.data || []).filter(function(r) { return paid.has(r.entry_id); });
+    var totalGoals = goalsRes.data ? goalsRes.data.total_goals : 0;
 
     if (!points.length) return showAlert("No hay boletos pagados con aciertos.", "error");
 
-    var partIds = [...new Set(points.map(function(r) {
-        return r.participant_id;
-    }))];
+    var partIds = [...new Set(points.map(function(r) { return r.participant_id; }))];
     var partRes = await supabaseClient.from("participants").select("id, name, area").in("id", partIds);
     var partMap = {};
-    (partRes.data || []).forEach(function(p) {
-        partMap[p.id] = p;
-    });
+    (partRes.data || []).forEach(function(p) { partMap[p.id] = p; });
 
     var ranked = points.map(function(r) {
         var p = partMap[r.participant_id] || {};
         return {
-            name: p.name || "?", area: p.area || "", points: Number(r.points || 0)
+            name: p.name || "?",
+            area: p.area || "",
+            points: Number(r.points || 0)
         };
     }).sort(function(a, b) {
         return b.points - a.points || a.name.localeCompare(b.name);
@@ -10583,164 +11124,359 @@ async function exportTop3Card() {
 
     if (!ranked.length) return showAlert("Sin datos para el cartel.", "error");
 
-    var jornada = pool.round ? "Jornada " + pool.round: pool.name;
+    var jornada = pool.round != null && pool.round !== "" ? ("Jornada " + pool.round) : (pool.name || "Jornada");
+    var competition = pool.competition || "Liga MX";
+    var season = pool.season || "";
 
-    // Build card DOM
-    var card = document.createElement("div");
-    card.style.cssText = [
-        "width:800px",
-        "box-sizing:border-box",
-        "background:linear-gradient(160deg,#050810 0%,#071220 50%,#040c10 100%)",
-        "color:#f0f4f8",
-        "border-radius:24px",
-        "padding:36px 32px",
-        "font-family:Arial,sans-serif",
-        "position:relative",
-        "overflow:hidden"
-    ].join(";");
-
-    // Glow + grid bg
-    card.innerHTML = [
-        '<div style="position:absolute;top:-60px;left:-60px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(16,185,129,.18) 0%,transparent 70%);pointer-events:none;"></div>',
-        '<div style="position:absolute;bottom:-40px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(6,182,212,.12) 0%,transparent 70%);pointer-events:none;"></div>',
-        '<div style="position:absolute;top:0;left:15%;right:15%;height:2px;background:linear-gradient(90deg,transparent,#10b981,transparent);border-radius:0 0 4px 4px;"></div>',
-        // Header
-        '<div style="text-align:center;margin-bottom:28px;position:relative;">',
-        '<div style="font-size:15px;color:#34d399;margin-bottom:6px;letter-spacing:1px;">🏆 QUINIELA ARCÁNGEL</div>',
-        '<div style="font-size:34px;font-weight:900;color:#fff;line-height:1.1;">Top 3 &mdash; ' + jornada + '</div>',
-        '<div style="font-size:14px;color:#8a94a6;margin-top:6px;">' + (pool.competition || "Liga MX") + ' &bull; ' + (pool.season || "") + ' &bull; ' + totalGoals + ' goles</div>',
-        '</div>',
-    ].join("");
-
-    // Podium — 2nd 1st 3rd layout
-    var podiumOrder = ranked.length === 1 ? [ranked[0]]:
-    ranked.length === 2 ? [ranked[1],
-        ranked[0]]:
-    [ranked[1],
-        ranked[0],
-        ranked[2]];
-
-    var podiumConfig = ranked.length === 1
-    ? [{
-        pos: 1,
-        color: "#f59e0b",
-        glow: "rgba(245,158,11,.35)",
-        size: "100px",
-        fontSize: "36px",
-        textSize: "18px",
-        emoji: "🥇"
-    }]: ranked.length === 2
-    ? [{
-        pos: 2,
-        color: "#9ca3af",
-        glow: "rgba(156,163,175,.2)",
-        size: "80px",
-        fontSize: "28px",
-        textSize: "15px",
-        emoji: "🥈"
-    },
-        {
-            pos: 1,
-            color: "#f59e0b",
-            glow: "rgba(245,158,11,.35)",
-            size: "100px",
-            fontSize: "36px",
-            textSize: "18px",
-            emoji: "🥇"
-        },
-    ]: [{
-            pos: 2,
-            color: "#9ca3af",
-            glow: "rgba(156,163,175,.2)",
-            size: "80px",
-            fontSize: "28px",
-            textSize: "14px",
-            emoji: "🥈"
-        },
-        {
-            pos: 1,
-            color: "#f59e0b",
-            glow: "rgba(245,158,11,.35)",
-            size: "100px",
-            fontSize: "36px",
-            textSize: "18px",
-            emoji: "🥇"
-        },
-        {
-            pos: 3,
-            color: "#b45309",
-            glow: "rgba(180,83,9,.2)",
-            size: "70px",
-            fontSize: "24px",
-            textSize: "13px",
-            emoji: "🥉"
-        },
-    ];
-
-    var podiumEl = document.createElement("div");
-    podiumEl.style.cssText = "display:flex;align-items:flex-end;justify-content:center;gap:20px;margin-bottom:28px;position:relative;";
-
-    podiumOrder.forEach(function(player, idx) {
-        var cfg = podiumConfig[idx];
-        var initials = player.name.split(" ").map(function(w) {
-            return w[0] || "";
-        }).join("").substring(0, 2).toUpperCase();
-
-        var col = document.createElement("div");
-        col.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:10px;" +
-        (cfg.pos === 1 ? "margin-bottom:0;": "margin-bottom:-12px;");
-
-        col.innerHTML = [
-            // Avatar with initials
-            '<div style="width:' + cfg.size + ';height:' + cfg.size + ';border-radius:50%;' +
-            'background:linear-gradient(135deg,' + cfg.color + '22,' + cfg.color + '44);' +
-            'border:3px solid ' + cfg.color + ';display:flex;align-items:center;justify-content:center;' +
-            'box-shadow:0 0 24px ' + cfg.glow + ';font-size:' + cfg.fontSize + ';font-weight:900;color:' + cfg.color + ';">',
-            initials,
-            '</div>',
-            // Emoji medal
-            '<div style="font-size:24px;">' + cfg.emoji + '</div>',
-            // Name
-            '<div style="text-align:center;max-width:' + (cfg.pos === 1 ? "180px": "140px") + ';">',
-            '<div style="font-size:' + cfg.textSize + ';font-weight:800;color:#fff;line-height:1.2;">' + player.name + '</div>',
-            '<div style="font-size:11px;color:#8a94a6;margin-top:3px;">' + (player.area || "Sin área") + '</div>',
-            '<div style="font-size:' + (cfg.pos === 1 ? "28px": "22px") + ';font-weight:900;color:' + cfg.color + ';margin-top:4px;">' + player.points + '</div>',
-            '<div style="font-size:11px;color:#6b7280;">aciertos</div>',
-            '</div>',
-        ].join("");
-
-        podiumEl.appendChild(col);
-    });
-
-    card.appendChild(podiumEl);
-
-    // Footer
-    var footer = document.createElement("div");
-    footer.style.cssText = "text-align:center;border-top:1px solid rgba(255,255,255,.1);padding-top:18px;";
-    footer.innerHTML = '<div style="font-size:16px;font-weight:800;color:#fff;">¡Gracias por participar! 🏆</div><div style="font-size:13px;color:#8a94a6;margin-top:4px;">Quiniela Arcángel &mdash; Pasión X Ganar</div>';
-    card.appendChild(footer);
-
-    // Export
-    var printArea = $("printArea");
-    printArea.classList.remove("hidden");
-    printArea.innerHTML = "";
-    printArea.appendChild(card);
+    // Precargar logo (opcional; si falla se omite)
+    var logoImg = null;
+    try {
+        var logoUrl = typeof QUINIELA_LOGO_URL !== "undefined" ? QUINIELA_LOGO_URL : "";
+        if (logoUrl) {
+            logoImg = await new Promise(function(resolve) {
+                var img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = function() { resolve(img); };
+                img.onerror = function() { resolve(null); };
+                img.src = logoUrl;
+                setTimeout(function() { resolve(img.complete && img.naturalWidth > 0 ? img : null); }, 2000);
+            });
+        }
+    } catch (e) {
+        logoImg = null;
+    }
 
     try {
-        var canvas = await html2canvas(card, {
-            scale: 2.5, backgroundColor: "#050810", useCORS: true, logging: false
+        // Canvas nativo — SIN html2canvas (evita createPattern 0x0 en móvil)
+        var canvas = drawTop3Canvas({
+            ranked: ranked,
+            jornada: jornada,
+            competition: competition,
+            season: season,
+            totalGoals: totalGoals,
+            logoImg: logoImg
         });
+
         var a = document.createElement("a");
-        a.download = (jornada || "top3").replace(/\s+/g, "-") + "-top3.png";
+        var safeName = (jornada || "top3").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+        a.download = safeName + "-top3.png";
         a.href = canvas.toDataURL("image/png");
         a.click();
-        showAlert("Cartel Top 3 exportado ✅", "ok");
-    } catch(err) {
-        showAlert("Error: " + (err && err.message ? err.message: String(err)), "error");
-    } finally {
-        printArea.innerHTML = "";
-        printArea.classList.add("hidden");
+        showAlert("Cartel Top 3 premium exportado ✅", "ok");
+    } catch (err) {
+        showAlert("Error: " + (err && err.message ? err.message : String(err)), "error");
     }
+}
+
+/**
+ * Dibuja el cartel Top 3 en un <canvas> nativo (sin html2canvas).
+ * Fiable en Chrome/Android donde html2canvas falla con createPattern.
+ */
+function drawTop3Canvas(opts) {
+    opts = opts || {};
+    var ranked = (opts.ranked || []).slice(0, 3);
+    var jornada = opts.jornada || "Jornada";
+    var competition = opts.competition || "Liga MX";
+    var season = opts.season || "";
+    var totalGoals = opts.totalGoals != null ? opts.totalGoals : 0;
+    var logoImg = opts.logoImg || null;
+
+    var W = 900;
+    var H = 1020;
+    var scale = 2;
+    var canvas = document.createElement("canvas");
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo crear el canvas");
+    ctx.scale(scale, scale);
+
+    // Fondo
+    var bg = ctx.createRadialGradient(W / 2, 80, 30, W / 2, H * 0.45, H * 0.85);
+    bg.addColorStop(0, "#0c1a2e");
+    bg.addColorStop(0.5, "#050810");
+    bg.addColorStop(1, "#03060c");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    function softGlow(x, y, r, color) {
+        var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, color);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    softGlow(W / 2, 380, 200, "rgba(251,191,36,0.12)");
+    softGlow(70, 40, 140, "rgba(16,185,129,0.12)");
+    softGlow(W - 50, H - 60, 120, "rgba(6,182,212,0.09)");
+
+    // Línea superior
+    var lg = ctx.createLinearGradient(W * 0.12, 0, W * 0.88, 0);
+    lg.addColorStop(0, "rgba(16,185,129,0)");
+    lg.addColorStop(0.2, "#10b981");
+    lg.addColorStop(0.5, "#fbbf24");
+    lg.addColorStop(0.8, "#10b981");
+    lg.addColorStop(1, "rgba(16,185,129,0)");
+    ctx.fillStyle = lg;
+    ctx.fillRect(W * 0.12, 0, W * 0.76, 3);
+
+    // ── HEADER con espaciado generoso ──
+    var hy = 36;
+    if (logoImg && logoImg.naturalWidth > 0) {
+        try {
+            ctx.drawImage(logoImg, W / 2 - 28, hy, 56, 56);
+            hy += 56 + 14;
+        } catch (e) {
+            hy += 8;
+        }
+    } else {
+        ctx.font = "28px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("🏆", W / 2, hy + 26);
+        hy += 48;
+    }
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#34d399";
+    ctx.font = "800 13px Arial";
+    ctx.fillText("QUINIELA ARCÁNGEL", W / 2, hy);
+    hy += 36;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 42px Arial";
+    ctx.fillText("Top 3", W / 2, hy);
+    hy += 28;
+
+    var meta = jornada + "  ·  " + competition + (season ? "  ·  " + season : "") + "  ·  ⚽ " + totalGoals + " goles";
+    ctx.font = "700 15px Arial";
+    var metaW = Math.min(ctx.measureText(meta).width + 48, W - 48);
+    var chipX = (W - metaW) / 2;
+    var chipY = hy;
+    var chipH = 36;
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.strokeStyle = "rgba(52,211,153,0.28)";
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, chipX, chipY, metaW, chipH, 18);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#d1d5db";
+    ctx.font = "700 14px Arial";
+    ctx.fillText(meta, W / 2, chipY + 23);
+
+    var headerBottom = chipY + chipH;
+
+    // ── PODIO + PERSONAS ──
+    // Layout de abajo hacia arriba para que los aciertos NUNCA se metan en el bloque
+    var visual = [];
+    if (ranked.length === 1) visual = [{ p: ranked[0], place: 1 }];
+    else if (ranked.length === 2) visual = [{ p: ranked[1], place: 2 }, { p: ranked[0], place: 1 }];
+    else visual = [{ p: ranked[1], place: 2 }, { p: ranked[0], place: 1 }, { p: ranked[2], place: 3 }];
+
+    var METAL = {
+        1: { ring: "#fbbf24", label: "#fde68a", podiumTop: "#fbbf24", podiumBot: "#92400e", av: 54, ph: 130, colW: 230 },
+        2: { ring: "#e5e7eb", label: "#e5e7eb", podiumTop: "#d1d5db", podiumBot: "#6b7280", av: 46, ph: 96, colW: 200 },
+        3: { ring: "#fdba74", label: "#fdba74", podiumTop: "#fb923c", podiumBot: "#7c2d12", av: 42, ph: 74, colW: 190 }
+    };
+
+    var gapCols = 20;
+    var totalColsW = visual.reduce(function(s, v) { return s + METAL[v.place].colW; }, 0) + (visual.length - 1) * gapCols;
+    var startX = (W - totalColsW) / 2;
+
+    // Base del podio: anclada para llenar el centro (header ~170 → avatares ~300)
+    var footerY = H - 52;
+    var baseY = 820;
+
+    var xCursor = startX;
+    visual.forEach(function(item) {
+        var place = item.place;
+        var player = item.p;
+        var m = METAL[place];
+        var cx = xCursor + m.colW / 2;
+        var isFirst = place === 1;
+        var ph = m.ph;
+        var podiumTop = baseY - ph;
+        var avR = m.av;
+
+        // Stack vertical FIJO encima del podio (de abajo a arriba):
+        // podiumTop
+        //   ↑ gap 14
+        //   "aciertos"
+        //   ↑ 6
+        //   POINTS (grande)
+        //   ↑ 14
+        //   área
+        //   ↑ 6
+        //   nombre
+        //   ↑ 14
+        //   avatar
+        //   ↑ 8
+        //   corona (solo 1º)
+
+        var yAciertos = podiumTop - 16;
+        var yPoints = yAciertos - 18;
+        var yArea = yPoints - (isFirst ? 48 : 40);
+        var yName = yArea - 16;
+        var avCy = yName - 20 - avR;
+        var yCrown = avCy - avR - 10;
+
+        // Si el 1º queda demasiado cerca del header, no importa; priorizamos no solapar podio.
+        // Subir todo el grupo si hay mucho aire: anclar al header cuando sobre espacio.
+        var minAvTop = headerBottom + 36;
+        if (avCy - avR < minAvTop) {
+            // Empujar hacia abajo no — ya estamos anclados al podio. El vacío superior se reduce
+            // porque header es compacto y H es menor.
+        }
+
+        // Corona
+        if (isFirst) {
+            ctx.font = "28px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("👑", cx, yCrown);
+        }
+
+        // Avatar
+        ctx.beginPath();
+        ctx.arc(cx, avCy, avR + 5, 0, Math.PI * 2);
+        ctx.fillStyle = m.ring;
+        ctx.globalAlpha = 0.22;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        var ringGrad = ctx.createLinearGradient(cx - avR, avCy - avR, cx + avR, avCy + avR);
+        ringGrad.addColorStop(0, m.podiumTop);
+        ringGrad.addColorStop(1, m.podiumBot);
+
+        ctx.beginPath();
+        ctx.arc(cx, avCy, avR + 3, 0, Math.PI * 2);
+        ctx.fillStyle = ringGrad;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(cx, avCy, avR, 0, Math.PI * 2);
+        ctx.fillStyle = "#1c1917";
+        ctx.fill();
+
+        var initials = nameInitials(player.name);
+        ctx.fillStyle = m.ring;
+        ctx.font = "900 " + (isFirst ? 32 : 24) + "px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(initials, cx, avCy + 1);
+        ctx.textBaseline = "alphabetic";
+
+        // Badge rank
+        var bx = cx + avR * 0.72;
+        var by = avCy + avR * 0.72;
+        ctx.beginPath();
+        ctx.arc(bx, by, 14, 0, Math.PI * 2);
+        ctx.fillStyle = ringGrad;
+        ctx.fill();
+        ctx.strokeStyle = "#050810";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = "#111";
+        ctx.font = "900 12px Arial";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(place), bx, by + 1);
+        ctx.textBaseline = "alphabetic";
+
+        // Nombre
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "800 " + (isFirst ? 16 : 14) + "px Arial";
+        ctx.textAlign = "center";
+        wrapText(ctx, player.name || "?", cx, yName, m.colW - 16, 17);
+
+        // Área
+        ctx.fillStyle = "#8a94a6";
+        ctx.font = "600 11px Arial";
+        ctx.fillText(player.area || "Sin área", cx, yArea);
+
+        // Puntos — bien visibles, encima del podio
+        ctx.fillStyle = m.label;
+        ctx.font = "900 " + (isFirst ? 44 : 34) + "px Arial";
+        ctx.fillText(String(Number(player.points || 0)), cx, yPoints);
+
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "700 10px Arial";
+        ctx.fillText("ACIERTOS", cx, yAciertos);
+
+        // Bloque podio
+        var podiumGrad = ctx.createLinearGradient(cx, podiumTop, cx, baseY);
+        podiumGrad.addColorStop(0, m.podiumTop);
+        podiumGrad.addColorStop(1, m.podiumBot);
+        ctx.fillStyle = podiumGrad;
+        roundRect(ctx, xCursor + 10, podiumTop, m.colW - 20, ph, 12);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255,255,255,0.22)";
+        roundRect(ctx, xCursor + 20, podiumTop + 3, m.colW - 40, Math.max(16, ph * 0.25), 8);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(0,0,0,0.18)";
+        ctx.font = "900 " + (isFirst ? 52 : 38) + "px Arial";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(place), cx, podiumTop + ph / 2);
+        ctx.textBaseline = "alphabetic";
+
+        xCursor += m.colW + gapCols;
+    });
+
+    // Footer
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.18, footerY - 8);
+    ctx.lineTo(W * 0.82, footerY - 8);
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 16px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("¡Gracias por participar! 🏆", W / 2, footerY + 14);
+
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 12px Arial";
+    ctx.fillText("Quiniela Arcángel — Pasión X Ganar", W / 2, footerY + 34);
+
+    return canvas;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    var words = String(text).split(/\s+/);
+    var line = "";
+    var lines = [];
+    for (var n = 0; n < words.length; n++) {
+        var test = line ? (line + " " + words[n]) : words[n];
+        if (ctx.measureText(test).width > maxWidth && line) {
+            lines.push(line);
+            line = words[n];
+        } else {
+            line = test;
+        }
+    }
+    if (line) lines.push(line);
+    // max 2 lines
+    if (lines.length > 2) {
+        lines = lines.slice(0, 2);
+        lines[1] = lines[1].substring(0, Math.max(1, lines[1].length - 1)) + "…";
+    }
+    var startY = y - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach(function(ln, i) {
+        ctx.fillText(ln, x, startY + i * lineHeight);
+    });
 }
 
 
