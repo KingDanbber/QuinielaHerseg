@@ -3037,6 +3037,16 @@ async function loadPickStatusList() {
         return e.id;
     });
 
+    // Modo de la jornada (GOLEO vs 1X2)
+    var poolModeInfo = null;
+    try {
+        var { data: pmi } = await supabaseClient.from("pools")
+            .select("id, mode_code, name, round, competition, season, price, date_label")
+            .eq("id", pool_id).maybeSingle();
+        poolModeInfo = pmi;
+    } catch (e) { /* ignore */ }
+    var isGoleoPool = poolModeInfo && String(poolModeInfo.mode_code || "").toUpperCase() === "GOLEO";
+
     // Also get match IDs for this pool to anchor the query (double filter = fastest + most accurate)
     const {
         data: matchIds
@@ -3049,7 +3059,24 @@ async function loadPickStatusList() {
     });
 
     let picks = [];
-    if (entryIds.length) {
+    // Predicciones de goles (Goleó)
+    var goalsByEntry = new Map();
+    if (isGoleoPool && entryIds.length) {
+        try {
+            var { data: goalsRows } = await supabaseClient.from("predictions_goals_total")
+                .select("entry_id, predicted_goals")
+                .in("entry_id", entryIds);
+            (goalsRows || []).forEach(function(g) {
+                if (g.entry_id != null && g.predicted_goals != null) {
+                    goalsByEntry.set(g.entry_id, Number(g.predicted_goals));
+                }
+            });
+        } catch (e) {
+            console.warn("loadPickStatusList goals", e);
+        }
+    }
+
+    if (!isGoleoPool && entryIds.length) {
         // Paginate in batches of 500 to handle large pools (24+ matches × many participants)
         const BATCH = 500;
         let allPicks = [];
@@ -3085,7 +3112,7 @@ async function loadPickStatusList() {
         picksCountByEntry.set(entryId, matchSet.size);
     });
 
-    const totalMatchesInPool = await (async function() {
+    const totalMatchesInPool = isGoleoPool ? 0 : await (async function() {
         const {
             count,
             error
@@ -3121,9 +3148,84 @@ async function loadPickStatusList() {
         let actionBtn = "";
         let cardClass = "bg-zinc-950 border-zinc-800";
         let iconWrapClass = "border-zinc-700 bg-zinc-900";
-        let progressHtml = `<div class="text-xs text-zinc-500 mt-1">0/${totalMatchesInPool || 0}</div>`;
+        let progressHtml = isGoleoPool
+            ? `<div class="text-xs text-zinc-500 mt-1">Sin pronóstico</div>`
+            : `<div class="text-xs text-zinc-500 mt-1">0/${totalMatchesInPool || 0}</div>`;
 
         if (pEntries.length > 0) {
+            // ── MODO GOLEÓ: completo = tiene predicted_goals ──
+            if (isGoleoPool) {
+                const entryProgress = pEntries.map(function(e) {
+                    const hasGoals = goalsByEntry.has(e.id);
+                    const goals = hasGoals ? goalsByEntry.get(e.id) : null;
+                    return {
+                        entry: e,
+                        hasGoals: hasGoals,
+                        goals: goals,
+                        complete: hasGoals
+                    };
+                });
+                const completeEntries = entryProgress.filter(function(item) { return item.complete; }).length;
+                const allComplete = completeEntries === entryProgress.length;
+                const allEmpty = completeEntries === 0;
+
+                if (entryProgress.length === 1) {
+                    var g0 = entryProgress[0];
+                    progressHtml = g0.hasGoals
+                        ? `<div class="text-xs mt-1"><span class="text-amber-300 font-semibold">⚽ Goles: ${g0.goals}</span></div>`
+                        : `<div class="text-xs mt-1"><span class="text-zinc-500">Sin pronóstico de goles</span></div>`;
+                } else {
+                    progressHtml = `
+                    <div class="text-xs mt-1 flex items-center gap-1 flex-wrap">
+                    <span class="${allComplete ? "text-emerald-300": "text-zinc-300"}">
+                    ${completeEntries}/${entryProgress.length} con pronóstico
+                    </span>
+                    </div>`;
+                }
+
+                if (allComplete) {
+                    statusEmoji = "✅";
+                    statusTitle = "Pronóstico de goles listo";
+                    statusKey = "complete";
+                    cardClass = "bg-emerald-500/5 border-emerald-500/20";
+                    iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
+                } else if (allEmpty) {
+                    statusEmoji = "⏳";
+                    statusTitle = "Pendiente de goles";
+                    statusKey = "pending";
+                    cardClass = "bg-amber-500/5 border-amber-500/20";
+                    iconWrapClass = "border-amber-500/30 bg-amber-500/10";
+                } else {
+                    statusEmoji = "🟡";
+                    statusTitle = "Parcial";
+                    statusKey = "partial";
+                    cardClass = "bg-yellow-500/5 border-yellow-500/20";
+                    iconWrapClass = "border-yellow-500/30 bg-yellow-500/10";
+                }
+
+                const multiEntry = pEntries.length > 1;
+                actionBtn = pEntries.map(function(e, idx) {
+                    const hasG = goalsByEntry.has(e.id);
+                    const boletaLabel = multiEntry
+                        ? `<span style="font-size:10px;font-weight:700;margin-left:3px;opacity:.85;">#${idx + 1}</span>` : "";
+                    const openBtnClass = hasG
+                        ? "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-sm font-semibold"
+                        : "pick-status-open flex items-center gap-1 px-3 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-semibold";
+                    return `
+                    <button type="button" class="${openBtnClass}"
+                    data-participant-id="${participant.id}" data-entry-id="${e.id}"
+                    title="Abrir boleta ${multiEntry ? idx + 1 : ""}">👁️${boletaLabel}</button>
+                    ${hasG ? `
+                    <button type="button"
+                    class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
+                    data-participant-id="${participant.id}" data-entry-id="${e.id}"
+                    title="Descargar comprobante Goleó">🖼️</button>
+                    <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
+                    data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">📲</button>` : ""}
+                    `;
+                }).join("");
+            } else {
+            // ── MODO SENCILLA / 1X2 ──
             const entryProgress = pEntries.map(function(e) {
                 const count = picksCountByEntry.get(e.id) || 0;
                 return {
@@ -3214,6 +3316,7 @@ async function loadPickStatusList() {
                 <button type="button" class="pick-status-physical flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Ver boleta con resultados">🎯</button>`: ""}
                 `;
             }).join("");
+            } // end !isGoleoPool
         }
 
         const hiddenByFilter =
@@ -3398,8 +3501,168 @@ function attachPickStatusWaEvents() {
     });
 }
 
+/**
+ * Comprobante Campeón de Goleó — Canvas 2D nativo.
+ */
+function drawGoleoReceiptCanvas(opts) {
+    opts = opts || {};
+    var pool = opts.pool || {};
+    var participant = opts.participant || {};
+    var predictedGoals = Number(opts.predictedGoals || 0);
+    var logoImg = opts.logoImg || null;
+    var paid = !!opts.paid;
+
+    var W = 900;
+    var H = 1100;
+    var scale = 2;
+    var canvas = document.createElement("canvas");
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo crear el canvas");
+    ctx.scale(scale, scale);
+
+    // Fondo dark premium
+    var bg = ctx.createRadialGradient(W / 2, 80, 20, W / 2, H * 0.4, H * 0.9);
+    bg.addColorStop(0, "#1a1205");
+    bg.addColorStop(0.45, "#0a0c10");
+    bg.addColorStop(1, "#050810");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    function glow(x, y, r, c) {
+        var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, c);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    glow(W / 2, 280, 260, "rgba(251,191,36,0.16)");
+    glow(60, 40, 160, "rgba(16,185,129,0.10)");
+
+    // Línea top ámbar
+    var lg = ctx.createLinearGradient(W * 0.12, 0, W * 0.88, 0);
+    lg.addColorStop(0, "transparent");
+    lg.addColorStop(0.5, "#fbbf24");
+    lg.addColorStop(1, "transparent");
+    ctx.fillStyle = lg;
+    ctx.fillRect(W * 0.12, 0, W * 0.76, 3);
+
+    var y = 48;
+    ctx.textAlign = "center";
+    if (logoImg && logoImg.naturalWidth > 0) {
+        try {
+            ctx.drawImage(logoImg, W / 2 - 32, y, 64, 64);
+            y += 78;
+        } catch (e) {
+            y += 12;
+        }
+    } else {
+        ctx.font = "36px Arial";
+        ctx.fillText("⚽", W / 2, y + 36);
+        y += 56;
+    }
+
+    ctx.fillStyle = "#34d399";
+    ctx.font = "800 13px Arial";
+    ctx.fillText("QUINIELA ARCÁNGEL", W / 2, y);
+    y += 36;
+
+    ctx.fillStyle = "#fbbf24";
+    ctx.font = "900 34px Arial";
+    ctx.fillText("⚽ Campeón de Goleó", W / 2, y);
+    y += 36;
+
+    var jornada = pool.round != null && pool.round !== ""
+        ? ("Jornada " + pool.round)
+        : (pool.name || "Jornada");
+    var meta = jornada +
+        (pool.competition ? "  ·  " + pool.competition : "") +
+        (pool.season ? "  ·  " + pool.season : "");
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "600 15px Arial";
+    ctx.fillText(meta, W / 2, y);
+    y += 28;
+
+    if (pool.date_label) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "600 13px Arial";
+        ctx.fillText(pool.date_label, W / 2, y);
+        y += 24;
+    }
+    y += 16;
+
+    // Card participante
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth = 1;
+    roundRect(ctx, 80, y, W - 160, 120, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 26px Arial";
+    ctx.fillText(participant.name || "Participante", W / 2, y + 48);
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 15px Arial";
+    ctx.fillText(participant.area || "Sin área", W / 2, y + 76);
+    ctx.fillStyle = paid ? "#34d399" : "#fbbf24";
+    ctx.font = "700 13px Arial";
+    ctx.fillText(paid ? "Boleto pagado ✅" : "Boleto pendiente ⏳", W / 2, y + 102);
+    y += 150;
+
+    // Big goals number
+    ctx.fillStyle = "rgba(251,191,36,0.10)";
+    ctx.strokeStyle = "rgba(251,191,36,0.40)";
+    ctx.lineWidth = 2;
+    roundRect(ctx, 140, y, W - 280, 220, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#fbbf24";
+    ctx.font = "700 16px Arial";
+    ctx.fillText("PRONÓSTICO DE GOLES TOTALES", W / 2, y + 42);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 96px Arial";
+    ctx.fillText(String(predictedGoals), W / 2, y + 140);
+
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 16px Arial";
+    ctx.fillText("goles en la jornada", W / 2, y + 180);
+    y += 250;
+
+    // Nota
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "600 14px Arial";
+    ctx.fillText("Gana quien acierte exactamente el total de goles de la jornada.", W / 2, y);
+    y += 28;
+    if (pool.price != null) {
+        ctx.fillStyle = "#9ca3af";
+        ctx.font = "700 15px Arial";
+        ctx.fillText("Costo: $" + pool.price, W / 2, y);
+    }
+
+    // Footer
+    var fy = H - 70;
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.beginPath();
+    ctx.moveTo(W * 0.18, fy - 12);
+    ctx.lineTo(W * 0.82, fy - 12);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 16px Arial";
+    ctx.fillText("¡Suerte! 🏆", W / 2, fy + 14);
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 12px Arial";
+    ctx.fillText("Quiniela Arcángel — Pasión X Ganar", W / 2, fy + 36);
+
+    return canvas;
+}
+
 async function exportParticipantPickImage(poolId, participantId, entryId) {
-    await ensureExportLibraries();
     hideAlert();
 
     if (!poolId || !participantId) {
@@ -3407,10 +3670,9 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
     }
 
     try {
-        // pool
         const pool = await getPoolInfo(poolId);
+        var isGoleo = pool && String(pool.mode_code || "").toUpperCase() === "GOLEO";
 
-        // participante
         const {
             data: participant,
             error: pErr
@@ -3423,9 +3685,8 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
         if (pErr) return showAlert(pErr.message, "error");
         if (!participant) return showAlert("Participante no encontrado.", "error");
 
-        // boleto — obtener el específico si viene entryId, sino el más reciente
         var entryQuery = supabaseClient.from("entries")
-        .select("id, participant_id, pool_id, created_at")
+        .select("id, participant_id, pool_id, created_at, paid")
         .eq("pool_id", poolId)
         .eq("participant_id", participantId)
         .order("created_at", {
@@ -3439,7 +3700,6 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
         if (eErr) return showAlert(eErr.message, "error");
         if (!allEntries || !allEntries.length) return showAlert("Ese participante no tiene boleto en esta jornada.", "error");
 
-        // Identify which entry and its boleto number (1-based, oldest first)
         var entry = entryId
         ? allEntries.find(function(e) {
             return e.id === entryId;
@@ -3449,7 +3709,46 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
         }) + 1;
         var totalBoletas = allEntries.length;
 
-        // partidos
+        // ── GOLEÓ: comprobante Canvas 2D ──
+        if (isGoleo) {
+            var { data: gPred, error: gErr } = await supabaseClient
+                .from("predictions_goals_total")
+                .select("predicted_goals")
+                .eq("entry_id", entry.id)
+                .maybeSingle();
+            if (gErr) return showAlert(gErr.message, "error");
+            if (!gPred || gPred.predicted_goals == null) {
+                return showAlert("Aún no hay pronóstico de goles guardado para este boleto.", "error");
+            }
+
+            var logoImg = typeof loadLogoImage === "function" ? await loadLogoImage() : null;
+            var canvasG = drawGoleoReceiptCanvas({
+                pool: pool,
+                participant: participant,
+                predictedGoals: gPred.predicted_goals,
+                logoImg: logoImg,
+                paid: !!entry.paid
+            });
+
+            const aG = document.createElement("a");
+            const safeNameG = (participant.name || "goleo")
+                .replace(/[áàäâ]/gi, "a").replace(/[éèëê]/gi, "e")
+                .replace(/[íìïî]/gi, "i").replace(/[óòöô]/gi, "o")
+                .replace(/[úùüû]/gi, "u").replace(/[ñ]/gi, "n")
+                .replace(/[^a-zA-Z0-9\s-]/g, "")
+                .replace(/\s+/g, "-")
+                .toLowerCase();
+            const safeJG = pool && pool.round ? "J" + pool.round : "Jornada";
+            aG.download = safeNameG + "-" + safeJG + "-goleo.png";
+            aG.href = canvasG.toDataURL("image/png");
+            aG.click();
+            showAlert("Comprobante Goleó generado ✅ (" + gPred.predicted_goals + " goles)", "ok");
+            return;
+        }
+
+        // ── SENCILLA / 1X2 ──
+        await ensureExportLibraries();
+
         const {
             data: matches,
             error: mErr
@@ -3463,7 +3762,6 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
 
         if (mErr) return showAlert(mErr.message, "error");
 
-        // picks
         const {
             data: picks,
             error: pkErr
@@ -3480,11 +3778,37 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
             })
         );
 
+        // Si el participante también jugó Goleó hermano, incluirlo en la imagen
+        var goleoOnTicket = null;
+        try {
+            var sibling = await findSiblingGoleoPool(pool);
+            if (sibling && sibling.id) {
+                var { data: gEnt } = await supabaseClient.from("entries")
+                    .select("id")
+                    .eq("pool_id", sibling.id)
+                    .eq("participant_id", participantId)
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (gEnt && gEnt.id) {
+                    var { data: gP } = await supabaseClient.from("predictions_goals_total")
+                        .select("predicted_goals")
+                        .eq("entry_id", gEnt.id)
+                        .maybeSingle();
+                    if (gP && gP.predicted_goals != null) {
+                        goleoOnTicket = {
+                            predicted: gP.predicted_goals,
+                            price: sibling.price
+                        };
+                    }
+                }
+            }
+        } catch (e) { /* ignore */ }
+
         const printArea = $("printArea");
         printArea.classList.remove("hidden");
         printArea.innerHTML = "";
 
-        // Precargar logo como base64 para que html2canvas lo incluya
         var logoBase64 = QUINIELA_LOGO_URL;
         try {
             var logoResp = await fetch(QUINIELA_LOGO_URL);
@@ -3507,7 +3831,8 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
             pickMap: pickMap,
             logoUrl: logoBase64,
             boletaNum: boletaNum,
-            totalBoletas: totalBoletas
+            totalBoletas: totalBoletas,
+            goleoOnTicket: goleoOnTicket
         });
 
         printArea.appendChild(card);
@@ -3538,7 +3863,8 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
         printArea.innerHTML = "";
         printArea.classList.add("hidden");
 
-        showAlert("Imagen del boleto generada ✅", "ok");
+        var extra = goleoOnTicket ? " + Goleó (" + goleoOnTicket.predicted + ")" : "";
+        showAlert("Imagen del boleto generada ✅" + extra, "ok");
     } catch (err) {
         showAlert("Error generando boleto: " + (err?.message || err), "error");
     }
@@ -3552,6 +3878,7 @@ function makePickedTicketCard(opts) {
     var logoUrl = opts.logoUrl || (typeof QUINIELA_LOGO_URL !== "undefined" ? QUINIELA_LOGO_URL: "");
     var boletaNum = opts.boletaNum || 1;
     var totalBoletas = opts.totalBoletas || 1;
+    var goleoOnTicket = opts.goleoOnTicket || null;
 
     var bg = "#ffffff";
     var text = "#111111";
@@ -3659,6 +3986,19 @@ function makePickedTicketCard(opts) {
     });
 
     card.appendChild(table);
+
+    // Bloque Goleó si el participante también jugó el modo hermano
+    if (goleoOnTicket && goleoOnTicket.predicted != null) {
+        var goleoDiv = document.createElement("div");
+        goleoDiv.style.cssText = "margin-top:16px;padding:14px 16px;border-radius:12px;" +
+            "background:#fffbeb;border:1.5px solid #f59e0b;box-sizing:border-box;";
+        var gp = goleoOnTicket.price != null ? (" · $" + goleoOnTicket.price) : "";
+        goleoDiv.innerHTML =
+            "<div style='font-weight:900;font-size:15px;color:#b45309;margin-bottom:6px;'>⚽ Campeón de Goleó" + gp + "</div>" +
+            "<div style='font-size:14px;color:#111;font-weight:700;'>Total de goles pronosticado: " +
+            "<span style='font-size:22px;font-weight:900;color:#b45309;'>" + goleoOnTicket.predicted + "</span></div>";
+        card.appendChild(goleoDiv);
+    }
 
     var footer = document.createElement("div");
     footer.style.cssText = "margin-top:22px;padding:14px 16px;border-radius:12px;" +
@@ -11893,6 +12233,9 @@ async function saveGoalChampionPick() {
 
     if (error) return showAlert(error.message, "error");
     showAlert("Pronóstico de goles guardado ✅ (" + predicted + " goles)", "ok");
+    try {
+        if (typeof loadPickStatusList === "function") await loadPickStatusList();
+    } catch (e) { /* ignore */ }
 }
 
 /**
