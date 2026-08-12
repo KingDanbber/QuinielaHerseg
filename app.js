@@ -4420,22 +4420,24 @@ async function getPoolInfo(pool_id) {
     return data;
 }
 
-/** Busca pool hermano GOLEO de la misma jornada (round + competition + season). */
+/** Busca pool hermano GOLEO de la misma jornada (round + competition + season).
+ *  Solo open o draft (no cerrados). */
 async function findSiblingGoleoPool(sourcePool) {
     if (!sourcePool || sourcePool.round == null || sourcePool.round === "") return null;
     var q = supabaseClient
         .from("pools")
         .select("id, name, mode_code, status, price, round")
         .eq("round", sourcePool.round)
-        .eq("mode_code", "GOLEO");
+        .eq("mode_code", "GOLEO")
+        .in("status", ["open", "draft"]);
     if (sourcePool.id) q = q.neq("id", sourcePool.id);
     if (sourcePool.competition) q = q.eq("competition", sourcePool.competition);
     if (sourcePool.season) q = q.eq("season", sourcePool.season);
-    // Preferir abiertos; si no hay, cualquiera de esa jornada
     var { data, error } = await q.order("status", { ascending: true }).limit(5);
     if (error || !data || !data.length) return null;
     var open = data.find(function(p) { return p.status === "open"; });
-    return open || data[0];
+    var draft = data.find(function(p) { return p.status === "draft"; });
+    return open || draft || null;
 }
 
 function clearTemplateEditor() {
@@ -4481,6 +4483,8 @@ function makeTemplateCard(opts) {
     const matches = opts.matches || [];
     const exportMode = opts.exportMode === true;
     const showFooterInfo = opts.showFooterInfo !== false;
+    const showGoleo = opts.showGoleo === true;
+    const goleoPrice = opts.goleoPrice != null ? opts.goleoPrice : "";
 
     // ── Paleta ──
     const bg = exportMode ? "#ffffff": "#0b0f14";
@@ -4490,6 +4494,11 @@ function makeTemplateCard(opts) {
     const innerBg = exportMode ? "#f9f9fb": "#0a0e13";
     const softBg = exportMode ? "#f0f0f2": "#111827";
     const accentClr = exportMode ? "#059669": "#34d399";
+    // Goleó accents
+    const goleoBorder = exportMode ? "#f59e0b": "rgba(245,158,11,.45)";
+    const goleoBg = exportMode ? "#fffbeb": "rgba(245,158,11,.08)";
+    const goleoTitle = exportMode ? "#b45309": "#fbbf24";
+    const goleoLine = exportMode ? "#333333": "#9ca3af";
 
     const card = document.createElement("div");
     card.style.cssText = [
@@ -4506,6 +4515,27 @@ function makeTemplateCard(opts) {
 
     // ── HEADER: logo + título ──
     const logoSize = exportMode ? 72: 50;
+    const goleoPriceHtml = goleoPrice
+        ? (' <span style="font-weight:700;color:' + accentClr + ';">(' + goleoPrice + ')</span>')
+        : "";
+
+    const goleoBlockHtml = showGoleo ? `
+    <div style="margin-top:${exportMode ? "16px" : "10px"};margin-bottom:${exportMode ? "4px" : "2px"};padding:${exportMode ? "14px 16px" : "10px 12px"};border:1.5px solid ${goleoBorder};border-radius:12px;background:${goleoBg};">
+      <div style="display:flex;align-items:center;gap:${exportMode ? "10px" : "8px"};margin-bottom:${exportMode ? "10px" : "6px"};">
+        <div style="width:${exportMode ? "22px" : "16px"};height:${exportMode ? "22px" : "16px"};border:2px solid ${goleoLine};border-radius:5px;background:${innerBg};flex-shrink:0;box-sizing:border-box;"></div>
+        <div style="font-weight:900;font-size:${exportMode ? "15px" : "12px"};color:${goleoTitle};line-height:1.2;">
+          ⚽ Campeón de Goleó${goleoPriceHtml}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:${exportMode ? "12px" : "8px"};">
+        <div style="font-weight:700;font-size:${exportMode ? "13px" : "11px"};color:${text};white-space:nowrap;">Total de goles de la jornada:</div>
+        <div style="flex:1;height:${exportMode ? "28px" : "22px"};border:1.5px solid ${border};border-radius:8px;background:${innerBg};"></div>
+      </div>
+      <div style="margin-top:${exportMode ? "8px" : "5px"};font-size:${exportMode ? "11px" : "9px"};color:${sub};line-height:1.35;">
+        Marca la casilla si también juegas Goleó y escribe tu predicción de goles totales.
+      </div>
+    </div>` : "";
+
     card.innerHTML = `
     <div style="display:flex;align-items:center;gap:${exportMode?"16px": "10px"};margin-bottom:${exportMode?"18px": "10px"};">
     <img src="${typeof QUINIELA_LOGO_URL !== "undefined"?QUINIELA_LOGO_URL: ""}"
@@ -4544,8 +4574,10 @@ function makeTemplateCard(opts) {
 
     <div class="qh-table" style="display:grid;gap:${exportMode?"10px": "7px"};"></div>
 
+    ${goleoBlockHtml}
+
     ${showFooterInfo ? `
-    <div style="margin-top:${exportMode?"20px": "12px"};padding:${exportMode?"14px 16px": "9px 10px"};border:1px solid ${border};border-radius:12px;background:${softBg};font-size:${exportMode?"12px": "9px"};line-height:1.6;color:${text};">
+    <div style="margin-top:${exportMode?"16px": "10px"};padding:${exportMode?"14px 16px": "9px 10px"};border:1px solid ${border};border-radius:12px;background:${softBg};font-size:${exportMode?"12px": "9px"};line-height:1.6;color:${text};">
     <div style="font-weight:700;">Devolver con tu pronóstico rellenado, tu nombre y tu área al WhatsApp: <strong>8715118046</strong></div>
     <div style="margin-top:4px;"><strong>Fecha límite de registro de pronósticos:</strong> Viernes 05:00 PM</div>
     <div style="margin-top:4px;font-weight:800;">Boleto pagado, boleto jugado. &nbsp;¡Suerte!</div>
@@ -4679,6 +4711,14 @@ async function renderPreview() {
         return;
     }
 
+    var goleoSibling = null;
+    var isGoleoTemplate = pool && String(pool.mode_code || "").toUpperCase() === "GOLEO";
+    if (!isGoleoTemplate) {
+        try {
+            goleoSibling = await findSiblingGoleoPool(pool);
+        } catch (e) { /* ignore */ }
+    }
+
     const card = makeTemplateCard( {
         title: "Quiniela Arcángel",
         subtitle: `"Pasión X Ganar" ⚽ ${pool?.season || ""}`.trim(),
@@ -4686,11 +4726,14 @@ async function renderPreview() {
         dateText: (pool?.date_label || "FECHAS"),
         priceText: Number(pool?.price || 20),
         matches,
-        exportMode: false
+        exportMode: false,
+        showGoleo: !!goleoSibling,
+        goleoPrice: goleoSibling && goleoSibling.price != null ? ("$" + goleoSibling.price) : ""
     });
 
     wrap.appendChild(card);
-    $("tplSavedStatus").textContent = `Plantilla guardada: ${matches.length} partidos`;
+    var goleoNote = goleoSibling ? " · + Goleó" : "";
+    $("tplSavedStatus").textContent = `Plantilla guardada: ${matches.length} partidos` + goleoNote;
 }
 
 async function exportAllToPDF() {
@@ -4804,6 +4847,19 @@ async function exportCurrentTemplatePNG() {
         return showAlert("Esta jornada no tiene plantilla guardada.", "error");
     }
 
+    // Goleó hermano (open/draft) de la misma jornada — igual que PDF imprimible
+    var goleoSibling = null;
+    var isGoleoTemplate = pool && String(pool.mode_code || "").toUpperCase() === "GOLEO";
+    if (!isGoleoTemplate) {
+        try {
+            goleoSibling = await findSiblingGoleoPool(pool);
+        } catch (e) {
+            console.warn("findSiblingGoleoPool exportPNG", e);
+        }
+    }
+    var showGoleo = !!goleoSibling;
+    var goleoPrice = goleoSibling && goleoSibling.price != null ? ("$" + goleoSibling.price) : "";
+
     const printArea = $("printArea");
     printArea.classList.remove("hidden");
     printArea.innerHTML = "";
@@ -4812,7 +4868,7 @@ async function exportCurrentTemplatePNG() {
     const sheet = document.createElement("div");
     sheet.style.background = "#ffffff";
     sheet.style.padding = "20px";
-    sheet.style.width = "800px";
+    sheet.style.width = "900px";
     sheet.style.boxSizing = "border-box";
 
     const card = makeTemplateCard( {
@@ -4822,7 +4878,9 @@ async function exportCurrentTemplatePNG() {
         dateText: (pool?.date_label || "FECHAS"),
         priceText: Number(pool?.price || 20),
         matches,
-        exportMode: true
+        exportMode: true,
+        showGoleo: showGoleo,
+        goleoPrice: goleoPrice
     });
 
     sheet.appendChild(card);
@@ -4832,7 +4890,9 @@ async function exportCurrentTemplatePNG() {
         const canvas = await html2canvas(sheet, {
             scale: 2,
             backgroundColor: "#ffffff",
-            useCORS: true
+            useCORS: true,
+            logging: false,
+            foreignObjectRendering: false
         });
 
         const a = document.createElement("a");
@@ -4844,7 +4904,8 @@ async function exportCurrentTemplatePNG() {
         a.href = canvas.toDataURL("image/png");
         a.click();
 
-        showAlert("Imagen generada ✅", "ok");
+        var extra = showGoleo ? " + Campeón de Goleó" : "";
+        showAlert("Imagen generada ✅" + extra, "ok");
     } catch (err) {
         showAlert("Error generando imagen: " + (err?.message || err), "error");
     } finally {
@@ -4853,178 +4914,294 @@ async function exportCurrentTemplatePNG() {
     }
 }
 
+/**
+ * Historia 9:16 — Canvas 2D nativo (sin html2canvas).
+ */
+function drawStoryTemplateCanvas(opts) {
+    opts = opts || {};
+    var matches = opts.matches || [];
+    var pool = opts.pool || {};
+    var showGoleo = !!opts.showGoleo;
+    var goleoPrice = opts.goleoPrice || "";
+    var logoImg = opts.logoImg || null;
+
+    var W = 1080;
+    var H = 1920;
+    var padX = 64;
+    var canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo crear el canvas");
+
+    // Fondo
+    var bg = ctx.createLinearGradient(0, 0, W * 0.3, H);
+    bg.addColorStop(0, "#050810");
+    bg.addColorStop(0.45, "#071220");
+    bg.addColorStop(1, "#040c10");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    function glow(x, y, r, c) {
+        var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, c);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    glow(80, 60, 280, "rgba(16,185,129,0.16)");
+    glow(W - 60, H - 100, 240, "rgba(6,182,212,0.10)");
+
+    var y = 72;
+
+    // Logo + marca
+    if (logoImg && logoImg.naturalWidth > 0) {
+        try {
+            ctx.drawImage(logoImg, padX, y, 88, 88);
+        } catch (e) { /* ignore */ }
+    } else {
+        ctx.font = "48px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText("🏆", padX + 10, y + 60);
+    }
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 36px Arial";
+    ctx.fillText("Quiniela Arcángel", padX + 108, y + 38);
+    ctx.fillStyle = "#34d399";
+    ctx.font = "600 18px Arial";
+    ctx.fillText('"Pasión X Ganar" ⚽ ' + (pool.season || ""), padX + 108, y + 68);
+    y += 120;
+
+    // Título jornada
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 68px Arial";
+    var jornadaLabel = pool.round != null && pool.round !== ""
+        ? ("Jornada " + pool.round)
+        : (pool.name || "Jornada");
+    ctx.fillText(jornadaLabel, W / 2, y);
+    y += 42;
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 24px Arial";
+    ctx.fillText(pool.competition || "Liga MX", W / 2, y);
+    y += 48;
+
+    // Chips fechas + precio
+    var dateTxt = "📅  " + (pool.date_label || "—");
+    var priceTxt = "$" + Number(pool.price || 20) + " por boleto";
+    ctx.font = "800 20px Arial";
+    var dw = ctx.measureText(dateTxt).width + 48;
+    var pw = ctx.measureText(priceTxt).width + 48;
+    var chipsGap = 16;
+    var chipsTotal = dw + pw + chipsGap;
+    var cx0 = (W - chipsTotal) / 2;
+
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, cx0, y, dw, 48, 24);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#e5e7eb";
+    ctx.textAlign = "center";
+    ctx.font = "800 20px Arial";
+    ctx.fillText(dateTxt, cx0 + dw / 2, y + 31);
+
+    var px = cx0 + dw + chipsGap;
+    var pGrad = ctx.createLinearGradient(px, y, px + pw, y + 48);
+    pGrad.addColorStop(0, "#059669");
+    pGrad.addColorStop(1, "#10b981");
+    ctx.fillStyle = pGrad;
+    roundRect(ctx, px, y, pw, 48, 24);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 20px Arial";
+    ctx.fillText(priceTxt, px + pw / 2, y + 31);
+    y += 72;
+
+    // Divider
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padX, y);
+    ctx.lineTo(W - padX, y);
+    ctx.stroke();
+    y += 28;
+
+    // Headers
+    ctx.fillStyle = "#34d399";
+    ctx.font = "800 15px Arial";
+    ctx.textAlign = "left";
+    ctx.fillText("LOCAL", padX + 8, y);
+    ctx.textAlign = "right";
+    ctx.fillText("VISITA", W - padX - 8, y);
+    y += 22;
+
+    // Filas
+    var n = matches.length || 1;
+    var availableH = H - y - (showGoleo ? 220 : 160) - 40;
+    var rowH = Math.min(58, Math.max(40, Math.floor(availableH / n)));
+    var teamFont = rowH >= 52 ? 20 : 17;
+
+    matches.forEach(function(m, i) {
+        var ry = y + i * rowH;
+        var isEven = i % 2 === 0;
+        ctx.fillStyle = isEven ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.03)";
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
+        ctx.lineWidth = 1;
+        roundRect(ctx, padX, ry, W - padX * 2, rowH - 8, 14);
+        ctx.fill();
+        ctx.stroke();
+
+        var cy = ry + (rowH - 8) / 2 + 6;
+        ctx.fillStyle = "#f0f4f8";
+        ctx.font = "800 " + teamFont + "px Arial";
+        ctx.textAlign = "left";
+        var homeName = String(m.home_team || "");
+        if (ctx.measureText(homeName).width > 360) {
+            while (homeName.length > 3 && ctx.measureText(homeName + "…").width > 360) {
+                homeName = homeName.slice(0, -1);
+            }
+            homeName += "…";
+        }
+        ctx.fillText(homeName, padX + 18, cy);
+
+        ctx.fillStyle = "#4a5568";
+        ctx.font = "700 15px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("VS", W / 2, cy);
+
+        ctx.fillStyle = "#f0f4f8";
+        ctx.font = "800 " + teamFont + "px Arial";
+        ctx.textAlign = "right";
+        var awayName = String(m.away_team || "");
+        if (ctx.measureText(awayName).width > 360) {
+            while (awayName.length > 3 && ctx.measureText(awayName + "…").width > 360) {
+                awayName = awayName.slice(0, -1);
+            }
+            awayName += "…";
+        }
+        ctx.fillText(awayName, W - padX - 18, cy);
+    });
+    y += n * rowH + 16;
+
+    // Goleó
+    if (showGoleo) {
+        ctx.fillStyle = "rgba(245,158,11,0.10)";
+        ctx.strokeStyle = "rgba(245,158,11,0.45)";
+        ctx.lineWidth = 1.5;
+        roundRect(ctx, padX, y, W - padX * 2, 140, 18);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = "#fbbf24";
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, padX + 22, y + 22, 28, 28, 6);
+        ctx.stroke();
+
+        ctx.fillStyle = "#fbbf24";
+        ctx.font = "900 26px Arial";
+        ctx.textAlign = "left";
+        var gTitle = "⚽  Campeón de Goleó" + (goleoPrice ? "  (" + goleoPrice + ")" : "");
+        ctx.fillText(gTitle, padX + 62, y + 44);
+
+        ctx.fillStyle = "#e5e7eb";
+        ctx.font = "700 18px Arial";
+        ctx.fillText("Total de goles de la jornada:", padX + 22, y + 88);
+
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.strokeStyle = "rgba(255,255,255,0.15)";
+        ctx.lineWidth = 1.5;
+        roundRect(ctx, padX + 300, y + 68, W - padX * 2 - 322, 36, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#8a94a6";
+        ctx.font = "600 15px Arial";
+        ctx.fillText("Marca si también juegas Goleó y escribe tu predicción.", padX + 22, y + 124);
+        y += 160;
+    }
+
+    // Footer
+    var fy = H - 120;
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padX + 40, fy - 16);
+    ctx.lineTo(W - padX - 40, fy - 16);
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 20px Arial";
+    ctx.fillText("Envía tu pronóstico al WhatsApp:", W / 2, fy + 8);
+
+    ctx.fillStyle = "#34d399";
+    ctx.font = "900 34px Arial";
+    ctx.fillText("8715118046", W / 2, fy + 48);
+
+    ctx.fillStyle = "#8a94a6";
+    ctx.font = "600 18px Arial";
+    ctx.fillText("Fecha límite: Viernes 05:00 PM", W / 2, fy + 78);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 26px Arial";
+    ctx.fillText("¡Suerte a todos! 🏆", W / 2, fy + 112);
+
+    return canvas;
+}
+
 async function exportStoryTemplatePNG() {
-    await ensureExportLibraries();
     hideAlert();
 
     const pool_id = $("tplPool").value;
     if (!pool_id) return showAlert("Selecciona una jornada.", "error");
 
-    let pool,
-    matches;
+    let pool, matches;
     try {
         pool = await getPoolInfo(pool_id);
         matches = await getMatches(pool_id);
-    } catch(e) {
+    } catch (e) {
         return showAlert(e.message, "error");
     }
 
     if (!matches || !matches.length) return showAlert("Esta jornada no tiene plantilla guardada.", "error");
 
-    const printArea = $("printArea");
-    printArea.classList.remove("hidden");
-    printArea.innerHTML = "";
-
-    // ── Canvas 1080 × 1920 ──
-    const W = 1080,
-    H = 1920;
-
-    const story = document.createElement("div");
-    story.style.cssText = `
-    width:${W}px;height:${H}px;box-sizing:border-box;
-    background:linear-gradient(160deg,#050810 0%,#071220 45%,#040c10 100%);
-    display:flex;flex-direction:column;align-items:center;
-    padding:80px 64px 70px;gap:0;font-family:Arial,sans-serif;
-    position:relative;overflow:hidden;
-    `;
-
-    // Decorative glow blobs
-    story.innerHTML = `
-    <div style="position:absolute;top:-120px;left:-120px;width:500px;height:500px;
-    border-radius:50%;background:radial-gradient(circle,rgba(16,185,129,.18) 0%,transparent 70%);
-    pointer-events:none;"></div>
-    <div style="position:absolute;bottom:-80px;right:-80px;width:420px;height:420px;
-    border-radius:50%;background:radial-gradient(circle,rgba(6,182,212,.12) 0%,transparent 70%);
-    pointer-events:none;"></div>
-    `;
-
-    // ── TOP BRANDING ──
-    const brand = document.createElement("div");
-    brand.style.cssText = "display:flex;align-items:center;gap:18px;margin-bottom:40px;";
-    brand.innerHTML = `
-    <img src="${typeof QUINIELA_LOGO_URL !== "undefined"?QUINIELA_LOGO_URL: ""}"
-    crossorigin="anonymous"
-    style="width:90px;height:90px;object-fit:contain;border-radius:16px;
-    box-shadow:0 0 32px rgba(16,185,129,.4);"/>
-    <div>
-    <div style="font-size:38px;font-weight:900;color:#ffffff;line-height:1;">Quiniela Arcángel</div>
-    <div style="font-size:20px;color:#34d399;margin-top:6px;font-weight:600;">"Pasión X Ganar" ⚽ ${pool?.season || ""}</div>
-    </div>
-    `;
-    story.appendChild(brand);
-
-    // ── JORNADA HEADING ──
-    const heading = document.createElement("div");
-    heading.style.cssText = "text-align:center;margin-bottom:28px;";
-    heading.innerHTML = `
-    <div style="font-size:72px;font-weight:900;color:#ffffff;line-height:1;letter-spacing:-1px;">
-    Jornada ${pool?.round || ""}
-    </div>
-    <div style="font-size:26px;color:#8a94a6;margin-top:10px;">${pool?.competition || "Liga MX"}</div>
-    `;
-    story.appendChild(heading);
-
-    // ── CHIPS: fechas + costo ──
-    const chips = document.createElement("div");
-    chips.style.cssText = "display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:40px;";
-    chips.innerHTML = `
-    <div style="padding:12px 26px;border-radius:999px;background:rgba(255,255,255,.07);
-    border:1px solid rgba(255,255,255,.14);font-size:22px;font-weight:800;color:#e5e7eb;">
-    📅 ${pool?.date_label || "—"}
-    </div>
-    <div style="padding:12px 26px;border-radius:999px;
-    background:linear-gradient(135deg,#059669,#10b981);
-    font-size:22px;font-weight:900;color:#ffffff;
-    box-shadow:0 4px 20px rgba(16,185,129,.45);">
-    $${Number(pool?.price || 20)} por boleto
-    </div>
-    `;
-    story.appendChild(chips);
-
-    // ── DIVIDER ──
-    const div1 = document.createElement("div");
-    div1.style.cssText = "width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);margin-bottom:32px;";
-    story.appendChild(div1);
-
-    // ── MATCHES TABLE (no boxes — informativo) ──
-    const tbl = document.createElement("div");
-    tbl.style.cssText = "width:100%;display:grid;gap:14px;";
-
-    // Header row
-    const hdr = document.createElement("div");
-    hdr.style.cssText = "display:grid;grid-template-columns:1fr 60px 1fr;gap:10px;margin-bottom:4px;";
-    hdr.innerHTML = `
-    <div style="text-align:left;font-size:17px;font-weight:800;color:#34d399;letter-spacing:.8px;text-transform:uppercase;padding-left:4px;">LOCAL</div>
-    <div></div>
-    <div style="text-align:right;font-size:17px;font-weight:800;color:#34d399;letter-spacing:.8px;text-transform:uppercase;padding-right:4px;">VISITA</div>
-    `;
-    tbl.appendChild(hdr);
-
-    matches.forEach(function(m, i) {
-        const homeLogo = getTeamLogo(m.home_team);
-        const awayLogo = getTeamLogo(m.away_team);
-        const isEven = i % 2 === 0;
-
-        const row = document.createElement("div");
-        row.style.cssText = `
-        display:grid;grid-template-columns:1fr 60px 1fr;gap:10px;align-items:center;
-        padding:14px 16px;border-radius:16px;
-        background:${isEven?"rgba(255,255,255,.05)": "rgba(255,255,255,.03)"};
-        border:1px solid rgba(255,255,255,.07);
-        `;
-        row.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-        ${homeLogo?`<img src="${homeLogo}" crossorigin="anonymous" style="width:36px;height:36px;object-fit:contain;flex:0 0 auto;">`: ""}
-        <span style="font-weight:800;font-size:19px;color:#f0f4f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.home_team}</span>
-        </div>
-        <div style="text-align:center;font-size:16px;font-weight:700;color:#4a5568;">VS</div>
-        <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0;">
-        <span style="font-weight:800;font-size:19px;color:#f0f4f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.away_team}</span>
-        ${awayLogo?`<img src="${awayLogo}" crossorigin="anonymous" style="width:36px;height:36px;object-fit:contain;flex:0 0 auto;">`: ""}
-        </div>
-        `;
-        tbl.appendChild(row);
-    });
-
-    story.appendChild(tbl);
-
-    // ── DIVIDER ──
-    const div2 = document.createElement("div");
-    div2.style.cssText = "width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);margin-top:32px;margin-bottom:30px;";
-    story.appendChild(div2);
-
-    // ── FOOTER CTA ──
-    const footer = document.createElement("div");
-    footer.style.cssText = "text-align:center;margin-top:auto;";
-    footer.innerHTML = `
-    <div style="font-size:22px;color:#8a94a6;line-height:1.7;">
-    Envía tu pronóstico al WhatsApp:
-    </div>
-    <div style="font-size:34px;font-weight:900;color:#34d399;margin-top:6px;">8715118046</div>
-    <div style="font-size:20px;color:#8a94a6;margin-top:10px;">Fecha límite: Viernes 05:00 PM</div>
-    <div style="font-size:28px;font-weight:900;color:#ffffff;margin-top:18px;">¡Suerte a todos! 🏆</div>
-    `;
-    story.appendChild(footer);
-
-    printArea.appendChild(story);
+    var goleoSibling = null;
+    var isGoleoTemplate = pool && String(pool.mode_code || "").toUpperCase() === "GOLEO";
+    if (!isGoleoTemplate) {
+        try {
+            goleoSibling = await findSiblingGoleoPool(pool);
+        } catch (e) { /* ignore */ }
+    }
+    var showGoleo = !!goleoSibling;
+    var goleoPrice = goleoSibling && goleoSibling.price != null ? ("$" + goleoSibling.price) : "";
 
     try {
-        const canvas = await html2canvas(story, {
-            scale: 1, backgroundColor: "#050810", useCORS: true
+        var logoImg = typeof loadLogoImage === "function" ? await loadLogoImage() : null;
+        var canvas = drawStoryTemplateCanvas({
+            pool: pool,
+            matches: matches,
+            showGoleo: showGoleo,
+            goleoPrice: goleoPrice,
+            logoImg: logoImg
         });
 
         const a = document.createElement("a");
-        const safeName = (pool?.name || "Plantilla-Historia").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
-        a.download = `${safeName}-story-9x16.png`;
+        const safeName = ((pool && pool.name) || "Plantilla-Historia")
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-");
+        a.download = safeName + "-story-9x16.png";
         a.href = canvas.toDataURL("image/png");
         a.click();
 
-        showAlert("Historia premium 9:16 generada ✅", "ok");
-    } catch(err) {
-        showAlert("Error generando historia: " + (err?.message || err), "error");
-    } finally {
-        printArea.innerHTML = "";
-        printArea.classList.add("hidden");
+        var extra = showGoleo ? " + Goleó" : "";
+        showAlert("Historia premium 9:16 generada ✅" + extra, "ok");
+    } catch (err) {
+        showAlert("Error generando historia: " + (err && err.message ? err.message : err), "error");
     }
 }
 
