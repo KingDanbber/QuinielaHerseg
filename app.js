@@ -2989,14 +2989,15 @@ async function loadPickStatusList() {
         return;
     }
 
-    // Boletos de esa jornada (fuente de verdad)
+    // Boletos de esa jornada (fuente de verdad) — orden cronológico para multi-boleta
     const {
         data: entries,
         error: eErr
     } = await supabaseClient
     .from("entries")
-    .select("id, participant_id, paid")
-    .eq("pool_id", pool_id);
+    .select("id, participant_id, paid, created_at")
+    .eq("pool_id", pool_id)
+    .order("created_at", { ascending: true });
 
     if (eErr) return showAlert(eErr.message, "error");
 
@@ -3175,11 +3176,17 @@ async function loadPickStatusList() {
                         ? `<div class="text-xs mt-1"><span class="text-amber-300 font-semibold">⚽ Goles: ${g0.goals}</span></div>`
                         : `<div class="text-xs mt-1"><span class="text-zinc-500">Sin pronóstico de goles</span></div>`;
                 } else {
+                    var goalsBits = entryProgress.map(function(item, idx) {
+                        return item.hasGoals
+                            ? ("#" + (idx + 1) + ": " + item.goals)
+                            : ("#" + (idx + 1) + ": —");
+                    }).join(" · ");
                     progressHtml = `
-                    <div class="text-xs mt-1 flex items-center gap-1 flex-wrap">
-                    <span class="${allComplete ? "text-emerald-300": "text-zinc-300"}">
-                    ${completeEntries}/${entryProgress.length} con pronóstico
+                    <div class="text-xs mt-1">
+                    <span class="${allComplete ? "text-emerald-300": "text-amber-300"} font-semibold">
+                    ⚽ ${completeEntries}/${entryProgress.length} boletas
                     </span>
+                    <span class="text-zinc-400"> · ${goalsBits}</span>
                     </div>`;
                 }
 
@@ -3778,18 +3785,13 @@ async function exportParticipantPickImage(poolId, participantId, entryId) {
             })
         );
 
-        // Si el participante también jugó Goleó hermano, incluirlo en la imagen
+        // Goleó hermano emparejado 1:1 con esta boleta Sencilla (por orden de creación)
         var goleoOnTicket = null;
         try {
             var sibling = await findSiblingGoleoPool(pool);
             if (sibling && sibling.id) {
-                var { data: gEnt } = await supabaseClient.from("entries")
-                    .select("id")
-                    .eq("pool_id", sibling.id)
-                    .eq("participant_id", participantId)
-                    .order("created_at", { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+                var pair = await getGoleoPairingForSencilla(poolId, sibling.id, participantId, entry.id);
+                var gEnt = pair.pairedGoleo;
                 if (gEnt && gEnt.id) {
                     var { data: gP } = await supabaseClient.from("predictions_goals_total")
                         .select("predicted_goals")
@@ -12035,7 +12037,9 @@ var _goleoOptIn = {
     siblingPoolId: null,
     siblingPrice: null,
     siblingOpen: false,
-    goleoEntryId: null
+    goleoEntryId: null,
+    sencillaEntryId: null,
+    boletaIndex: 0
 };
 
 function resetGoleoOptInState() {
@@ -12043,8 +12047,43 @@ function resetGoleoOptInState() {
         siblingPoolId: null,
         siblingPrice: null,
         siblingOpen: false,
-        goleoEntryId: null
+        goleoEntryId: null,
+        sencillaEntryId: null,
+        boletaIndex: 0
     };
+}
+
+/**
+ * Empareja boletas Sencilla ↔ Goleó 1:1 por orden de creación.
+ * Así 2 boletas Sencilla pueden tener 2 Goleó distintos del mismo participante.
+ * @returns {{ index: number, sencillaEntries: Array, goleoEntries: Array, pairedGoleo: object|null }}
+ */
+async function getGoleoPairingForSencilla(sencillaPoolId, goleoPoolId, participantId, sencillaEntryId) {
+    var empty = { index: 0, sencillaEntries: [], goleoEntries: [], pairedGoleo: null };
+    if (!sencillaPoolId || !goleoPoolId || !participantId) return empty;
+
+    var [sencRes, golRes] = await Promise.all([
+        supabaseClient.from("entries")
+            .select("id, paid, created_at")
+            .eq("pool_id", sencillaPoolId)
+            .eq("participant_id", participantId)
+            .order("created_at", { ascending: true }),
+        supabaseClient.from("entries")
+            .select("id, paid, created_at")
+            .eq("pool_id", goleoPoolId)
+            .eq("participant_id", participantId)
+            .order("created_at", { ascending: true })
+    ]);
+
+    var sencillaEntries = sencRes.data || [];
+    var goleoEntries = golRes.data || [];
+    var index = 0;
+    if (sencillaEntryId) {
+        var found = sencillaEntries.findIndex(function(e) { return e.id === sencillaEntryId; });
+        if (found >= 0) index = found;
+    }
+    var pairedGoleo = goleoEntries[index] || null;
+    return { index: index, sencillaEntries: sencillaEntries, goleoEntries: goleoEntries, pairedGoleo: pairedGoleo };
 }
 
 function hideGoalChampionSection() {
@@ -12139,6 +12178,8 @@ async function loadGoalChampionPick() {
     _goleoOptIn.siblingPrice = sibling.price;
     _goleoOptIn.siblingOpen = sibling.status === "open";
     _goleoOptIn.goleoEntryId = null;
+    _goleoOptIn.sencillaEntryId = entry_id;
+    _goleoOptIn.boletaIndex = 0;
 
     if (pureBlock) pureBlock.classList.add("hidden");
     if (optBlock) optBlock.classList.remove("hidden");
@@ -12152,18 +12193,21 @@ async function loadGoalChampionPick() {
         hint.textContent = "Misma jornada · Goleó " + stTxt + priceTxt;
     }
 
-    // ¿Ya tiene boleto / pronóstico en Goleó?
-    var goleoEntry = null;
+    // Emparejar esta boleta Sencilla con su Goleó (1:1 por orden de creación)
+    var pairing = { index: 0, sencillaEntries: [], goleoEntries: [], pairedGoleo: null };
     if (participant_id) {
-        var { data: gEnt } = await supabaseClient.from("entries")
-            .select("id, paid")
-            .eq("pool_id", sibling.id)
-            .eq("participant_id", participant_id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        goleoEntry = gEnt || null;
+        try {
+            pairing = await getGoleoPairingForSencilla(pool_id, sibling.id, participant_id, entry_id);
+        } catch (e) {
+            console.warn("getGoleoPairingForSencilla", e);
+        }
     }
+    _goleoOptIn.boletaIndex = pairing.index;
+    var goleoEntry = pairing.pairedGoleo;
+    var boletaLabel = pairing.sencillaEntries.length > 1
+        ? ("Boleta " + (pairing.index + 1) + "/" + pairing.sencillaEntries.length + " · ")
+        : "";
+
     if (goleoEntry) {
         _goleoOptIn.goleoEntryId = goleoEntry.id;
         var { data: gPred } = await supabaseClient.from("predictions_goals_total")
@@ -12182,9 +12226,9 @@ async function loadGoalChampionPick() {
             optIn.disabled = !_goleoOptIn.siblingOpen;
         }
         if (st) {
-            st.textContent = goleoEntry.paid
-                ? "Ya tiene boleto Goleó · Pagado ✅"
-                : "Ya tiene boleto Goleó · Pendiente de pago ⏳";
+            st.textContent = boletaLabel + (goleoEntry.paid
+                ? "Goleó emparejado · Pagado ✅"
+                : "Goleó emparejado · Pendiente de pago ⏳");
         }
     } else {
         var chk2 = $("goalChampionOptIn");
@@ -12198,7 +12242,7 @@ async function loadGoalChampionPick() {
             optIn2.disabled = !_goleoOptIn.siblingOpen;
         }
         if (st2) st2.textContent = _goleoOptIn.siblingOpen
-            ? "Al guardar picks se creará el boleto Goleó si marcas la casilla."
+            ? (boletaLabel + "Al guardar picks se creará un boleto Goleó nuevo para esta boleta.")
             : "El Goleó de esta jornada ya está cerrado.";
     }
 
@@ -12263,40 +12307,47 @@ async function saveGoleoOptInFromSencilla() {
         return { ok: false, msg: "Falta el participante para registrar Goleó." };
     }
 
+    var sencillaPoolId = currentPickPoolId || $("pickPool").value;
+    var sencillaEntryId = currentPickEntryId || _goleoOptIn.sencillaEntryId;
     var goleoEntryId = _goleoOptIn.goleoEntryId;
     var created = false;
 
-    if (!goleoEntryId) {
-        // ¿Ya existe boleto? (por si se creó en otra pestaña)
-        var { data: existingEnt } = await supabaseClient.from("entries")
-            .select("id")
-            .eq("pool_id", _goleoOptIn.siblingPoolId)
-            .eq("participant_id", participant_id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        if (existingEnt && existingEnt.id) {
-            goleoEntryId = existingEnt.id;
+    // Emparejar 1:1 con la boleta Sencilla actual (no reutilizar siempre el mismo Goleó)
+    try {
+        var pairing = await getGoleoPairingForSencilla(
+            sencillaPoolId,
+            _goleoOptIn.siblingPoolId,
+            participant_id,
+            sencillaEntryId
+        );
+        _goleoOptIn.boletaIndex = pairing.index;
+        if (pairing.pairedGoleo && pairing.pairedGoleo.id) {
+            goleoEntryId = pairing.pairedGoleo.id;
         } else {
-            if (!_goleoOptIn.siblingOpen) {
-                return { ok: false, msg: "El Goleó está cerrado; no se puede crear boleto nuevo." };
-            }
-            var { data: createdEnt, error: insErr } = await supabaseClient.from("entries")
-                .insert({
-                    pool_id: _goleoOptIn.siblingPoolId,
-                    participant_id: participant_id,
-                    paid: false,
-                    paid_at: null
-                })
-                .select("id")
-                .single();
-            if (insErr) return { ok: false, msg: "Goleó: " + insErr.message };
-            goleoEntryId = createdEnt.id;
-            created = true;
+            goleoEntryId = null;
         }
-        _goleoOptIn.goleoEntryId = goleoEntryId;
+    } catch (e) {
+        console.warn("pairing saveGoleoOptIn", e);
     }
+
+    if (!goleoEntryId) {
+        if (!_goleoOptIn.siblingOpen) {
+            return { ok: false, msg: "El Goleó está cerrado; no se puede crear boleto nuevo." };
+        }
+        var { data: createdEnt, error: insErr } = await supabaseClient.from("entries")
+            .insert({
+                pool_id: _goleoOptIn.siblingPoolId,
+                participant_id: participant_id,
+                paid: false,
+                paid_at: null
+            })
+            .select("id")
+            .single();
+        if (insErr) return { ok: false, msg: "Goleó: " + insErr.message };
+        goleoEntryId = createdEnt.id;
+        created = true;
+    }
+    _goleoOptIn.goleoEntryId = goleoEntryId;
 
     var { error: predErr } = await supabaseClient.from("predictions_goals_total")
         .upsert([{
@@ -12307,7 +12358,13 @@ async function saveGoleoOptInFromSencilla() {
 
     if (predErr) return { ok: false, msg: "Goleó: " + predErr.message };
 
-    return { ok: true, created: created, predicted: predicted, entryId: goleoEntryId };
+    return {
+        ok: true,
+        created: created,
+        predicted: predicted,
+        entryId: goleoEntryId,
+        boletaIndex: _goleoOptIn.boletaIndex
+    };
 }
 
 // ═══════════════════════════════════════════════════════
