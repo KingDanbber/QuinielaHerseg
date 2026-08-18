@@ -6615,6 +6615,7 @@ function drawStandingsCanvas(opts) {
     var poolName = opts.poolName || "Jornada";
     var totalGoals = opts.totalGoals != null ? opts.totalGoals : 0;
     var logoImg = opts.logoImg || null;
+    var isGoleo = !!opts.isGoleo;
 
     var W = 900;
     var padX = 36;
@@ -6695,7 +6696,7 @@ function drawStandingsCanvas(opts) {
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
     ctx.font = "900 36px Arial";
-    ctx.fillText("Tabla de Aciertos", W / 2, 120);
+    ctx.fillText(isGoleo ? "Campeón de Goleó" : "Tabla de Aciertos", W / 2, 120);
     ctx.fillStyle = "#8a94a6";
     ctx.font = "600 16px Arial";
     ctx.fillText(poolName, W / 2, 148);
@@ -6717,7 +6718,8 @@ function drawStandingsCanvas(opts) {
         var isTop3 = i < 3;
 
         // Fondo fila
-        if (isFirst) {
+        var isExact = isGoleo && r.isExact;
+        if (isExact || (isFirst && !isGoleo)) {
             ctx.fillStyle = "rgba(16,185,129,0.14)";
             ctx.strokeStyle = "rgba(16,185,129,0.32)";
         } else if (isTop3) {
@@ -6768,20 +6770,25 @@ function drawStandingsCanvas(opts) {
         ctx.fillText(r.name || "?", padX + 56, cy - 6);
         ctx.fillStyle = "#8a94a6";
         ctx.font = "600 12px Arial";
-        var sub = (r.area || "Sin área") + "  ·  " + (r.captured_picks || 0) + " picks  ·  " + (r.played_matches || 0) + " jugados";
+        var sub;
+        if (isGoleo) {
+            sub = (r.area || "Sin área") + (isExact ? "  ·  EXACTO ✅" : (r.diff != null ? "  ·  ±" + r.diff : ""));
+        } else {
+            sub = (r.area || "Sin área") + "  ·  " + (r.captured_picks || 0) + " picks  ·  " + (r.played_matches || 0) + " jugados";
+        }
         ctx.fillText(sub, padX + 56, cy + 14);
 
-        // Puntos
-        var ptsColor = isFirst ? "#34d399" : (isTop3 ? "#a3e635" : "#f0f4f8");
+        // Puntos / goles predichos
+        var ptsColor = isExact || isFirst ? "#34d399" : (isTop3 ? "#a3e635" : "#f0f4f8");
         ctx.textAlign = "right";
         ctx.fillStyle = ptsColor;
         ctx.font = "900 28px Arial";
         ctx.textBaseline = "middle";
         ctx.fillText(String(r.points || 0), W - padX - 16, cy - 4);
         ctx.textBaseline = "alphabetic";
-        ctx.fillStyle = "#6b7280";
+        ctx.fillStyle = isExact ? "#34d399" : "#6b7280";
         ctx.font = "600 10px Arial";
-        ctx.fillText("aciertos", W - padX - 16, cy + 16);
+        ctx.fillText(isGoleo ? (isExact ? "exacto" : "goles pred.") : "aciertos", W - padX - 16, cy + 16);
     });
 
     // Footer
@@ -6808,7 +6815,9 @@ async function exportStandingsImage() {
     if (!pool_id) return showAlert("Selecciona una jornada.", "error");
 
     const { data: pool } = await supabaseClient.from("pools")
-        .select("id, name").eq("id", pool_id).maybeSingle();
+        .select("id, name, mode_code, round").eq("id", pool_id).maybeSingle();
+
+    const isGoleo = pool && String(pool.mode_code || "").toUpperCase() === "GOLEO";
 
     const { data: paidEntries } = await supabaseClient.from("entries")
         .select("id, participant_id").eq("pool_id", pool_id).eq("paid", true);
@@ -6819,45 +6828,77 @@ async function exportStandingsImage() {
     const paidEntryIds = paidEntries.map(function(e) { return e.id; });
     const paidPartIds = paidEntries.map(function(e) { return e.participant_id; });
 
-    const { data: pointsRows } = await supabaseClient.from("entry_points")
-        .select("entry_id, participant_id, points, played_matches, captured_picks")
-        .eq("pool_id", pool_id).in("entry_id", paidEntryIds);
-
     const { data: participants } = await supabaseClient.from("participants")
         .select("id, name, area").in("id", paidPartIds);
 
     const { data: goalsData } = await supabaseClient.from("pool_goals_total")
         .select("total_goals").eq("pool_id", pool_id).maybeSingle();
 
+    const actualGoals = goalsData && goalsData.total_goals != null ? Number(goalsData.total_goals) : null;
     const partMap = new Map((participants || []).map(function(p) { return [p.id, p]; }));
+    const paidMap = {};
+    paidEntries.forEach(function(e) { paidMap[e.id] = e; });
 
-    const rows = (pointsRows || []).map(function(r) {
-        const p = partMap.get(r.participant_id) || {};
-        return {
-            name: p.name || "Sin nombre",
-            area: p.area || "",
-            points: Number(r.points || 0),
-            played_matches: Number(r.played_matches || 0),
-            captured_picks: Number(r.captured_picks || 0)
-        };
-    }).sort(function(a, b) {
-        return b.points - a.points || a.name.localeCompare(b.name);
-    });
+    var rows = [];
+
+    if (isGoleo) {
+        const { data: preds } = await supabaseClient.from("predictions_goals_total")
+            .select("entry_id, predicted_goals").eq("pool_id", pool_id).in("entry_id", paidEntryIds);
+        rows = (preds || []).map(function(pred) {
+            var entry = paidMap[pred.entry_id] || {};
+            var p = partMap.get(entry.participant_id) || {};
+            var predicted = Number(pred.predicted_goals);
+            var diff = actualGoals !== null ? Math.abs(predicted - actualGoals) : null;
+            return {
+                name: p.name || "Sin nombre",
+                area: p.area || "",
+                points: predicted,
+                predicted: predicted,
+                diff: diff,
+                isExact: diff === 0,
+                played_matches: 0,
+                captured_picks: 0
+            };
+        }).sort(function(a, b) {
+            if (a.diff === null && b.diff === null) return a.name.localeCompare(b.name);
+            if (a.diff === null) return 1;
+            if (b.diff === null) return -1;
+            return a.diff - b.diff || a.name.localeCompare(b.name);
+        });
+    } else {
+        const { data: pointsRows } = await supabaseClient.from("entry_points")
+            .select("entry_id, participant_id, points, played_matches, captured_picks")
+            .eq("pool_id", pool_id).in("entry_id", paidEntryIds);
+
+        rows = (pointsRows || []).map(function(r) {
+            const p = partMap.get(r.participant_id) || {};
+            return {
+                name: p.name || "Sin nombre",
+                area: p.area || "",
+                points: Number(r.points || 0),
+                played_matches: Number(r.played_matches || 0),
+                captured_picks: Number(r.captured_picks || 0)
+            };
+        }).sort(function(a, b) {
+            return b.points - a.points || a.name.localeCompare(b.name);
+        });
+    }
 
     try {
         var logoImg = await loadLogoImage();
         var canvas = drawStandingsCanvas({
             poolName: (pool && pool.name) || "Jornada",
-            totalGoals: (goalsData && goalsData.total_goals) || 0,
+            totalGoals: actualGoals != null ? actualGoals : 0,
             rows: rows,
-            logoImg: logoImg
+            logoImg: logoImg,
+            isGoleo: isGoleo
         });
         const a = document.createElement("a");
         const safeName = ((pool && pool.name) || "tabla").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
-        a.download = safeName + "-tabla-aciertos.png";
+        a.download = safeName + (isGoleo ? "-tabla-goleo.png" : "-tabla-aciertos.png");
         a.href = canvas.toDataURL("image/png");
         a.click();
-        showAlert("Tabla de aciertos exportada ✅", "ok");
+        showAlert(isGoleo ? "Tabla Goleó exportada ✅" : "Tabla de aciertos exportada ✅", "ok");
     } catch (err) {
         showAlert("Error exportando tabla: " + (err && err.message ? err.message : err), "error");
     }
@@ -7032,11 +7073,23 @@ function drawWinnerCanvas(opts) {
     var prizePerWinner = Number(opts.prizePerWinner || 0);
     var winnersCount = Number(opts.winnersCount || winners.length || 1);
     var logoImg = opts.logoImg || null;
-    var isTie = winnersCount > 1;
-    var names = winners.map(function(w) { return w.name || "?"; }).join(" & ");
-    var title = isTie
-        ? (isFinished ? "Empate Final" : "Empate Provisional")
-        : (isFinished ? "Ganador Final" : "Ganador Provisional");
+    var isGoleo = !!opts.isGoleo;
+    var noExactWinner = !!opts.noExactWinner;
+    var actualGoals = opts.actualGoals != null ? Number(opts.actualGoals) : winningPoints;
+    var isTie = !noExactWinner && winnersCount > 1;
+    var names = noExactWinner
+        ? "Sin acertante exacto"
+        : winners.map(function(w) { return w.name || "?"; }).join(" & ");
+    var title;
+    if (isGoleo) {
+        if (noExactWinner) title = isFinished ? "Bolsa Acumulada" : "Sin Acertante";
+        else if (isTie) title = isFinished ? "Empate Goleó" : "Empate Provisional Goleó";
+        else title = isFinished ? "Campeón de Goleó" : "Líder Goleó";
+    } else {
+        title = isTie
+            ? (isFinished ? "Empate Final" : "Empate Provisional")
+            : (isFinished ? "Ganador Final" : "Ganador Provisional");
+    }
 
     var W = 900;
     var H = 1000;
@@ -7123,9 +7176,10 @@ function drawWinnerCanvas(opts) {
     ctx.fill();
 
     var initials = nameInitials(winners[0] && winners[0].name ? winners[0].name : "G");
-    if (isTie) initials = "🤝";
+    if (noExactWinner) initials = "⚽";
+    else if (isTie) initials = "🤝";
     ctx.fillStyle = "#fbbf24";
-    ctx.font = isTie ? "40px Arial" : "900 36px Arial";
+    ctx.font = (isTie || noExactWinner) ? "40px Arial" : "900 36px Arial";
     ctx.textBaseline = "middle";
     ctx.fillText(initials, W / 2, avCy + 1);
     ctx.textBaseline = "alphabetic";
@@ -7145,11 +7199,26 @@ function drawWinnerCanvas(opts) {
     hy += 40;
 
     // Stats cards
-    var cards = [
-        { label: "Aciertos", value: String(winningPoints), color: "#34d399" },
-        { label: "Bolsa", value: (typeof money === "function" ? money(prizePool) : ("$" + prizePool)), color: "#fbbf24" },
-        { label: isTie ? "Por persona" : "Premio", value: (typeof money === "function" ? money(prizePerWinner) : ("$" + prizePerWinner)), color: "#38bdf8" }
-    ];
+    var cards;
+    if (isGoleo) {
+        cards = [
+            { label: "Goles reales", value: String(actualGoals), color: "#34d399" },
+            { label: "Bolsa", value: (typeof money === "function" ? money(prizePool) : ("$" + prizePool)), color: "#fbbf24" },
+            {
+                label: noExactWinner ? "Acumula" : (isTie ? "Por persona" : "Premio"),
+                value: noExactWinner
+                    ? (typeof money === "function" ? money(prizePool) : ("$" + prizePool))
+                    : (typeof money === "function" ? money(prizePerWinner) : ("$" + prizePerWinner)),
+                color: "#38bdf8"
+            }
+        ];
+    } else {
+        cards = [
+            { label: "Aciertos", value: String(winningPoints), color: "#34d399" },
+            { label: "Bolsa", value: (typeof money === "function" ? money(prizePool) : ("$" + prizePool)), color: "#fbbf24" },
+            { label: isTie ? "Por persona" : "Premio", value: (typeof money === "function" ? money(prizePerWinner) : ("$" + prizePerWinner)), color: "#38bdf8" }
+        ];
+    }
     var cardW = 240;
     var cardGap = 18;
     var cardsTotal = cards.length * cardW + (cards.length - 1) * cardGap;
@@ -7172,11 +7241,21 @@ function drawWinnerCanvas(opts) {
     });
     hy += 120;
 
-    // Ganadores count
-    if (isTie) {
+    // Ganadores count / nota Goleó
+    if (isGoleo && noExactWinner) {
         ctx.fillStyle = "#fbbf24";
         ctx.font = "700 14px Arial";
-        ctx.fillText(winnersCount + " ganadores empatados", W / 2, hy);
+        ctx.fillText("Nadie acertó exacto · la bolsa pasa a la próxima jornada", W / 2, hy);
+        hy += 28;
+    } else if (isTie) {
+        ctx.fillStyle = "#fbbf24";
+        ctx.font = "700 14px Arial";
+        ctx.fillText(winnersCount + " ganadores empatados" + (isGoleo ? " (acierto exacto)" : ""), W / 2, hy);
+        hy += 28;
+    } else if (isGoleo && winnersCount === 1) {
+        ctx.fillStyle = "#34d399";
+        ctx.font = "700 14px Arial";
+        ctx.fillText("⚽ Acierto exacto · " + actualGoals + " goles", W / 2, hy);
         hy += 28;
     }
 
@@ -7208,13 +7287,92 @@ async function exportWinnerCard() {
         error: poolErr
     } = await supabaseClient
         .from("pools")
-        .select("id, name, season")
+        .select("id, name, season, mode_code, round, competition, price, carryover_amount")
         .eq("id", pool_id)
         .maybeSingle();
 
     if (poolErr) return showAlert(poolErr.message, "error");
 
+    var isGoleo = pool && String(pool.mode_code || "").toUpperCase() === "GOLEO";
     const completionInfo = await getPoolCompletionInfo(pool_id);
+
+    // ── GOLEÓ: solo acertantes EXACTOS ──
+    if (isGoleo) {
+        var goalsRes = await supabaseClient.from("pool_goals_total")
+            .select("total_goals").eq("pool_id", pool_id).maybeSingle();
+        var actualGoals = goalsRes.data ? Number(goalsRes.data.total_goals) : null;
+        if (actualGoals === null || isNaN(actualGoals)) {
+            return showAlert("Captura primero el total de goles de la jornada.", "error");
+        }
+
+        var [paidRes, predsRes] = await Promise.all([
+            supabaseClient.from("entries").select("id, participant_id, paid").eq("pool_id", pool_id).eq("paid", true),
+            supabaseClient.from("predictions_goals_total").select("entry_id, predicted_goals").eq("pool_id", pool_id)
+        ]);
+        var paidMap = {};
+        (paidRes.data || []).forEach(function(e) { paidMap[e.id] = e; });
+        var partIds = [...new Set((paidRes.data || []).map(function(e) { return e.participant_id; }))];
+        var partMap = {};
+        if (partIds.length) {
+            var partRes = await supabaseClient.from("participants").select("id, name, area").in("id", partIds);
+            (partRes.data || []).forEach(function(p) { partMap[p.id] = p; });
+        }
+
+        var exactWinners = (predsRes.data || []).filter(function(pred) {
+            return paidMap[pred.entry_id] && Number(pred.predicted_goals) === actualGoals;
+        }).map(function(pred) {
+            var entry = paidMap[pred.entry_id];
+            var p = partMap[entry.participant_id] || {};
+            return { name: p.name || "?", area: p.area || "", predicted: Number(pred.predicted_goals) };
+        });
+
+        // Deduplicar por nombre (mismo participante con 2 boletas exactas cuenta 1 premio? 
+        // Por boleto: si 2 boletas exactas del mismo, ambos aparecen — reglas de negocio: 1 premio por entry
+        // Mantener uno por entry ya está; si mismo nombre 2 veces es OK si 2 boletas)
+
+        var bag = { total_bag: 0, prize_pool: 0, carryover_amount: 0 };
+        try {
+            bag = await getGoleoBagAmount(pool_id);
+        } catch (e) { /* ignore */ }
+
+        var winnersCount = exactWinners.length;
+        var prizePool = Number(bag.total_bag || 0);
+        var prizePer = winnersCount > 0 ? Math.floor(prizePool / winnersCount) : 0;
+
+        try {
+            var logoImg = await loadLogoImage();
+            var canvas = drawWinnerCanvas({
+                poolName: (pool && pool.name) || "Jornada",
+                season: (pool && pool.season) || "",
+                isFinished: completionInfo && completionInfo.isFinished,
+                winners: exactWinners.length ? exactWinners : [{ name: "Sin acertante exacto" }],
+                winningPoints: actualGoals,
+                prizePool: prizePool,
+                prizePerWinner: prizePer,
+                winnersCount: winnersCount || 0,
+                logoImg: logoImg,
+                isGoleo: true,
+                noExactWinner: winnersCount === 0,
+                actualGoals: actualGoals
+            });
+
+            const a = document.createElement("a");
+            const safeName = ((pool && pool.name) || "ganador")
+                .replace(/[^\w\s-]/g, "")
+                .replace(/\s+/g, "-");
+            a.download = safeName + "-ganador-goleo.png";
+            a.href = canvas.toDataURL("image/png");
+            a.click();
+            showAlert(winnersCount
+                ? "Cartel Campeón de Goleó exportado ✅"
+                : "Cartel Goleó (sin acertante) exportado ✅", "ok");
+        } catch (err) {
+            showAlert("Error generando cartel: " + (err && err.message ? err.message : err), "error");
+        }
+        return;
+    }
+
+    // ── SENCILLA / 1X2 ──
     const winnerSummary = await loadSimpleWinnerSummary(pool_id);
 
     if (!winnerSummary || !winnerSummary.winners || !winnerSummary.winners.length) {
@@ -7222,8 +7380,8 @@ async function exportWinnerCard() {
     }
 
     try {
-        var logoImg = await loadLogoImage();
-        var canvas = drawWinnerCanvas({
+        var logoImg2 = await loadLogoImage();
+        var canvas2 = drawWinnerCanvas({
             poolName: (pool && pool.name) || "Jornada",
             season: (pool && pool.season) || "",
             isFinished: completionInfo && completionInfo.isFinished,
@@ -7232,16 +7390,17 @@ async function exportWinnerCard() {
             prizePool: winnerSummary.prize_pool,
             prizePerWinner: winnerSummary.prize_per_winner,
             winnersCount: winnerSummary.winners_count,
-            logoImg: logoImg
+            logoImg: logoImg2,
+            isGoleo: false
         });
 
-        const a = document.createElement("a");
-        const safeName = ((pool && pool.name) || "ganador")
+        const a2 = document.createElement("a");
+        const safeName2 = ((pool && pool.name) || "ganador")
             .replace(/[^\w\s-]/g, "")
             .replace(/\s+/g, "-");
-        a.download = safeName + "-ganador.png";
-        a.href = canvas.toDataURL("image/png");
-        a.click();
+        a2.download = safeName2 + "-ganador.png";
+        a2.href = canvas2.toDataURL("image/png");
+        a2.click();
         showAlert("Cartel del ganador premium exportado ✅", "ok");
     } catch (err) {
         showAlert("Error generando cartel: " + (err && err.message ? err.message : err), "error");
@@ -11606,40 +11765,80 @@ function makeTop3Card(opts) {
 }
 
 async function exportTop3Card() {
-    await ensureExportLibraries();
     hideAlert();
     var pool_id = $("standingsPool").value;
     if (!pool_id) return showAlert("Selecciona una jornada primero.", "error");
 
-    var [poolRes, paidRes, ptRes, goalsRes] = await Promise.all([
-        supabaseClient.from("pools").select("id, name, round, competition, season").eq("id", pool_id).maybeSingle(),
-        supabaseClient.from("entries").select("id, participant_id").eq("pool_id", pool_id).eq("paid", true),
-        supabaseClient.from("entry_points").select("entry_id, participant_id, points, played_matches").eq("pool_id", pool_id),
-        supabaseClient.from("pool_goals_total").select("total_goals").eq("pool_id", pool_id).maybeSingle()
-    ]);
-
+    var poolRes = await supabaseClient.from("pools")
+        .select("id, name, round, competition, season, mode_code")
+        .eq("id", pool_id).maybeSingle();
     var pool = poolRes.data || {};
-    var paid = new Set((paidRes.data || []).map(function(e) { return e.id; }));
-    var points = (ptRes.data || []).filter(function(r) { return paid.has(r.entry_id); });
-    var totalGoals = goalsRes.data ? goalsRes.data.total_goals : 0;
+    var isGoleo = String(pool.mode_code || "").toUpperCase() === "GOLEO";
 
-    if (!points.length) return showAlert("No hay boletos pagados con aciertos.", "error");
+    var goalsRes = await supabaseClient.from("pool_goals_total")
+        .select("total_goals").eq("pool_id", pool_id).maybeSingle();
+    var totalGoals = goalsRes.data ? Number(goalsRes.data.total_goals) : 0;
+    var hasActual = goalsRes.data && goalsRes.data.total_goals != null;
 
-    var partIds = [...new Set(points.map(function(r) { return r.participant_id; }))];
-    var partRes = await supabaseClient.from("participants").select("id, name, area").in("id", partIds);
-    var partMap = {};
-    (partRes.data || []).forEach(function(p) { partMap[p.id] = p; });
+    var ranked = [];
 
-    var ranked = points.map(function(r) {
-        var p = partMap[r.participant_id] || {};
-        return {
-            name: p.name || "?",
-            area: p.area || "",
-            points: Number(r.points || 0)
-        };
-    }).sort(function(a, b) {
-        return b.points - a.points || a.name.localeCompare(b.name);
-    }).slice(0, 3);
+    if (isGoleo) {
+        // Ranking por cercanía al total real (exacto primero)
+        var [paidRes, predsRes] = await Promise.all([
+            supabaseClient.from("entries").select("id, participant_id, paid").eq("pool_id", pool_id).eq("paid", true),
+            supabaseClient.from("predictions_goals_total").select("entry_id, predicted_goals").eq("pool_id", pool_id)
+        ]);
+        var paidMap = {};
+        (paidRes.data || []).forEach(function(e) { paidMap[e.id] = e; });
+        var partIds = [...new Set((paidRes.data || []).map(function(e) { return e.participant_id; }))];
+        if (!partIds.length) return showAlert("No hay boletos pagados en Goleó.", "error");
+        var partRes = await supabaseClient.from("participants").select("id, name, area").in("id", partIds);
+        var partMap = {};
+        (partRes.data || []).forEach(function(p) { partMap[p.id] = p; });
+
+        ranked = (predsRes.data || []).map(function(pred) {
+            var entry = paidMap[pred.entry_id];
+            if (!entry) return null;
+            var p = partMap[entry.participant_id] || {};
+            var predGoals = Number(pred.predicted_goals);
+            var diff = hasActual ? Math.abs(predGoals - totalGoals) : null;
+            return {
+                name: p.name || "?",
+                area: p.area || "",
+                points: predGoals,
+                predicted: predGoals,
+                diff: diff,
+                isExact: diff === 0
+            };
+        }).filter(Boolean).sort(function(a, b) {
+            if (a.diff === null && b.diff === null) return a.name.localeCompare(b.name);
+            if (a.diff === null) return 1;
+            if (b.diff === null) return -1;
+            return a.diff - b.diff || a.name.localeCompare(b.name);
+        }).slice(0, 3);
+    } else {
+        var [paidRes2, ptRes] = await Promise.all([
+            supabaseClient.from("entries").select("id, participant_id").eq("pool_id", pool_id).eq("paid", true),
+            supabaseClient.from("entry_points").select("entry_id, participant_id, points, played_matches").eq("pool_id", pool_id)
+        ]);
+        var paid = new Set((paidRes2.data || []).map(function(e) { return e.id; }));
+        var points = (ptRes.data || []).filter(function(r) { return paid.has(r.entry_id); });
+        if (!points.length) return showAlert("No hay boletos pagados con aciertos.", "error");
+        var partIds2 = [...new Set(points.map(function(r) { return r.participant_id; }))];
+        var partRes2 = await supabaseClient.from("participants").select("id, name, area").in("id", partIds2);
+        var partMap2 = {};
+        (partRes2.data || []).forEach(function(p) { partMap2[p.id] = p; });
+        ranked = points.map(function(r) {
+            var p = partMap2[r.participant_id] || {};
+            return {
+                name: p.name || "?",
+                area: p.area || "",
+                points: Number(r.points || 0)
+            };
+        }).sort(function(a, b) {
+            return b.points - a.points || a.name.localeCompare(b.name);
+        }).slice(0, 3);
+    }
 
     if (!ranked.length) return showAlert("Sin datos para el cartel.", "error");
 
@@ -11647,41 +11846,30 @@ async function exportTop3Card() {
     var competition = pool.competition || "Liga MX";
     var season = pool.season || "";
 
-    // Precargar logo (opcional; si falla se omite)
     var logoImg = null;
     try {
-        var logoUrl = typeof QUINIELA_LOGO_URL !== "undefined" ? QUINIELA_LOGO_URL : "";
-        if (logoUrl) {
-            logoImg = await new Promise(function(resolve) {
-                var img = new Image();
-                img.crossOrigin = "anonymous";
-                img.onload = function() { resolve(img); };
-                img.onerror = function() { resolve(null); };
-                img.src = logoUrl;
-                setTimeout(function() { resolve(img.complete && img.naturalWidth > 0 ? img : null); }, 2000);
-            });
-        }
+        logoImg = typeof loadLogoImage === "function" ? await loadLogoImage() : null;
     } catch (e) {
         logoImg = null;
     }
 
     try {
-        // Canvas nativo — SIN html2canvas (evita createPattern 0x0 en móvil)
         var canvas = drawTop3Canvas({
             ranked: ranked,
             jornada: jornada,
             competition: competition,
             season: season,
             totalGoals: totalGoals,
-            logoImg: logoImg
+            logoImg: logoImg,
+            isGoleo: isGoleo
         });
 
         var a = document.createElement("a");
         var safeName = (jornada || "top3").replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
-        a.download = safeName + "-top3.png";
+        a.download = safeName + (isGoleo ? "-top3-goleo.png" : "-top3.png");
         a.href = canvas.toDataURL("image/png");
         a.click();
-        showAlert("Cartel Top 3 premium exportado ✅", "ok");
+        showAlert(isGoleo ? "Cartel Top 3 Goleó exportado ✅" : "Cartel Top 3 premium exportado ✅", "ok");
     } catch (err) {
         showAlert("Error: " + (err && err.message ? err.message : String(err)), "error");
     }
@@ -11699,6 +11887,7 @@ function drawTop3Canvas(opts) {
     var season = opts.season || "";
     var totalGoals = opts.totalGoals != null ? opts.totalGoals : 0;
     var logoImg = opts.logoImg || null;
+    var isGoleo = !!opts.isGoleo;
 
     var W = 900;
     var H = 1020;
@@ -11765,7 +11954,7 @@ function drawTop3Canvas(opts) {
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "900 42px Arial";
-    ctx.fillText("Top 3", W / 2, hy);
+    ctx.fillText(isGoleo ? "Top 3 Goleó" : "Top 3", W / 2, hy);
     hy += 28;
 
     var meta = jornada + "  ·  " + competition + (season ? "  ·  " + season : "") + "  ·  ⚽ " + totalGoals + " goles";
@@ -11912,14 +12101,22 @@ function drawTop3Canvas(opts) {
         ctx.font = "600 11px Arial";
         ctx.fillText(player.area || "Sin área", cx, yArea);
 
-        // Puntos — bien visibles, encima del podio
+        // Puntos / goles predichos — bien visibles, encima del podio
         ctx.fillStyle = m.label;
         ctx.font = "900 " + (isFirst ? 44 : 34) + "px Arial";
         ctx.fillText(String(Number(player.points || 0)), cx, yPoints);
 
         ctx.fillStyle = "#6b7280";
         ctx.font = "700 10px Arial";
-        ctx.fillText("ACIERTOS", cx, yAciertos);
+        if (isGoleo) {
+            var goleoLabel = player.isExact
+                ? "EXACTO ✅"
+                : (player.diff != null ? ("±" + player.diff + " GOLES") : "GOLES PRED.");
+            ctx.fillStyle = player.isExact ? "#34d399" : "#6b7280";
+            ctx.fillText(goleoLabel, cx, yAciertos);
+        } else {
+            ctx.fillText("ACIERTOS", cx, yAciertos);
+        }
 
         // Bloque podio
         var podiumGrad = ctx.createLinearGradient(cx, podiumTop, cx, baseY);
