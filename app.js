@@ -979,9 +979,26 @@ async function updateNavBadges(options = {}) {
         const totalMatches = validMatchIds.length;
         const picksByEntry = new Map();
 
-        // Contar picks incompletos (solo jornadas con plantilla de partidos)
-        // GOLEÓ no usa predictions_1x2 de la misma forma; si no hay matches, no cuenta picks 1X2
-        if (entryIds.length && validMatchIds.length) {
+        var modeUpper = String(pool.mode_code || "SENCILLA").toUpperCase();
+
+        // GOLEÓ: pendiente = boleto pagado o no sin pronóstico de goles
+        if (modeUpper === "GOLEO" && entryIds.length) {
+          var goalsByEntry = new Set();
+          try {
+            var { data: gRows } = await supabaseClient
+              .from("predictions_goals_total")
+              .select("entry_id")
+              .eq("pool_id", poolId)
+              .in("entry_id", entryIds);
+            (gRows || []).forEach(function(g) {
+              if (g.entry_id) goalsByEntry.add(g.entry_id);
+            });
+          } catch (e) { /* ignore */ }
+          picksPendingCount += entries.filter(function(entry) {
+            return !goalsByEntry.has(entry.id);
+          }).length;
+        } else if (entryIds.length && validMatchIds.length) {
+          // Sencilla / 1X2: picks incompletos vs plantilla de partidos
           const ENTRY_CHUNK = 80;
           const PAGE_SIZE = 500;
 
@@ -1097,6 +1114,83 @@ function formatModeLabel(mode) {
         default:
             return mode || "—";
     }
+}
+
+/** Texto corto y limpio para una jornada activa (chips / banners). */
+function formatActivePoolLine(p) {
+    if (!p) return "—";
+    var mode = String(p.mode_code || "SENCILLA").toUpperCase();
+    var modeShort = typeof formatModeShort === "function" ? formatModeShort(mode) : formatModeLabel(mode);
+    var parts = [];
+    if (p.round != null && String(p.round).trim() !== "") {
+        parts.push("J" + String(p.round).trim());
+    }
+    if (p.competition) parts.push(String(p.competition).trim());
+    if (p.season) parts.push(String(p.season).trim());
+    if (!parts.length && p.name) parts.push(String(p.name).trim());
+    return parts.join(" · ") + " · " + modeShort;
+}
+
+/** Banner de jornadas activas en pestaña Jornadas (ordenado y legible). */
+function renderActivePoolsBanner(actives) {
+    var list = actives || [];
+    var countEl = $("activePoolsCount");
+    var banner = $("activePoolsBanner");
+    var nameEl = $("activePoolName");
+
+    if (countEl) {
+        countEl.textContent = list.length === 1
+            ? "1 activa"
+            : (list.length + " activas");
+        countEl.className = list.length
+            ? "text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20"
+            : "text-[11px] font-semibold text-zinc-500 bg-zinc-800/80 px-2.5 py-1 rounded-full border border-zinc-700";
+    }
+
+    if (!nameEl) return;
+
+    if (!list.length) {
+        nameEl.innerHTML = "";
+        if (banner) banner.classList.add("hidden");
+        return;
+    }
+
+    if (banner) banner.classList.remove("hidden");
+
+    // Orden: por jornada (round) y luego por modo
+    var sorted = list.slice().sort(function(a, b) {
+        var ra = Number(a.round);
+        var rb = Number(b.round);
+        if (!isNaN(ra) && !isNaN(rb) && ra !== rb) return ra - rb;
+        return String(a.mode_code || "").localeCompare(String(b.mode_code || ""));
+    });
+
+    nameEl.innerHTML = sorted.map(function(p) {
+        var mode = String(p.mode_code || "SENCILLA").toUpperCase();
+        var modeBadge = mode === "GOLEO"
+            ? "bg-amber-500/15 text-amber-300 border-amber-500/25"
+            : mode === "ACUMULADA"
+            ? "bg-sky-500/15 text-sky-300 border-sky-500/25"
+            : "bg-emerald-500/15 text-emerald-300 border-emerald-500/25";
+        var modeShort = typeof formatModeShort === "function" ? formatModeShort(mode) : formatModeLabel(mode);
+        var title = [];
+        if (p.round != null && String(p.round).trim() !== "") title.push("Jornada " + String(p.round).trim());
+        if (p.competition) title.push(String(p.competition).trim());
+        if (p.season) title.push(String(p.season).trim());
+        if (!title.length) title.push(p.name || "Jornada");
+
+        return (
+            '<div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/15">' +
+            '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>' +
+            '<span class="text-sm text-zinc-100 font-medium flex-1 min-w-0 truncate">' +
+            escapeHTML(title.join(" · ")) +
+            '</span>' +
+            '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ' + modeBadge + '">' +
+            escapeHTML(modeShort) +
+            '</span>' +
+            '</div>'
+        );
+    }).join("");
 }
 
 /** Etiqueta corta de modo para selects (móvil) */
@@ -1436,17 +1530,35 @@ async function loadDashboardSummary() {
 
     // ── Jornadas activas ──
     if ($("dashActivePool")) {
-        $("dashActivePool").innerHTML = activePools.map(function(p) {
-            const mode = formatModeLabel(p.mode_code || "SENCILLA");
-            return (
-                '<div class="flex items-center gap-2">' +
-                '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>' +
-                '<span>' + (p.name || "—") +
-                ' <span class="text-xs text-emerald-300/90">(' + mode + ')</span>' +
-                '</span>' +
-                '</div>'
-            );
-        }).join("");
+        if (!activePools.length) {
+            $("dashActivePool").textContent = "Sin activa";
+        } else {
+            var sortedActive = activePools.slice().sort(function(a, b) {
+                var ra = Number(a.round), rb = Number(b.round);
+                if (!isNaN(ra) && !isNaN(rb) && ra !== rb) return ra - rb;
+                return String(a.mode_code || "").localeCompare(String(b.mode_code || ""));
+            });
+            $("dashActivePool").innerHTML = sortedActive.map(function(p) {
+                var mode = String(p.mode_code || "SENCILLA").toUpperCase();
+                var modeShort = typeof formatModeShort === "function" ? formatModeShort(mode) : formatModeLabel(mode);
+                var title = [];
+                if (p.round != null && String(p.round).trim() !== "") title.push("Jornada " + String(p.round).trim());
+                if (p.competition) title.push(String(p.competition).trim());
+                if (p.season) title.push(String(p.season).trim());
+                if (!title.length) title.push(p.name || "Jornada");
+                var badgeCls = mode === "GOLEO"
+                    ? "text-amber-300"
+                    : "text-emerald-300";
+                return (
+                    '<div class="flex items-center gap-2">' +
+                    '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>' +
+                    '<span class="text-sm text-zinc-100">' + escapeHTML(title.join(" · ")) +
+                    ' <span class="text-xs ' + badgeCls + '">· ' + escapeHTML(modeShort) + '</span>' +
+                    '</span>' +
+                    '</div>'
+                );
+            }).join("");
+        }
     }
 
     // ── Modos activos ──
@@ -1562,6 +1674,72 @@ async function loadDashboardSummary() {
         return s + r.unpaid;
     }, 0);
     if ($("dashUnpaidEntries")) $("dashUnpaidEntries").textContent = totalUnpaid;
+
+    // Volumen de datos (no bloquea el dashboard)
+    try {
+        loadDbStats().catch(function() { /* ignore */ });
+    } catch (e) { /* ignore */ }
+}
+
+/** Conteos de filas en tablas principales (proxy de volumen; el disco real está en Supabase Usage). */
+async function loadDbStats() {
+    var wrap = $("dashDbStats");
+    if (!wrap) return;
+
+    var tables = [
+        { key: "participants", label: "Participantes" },
+        { key: "pools", label: "Jornadas" },
+        { key: "entries", label: "Boletos" },
+        { key: "matches", label: "Partidos" },
+        { key: "predictions_1x2", label: "Picks 1X2" },
+        { key: "predictions_goals_total", label: "Picks Goleó" },
+        { key: "entry_points", label: "Puntos" }
+    ];
+
+    try {
+        var results = await Promise.all(tables.map(async function(t) {
+            var res = await supabaseClient.from(t.key).select("*", { count: "exact", head: true });
+            return {
+                label: t.label,
+                count: res.error ? null : Number(res.count || 0),
+                error: res.error ? res.error.message : null
+            };
+        }));
+
+        var total = results.reduce(function(s, r) {
+            return s + (r.count != null ? r.count : 0);
+        }, 0);
+
+        wrap.innerHTML = results.map(function(r) {
+            var val = r.count == null
+                ? '<span class="text-zinc-500">—</span>'
+                : '<span class="font-semibold text-zinc-100">' + r.count.toLocaleString("es-MX") + '</span>';
+            return (
+                '<div class="flex items-center justify-between gap-2">' +
+                '<span class="text-zinc-400 text-xs">' + r.label + '</span>' +
+                val +
+                '</div>'
+            );
+        }).join("") +
+        '<div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-zinc-800">' +
+        '<span class="text-zinc-500 text-xs">Total filas contadas</span>' +
+        '<span class="font-black text-emerald-400">' + total.toLocaleString("es-MX") + '</span>' +
+        '</div>';
+    } catch (err) {
+        wrap.innerHTML = '<div class="text-xs text-amber-400">No se pudo cargar el volumen: ' +
+            (err && err.message ? err.message : String(err)) + '</div>';
+    }
+}
+
+if (typeof document !== "undefined") {
+    document.addEventListener("click", function(ev) {
+        var t = ev.target && ev.target.closest ? ev.target.closest("#btnRefreshDbStats") : null;
+        if (t) {
+            var wrap = $("dashDbStats");
+            if (wrap) wrap.innerHTML = '<div class="text-xs text-zinc-500">Actualizando…</div>';
+            loadDbStats();
+        }
+    });
 }
 
 // Guardar Participantes
@@ -1934,9 +2112,8 @@ async function loadPools() {
     if (error) return showAlert(error.message, "error");
 
     const rows = data || [];
-    const actives = rows.filter(p => p.status === "open");
-    $("activePoolName").textContent = actives.length
-    ? actives.map(p => p.name + " (" + formatModeLabel(p.mode_code) + ")").join(" · "): "—";
+    const actives = rows.filter(function(p) { return p.status === "open"; });
+    renderActivePoolsBanner(actives);
 
     $("poolsList").innerHTML = rows.map(p => {
         const badge =

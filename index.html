@@ -206,6 +206,21 @@
         </div>
       </div>
 
+      <!-- Volumen de datos / referencia Supabase -->
+      <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+        <div class="flex items-center justify-between mb-2 gap-2">
+          <div class="text-xs text-zinc-400">Volumen de datos (filas en BD)</div>
+          <button type="button" id="btnRefreshDbStats" class="text-[11px] px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700">Actualizar</button>
+        </div>
+        <div id="dashDbStats" class="space-y-1.5 text-sm text-zinc-300">
+          <div class="text-xs text-zinc-500">Cargando…</div>
+        </div>
+        <div class="mt-3 pt-3 border-t border-zinc-800 text-[11px] text-zinc-500 leading-relaxed">
+          El <b class="text-zinc-400">espacio en disco</b> (MB/GB usados y libres del plan) no se puede leer desde la app con la clave anónima.
+          Se ve en <b class="text-zinc-400">Supabase → Project Settings → Usage</b> (o Billing).
+        </div>
+      </div>
+
       <!-- Resumen Semanal -->
       <div id="weeklySummaryWrap"></div>
 
@@ -344,38 +359,14 @@
     <!-- TAB: JORNADAS -->
     <section id="tab-pools" class="app-tab hidden space-y-4">
       <div class="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-        <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div class="flex items-center justify-between gap-3 mb-3">
           <h3 class="font-semibold">Jornadas / Pools</h3>
-          <div class="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-            Activa: <span id="activePoolName">—</span>
-          </div>
+          <span id="activePoolsCount" class="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">0 activas</span>
         </div>
 
-        <!-- Accesos rápidos Mundial 2026 -->
-        <div class="mb-2">
-          <div class="text-xs text-zinc-400 mb-2">⚡ Acceso rápido Mundial 2026:</div>
-          <div class="grid grid-cols-2 gap-1.5">
-            <button type="button" onclick="quickFillPool('J1','Mundial 2026','50','24 partidos')"
-              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
-              🌍 J1 · $50 (24 par.)
-            </button>
-            <button type="button" onclick="quickFillPool('J1','Mundial 2026','20','12 partidos')"
-              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
-              🌍 J1 · $20 (12 par.)
-            </button>
-            <button type="button" onclick="quickFillPool('J2','Mundial 2026','50','24 partidos')"
-              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
-              🌍 J2 · $50 (24 par.)
-            </button>
-            <button type="button" onclick="quickFillPool('J2','Mundial 2026','20','12 partidos')"
-              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-amber-500/20 hover:border-amber-500/30 border border-zinc-700 text-zinc-300 font-semibold">
-              🌍 J2 · $20 (12 par.)
-            </button>
-            <button type="button" onclick="quickFillPool('J1','Mundial 2026','50','24 partidos','GOLEO')"
-              class="text-xs py-2 px-2 rounded-xl bg-zinc-800 hover:bg-emerald-500/20 hover:border-emerald-500/30 border border-zinc-700 text-zinc-300 font-semibold col-span-2">
-              ⚽ J1 · Campeón de Goleo (24 par.)
-            </button>
-          </div>
+        <div id="activePoolsBanner" class="mb-3 hidden">
+          <div class="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Activas ahora</div>
+          <div id="activePoolName" class="flex flex-col gap-1.5"></div>
         </div>
 
         <form id="formPool" class="grid gap-2">
