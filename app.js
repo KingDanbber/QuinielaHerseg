@@ -227,9 +227,44 @@ const WORLD_TEAM_LOGOS = {
     "UZBEKISTÁN": "https://raw.githubusercontent.com/KingDanbber/QuinielaHerseg/main/assets/mundial2026/uzbekistan.png"
 };
 
+/** Escudos de clubes (Europa / relleno de plantilla) — API-Sports CDN */
+const CLUB_TEAM_LOGOS = {
+    // España
+    "ATHLETIC CLUB": "https://media.api-sports.io/football/teams/531.png",
+    "ATHLETIC": "https://media.api-sports.io/football/teams/531.png",
+    "ATHLETIC BILBAO": "https://media.api-sports.io/football/teams/531.png",
+    "ATLÉTICO DE MADRID": "https://media.api-sports.io/football/teams/530.png",
+    "ATLETICO DE MADRID": "https://media.api-sports.io/football/teams/530.png",
+    "ATLÉTICO MADRID": "https://media.api-sports.io/football/teams/530.png",
+    "ATLETICO MADRID": "https://media.api-sports.io/football/teams/530.png",
+    "ATLÉTICO": "https://media.api-sports.io/football/teams/530.png",
+    "ATLETICO": "https://media.api-sports.io/football/teams/530.png",
+    "ALAVÉS": "https://media.api-sports.io/football/teams/542.png",
+    "ALAVES": "https://media.api-sports.io/football/teams/542.png",
+    "DEPORTIVO ALAVÉS": "https://media.api-sports.io/football/teams/542.png",
+    "DEPORTIVO ALAVES": "https://media.api-sports.io/football/teams/542.png",
+    "OSASUNA": "https://media.api-sports.io/football/teams/727.png",
+    "CA OSASUNA": "https://media.api-sports.io/football/teams/727.png",
+    // Italia
+    "INTER DE MILÁN": "https://media.api-sports.io/football/teams/505.png",
+    "INTER DE MILAN": "https://media.api-sports.io/football/teams/505.png",
+    "INTER MILAN": "https://media.api-sports.io/football/teams/505.png",
+    "INTER MILÁN": "https://media.api-sports.io/football/teams/505.png",
+    "INTER": "https://media.api-sports.io/football/teams/505.png",
+    "INTERNAZIONALE": "https://media.api-sports.io/football/teams/505.png",
+    "NAPOLI": "https://media.api-sports.io/football/teams/492.png",
+    "SSC NAPOLI": "https://media.api-sports.io/football/teams/492.png",
+    "JUVENTUS": "https://media.api-sports.io/football/teams/496.png",
+    "JUVENTUS FC": "https://media.api-sports.io/football/teams/496.png",
+    "MILAN": "https://media.api-sports.io/football/teams/489.png",
+    "MILÁN": "https://media.api-sports.io/football/teams/489.png",
+    "AC MILAN": "https://media.api-sports.io/football/teams/489.png",
+    "A.C. MILAN": "https://media.api-sports.io/football/teams/489.png"
+};
+
 function getTeamLogo(teamName) {
     var key = normalizeTeamName(teamName);
-    return TEAM_LOGOS[key] || WORLD_TEAM_LOGOS[key] || "";
+    return TEAM_LOGOS[key] || WORLD_TEAM_LOGOS[key] || CLUB_TEAM_LOGOS[key] || "";
 }
 
 // =====================
