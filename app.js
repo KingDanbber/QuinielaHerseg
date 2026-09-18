@@ -3020,6 +3020,82 @@ function attachEntryPaymentEvents() {
             await markEntryPending(entryId);
         });
     });
+
+    document.querySelectorAll(".entry-delete").forEach(function(btn) {
+        btn.addEventListener("click", async function() {
+            const entryId = btn.getAttribute("data-entry-id");
+            const name = btn.getAttribute("data-participant-name") || "este participante";
+            await deleteEntry(entryId, name);
+        });
+    });
+}
+
+/**
+ * Elimina un boleto (entry) de una jornada y sus pronósticos asociados.
+ * No borra al participante de la BD; solo el boleto de esa jornada.
+ */
+async function deleteEntry(entryId, participantName) {
+    hideAlert();
+    if (!entryId) return showAlert("Falta el boleto a eliminar.", "error");
+
+    var { data: entry, error: entryErr } = await supabaseClient
+        .from("entries")
+        .select("id, pool_id, paid, participant_id")
+        .eq("id", entryId)
+        .maybeSingle();
+
+    if (entryErr) return showAlert(entryErr.message, "error");
+    if (!entry) return showAlert("Boleto no encontrado.", "error");
+
+    var { data: poolInfo } = await supabaseClient
+        .from("pools")
+        .select("id, status, name, mode_code")
+        .eq("id", entry.pool_id)
+        .maybeSingle();
+
+    if (poolInfo && poolInfo.status === "closed") {
+        return showAlert("La jornada está cerrada. No se pueden eliminar boletos.", "error");
+    }
+
+    var label = participantName || "este participante";
+    var paidNote = entry.paid ? "\n\n⚠️ Este boleto estaba marcado como PAGADO." : "";
+    var ok = await showConfirmModal({
+        icon: "🗑️",
+        title: "Eliminar boleto",
+        message: "Se eliminará el boleto de <b>" + escapeHTML(label) + "</b> en esta jornada" +
+            (poolInfo && poolInfo.name ? " (" + escapeHTML(poolInfo.name) + ")" : "") +
+            " junto con sus pronósticos (1X2 y/o Goleó)." + paidNote +
+            "<br><br>El participante seguirá en tu lista; solo se quita este boleto.",
+        confirmLabel: "Sí, eliminar boleto",
+        confirmStyle: "background:linear-gradient(135deg,#b91c1c,#ef4444);"
+    });
+    if (!ok) return;
+
+    // Borrar datos hijos (orden: predicciones → puntos → entry)
+    var del1 = await supabaseClient.from("predictions_1x2").delete().eq("entry_id", entryId);
+    if (del1.error) console.warn("delete predictions_1x2", del1.error.message);
+
+    var delG = await supabaseClient.from("predictions_goals_total").delete().eq("entry_id", entryId);
+    if (delG.error) console.warn("delete predictions_goals_total", delG.error.message);
+
+    try {
+        await supabaseClient.from("entry_points").delete().eq("entry_id", entryId);
+    } catch (e) { /* tabla puede no existir en todos los entornos */ }
+
+    var { error: delErr } = await supabaseClient.from("entries").delete().eq("id", entryId);
+    if (delErr) return showAlert("No se pudo eliminar el boleto: " + delErr.message, "error");
+
+    showAlert("Boleto de " + label + " eliminado ✅", "ok");
+
+    try {
+        if (typeof loadEntriesAndStats === "function") await loadEntriesAndStats();
+        if (typeof loadDashboardSummary === "function") await loadDashboardSummary();
+        if (typeof loadPickStatusList === "function") await loadPickStatusList();
+        clearNavBadgesCache();
+        await updateNavBadges({ force: true });
+    } catch (e) {
+        console.warn("refresh after deleteEntry", e);
+    }
 }
 
 function attachPickButtonsEvents() {
@@ -3441,6 +3517,11 @@ async function loadPickStatusList() {
                     title="Descargar comprobante Goleó">🖼️</button>
                     <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
                     data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">📲</button>` : ""}
+                    <button type="button"
+                    class="entry-delete flex items-center justify-center w-9 h-9 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300"
+                    data-entry-id="${e.id}"
+                    data-participant-name="${safeParticipantName}"
+                    title="Eliminar boleto">🗑️</button>
                     `;
                 }).join("");
             } else {
@@ -3533,6 +3614,11 @@ async function loadPickStatusList() {
                 </button>
                 <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">📲</button>
                 <button type="button" class="pick-status-physical flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Ver boleta con resultados">🎯</button>`: ""}
+                <button type="button"
+                class="entry-delete flex items-center justify-center w-9 h-9 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300"
+                data-entry-id="${e.id}"
+                data-participant-name="${safeParticipantName}"
+                title="Eliminar boleto">🗑️</button>
                 `;
             }).join("");
             } // end !isGoleoPool
@@ -3579,6 +3665,14 @@ async function loadPickStatusList() {
     attachPickStatusWaEvents();
     attachPickStatusPhysicalEvents();
     attachEditPickEvents();
+    // Botones 🗑️ eliminar boleto (misma clase que en Pagos)
+    document.querySelectorAll("#pickStatusList .entry-delete").forEach(function(btn) {
+        btn.addEventListener("click", async function() {
+            var entryId = btn.getAttribute("data-entry-id");
+            var name = btn.getAttribute("data-participant-name") || "este participante";
+            await deleteEntry(entryId, name);
+        });
+    });
     attachPickStatusFilterEvents();
     attachPickStatusSearchEvent();
     applyPickStatusFilter(currentPickStatusFilter);
@@ -4584,61 +4678,70 @@ async function loadEntriesAndStats() {
             }
         }
 
-        const badge = r.paid
-        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300": "bg-zinc-700/20 border-zinc-600/30 text-zinc-200";
+        const partNameSafe = escapeHTML(r.participants?.name || "Participante");
+        const areaSafe = escapeHTML((r.participants && r.participants.area) ? r.participants.area : "Sin área");
+        const createdLabel = new Date(r.created_at).toLocaleString("es-MX", {
+            day: "2-digit", month: "short", year: "numeric",
+            hour: "2-digit", minute: "2-digit"
+        });
+        const paidAtLabel = r.paid && r.paid_at
+            ? new Date(r.paid_at).toLocaleString("es-MX", {
+                day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
+            })
+            : "";
+
+        const paidBadge = r.paid
+            ? '<span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">✅ Pagado</span>'
+            : '<span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300">⏳ Pendiente</span>';
+
+        const picksBadge = picksStatus === "complete"
+            ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300">✅ ' + pickCount + '/' + matchesTotal + ' picks</span>'
+            : picksStatus === "partial"
+            ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-yellow-300">🟡 ' + pickCount + '/' + matchesTotal + ' picks</span>'
+            : '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400">⏳ ' + pickCount + '/' + matchesTotal + ' picks</span>';
 
         const actionBtn = isClosed
-        ? `
-        <button
-        type="button"
-        class="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-500 text-sm cursor-not-allowed"
-        disabled>
-        🔒
-        </button>
-        `: r.paid
-        ? `
-        <button
-        type="button"
-        class="entry-mark-pending px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
-        data-entry-id="${r.id}">
-        ↩️ Pendiente
-        </button>
-        `: `
-        <button
-        type="button"
-        class="entry-mark-paid px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm"
-        data-entry-id="${r.id}">
-        ✅ Pagar
-        </button>
-        `;
+            ? '<button type="button" class="flex-1 h-10 rounded-xl bg-zinc-800 text-zinc-500 text-sm font-semibold cursor-not-allowed" disabled>🔒 Cerrada</button>'
+            : r.paid
+            ? '<button type="button" class="entry-mark-pending flex-1 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-sm font-semibold" data-entry-id="' + r.id + '">↩️ Marcar pendiente</button>'
+            : '<button type="button" class="entry-mark-paid flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-bold shadow-lg shadow-emerald-900/30" data-entry-id="' + r.id + '">✅ Registrar pago</button>';
+
+        const deleteBtn = isClosed
+            ? ""
+            : '<button type="button" class="entry-delete shrink-0 w-10 h-10 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 flex items-center justify-center" data-entry-id="' + r.id + '" data-participant-name="' + partNameSafe + '" title="Eliminar boleto">🗑️</button>';
+
+        const cardBorder = r.paid
+            ? "border-emerald-500/20 bg-emerald-500/[0.04]"
+            : "border-zinc-800 bg-zinc-950";
 
         return `
         <div
-        class="entry-card p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3"
+        class="entry-card p-3.5 rounded-2xl border ${cardBorder} space-y-3"
         data-paid-status="${paidStatus}"
         data-picks-status="${picksStatus}"
         data-name="${String(r.participants?.name || "").toLowerCase()}"
         data-area="${String(r.participants?.area || "").trim()}">
 
-        <div class="min-w-0">
-        <div class="font-semibold flex items-center gap-2 flex-wrap">${r.participants?.name || "—"}${boleta}</div>
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold text-[15px] text-zinc-100 leading-snug flex items-center gap-2 flex-wrap">
+                ${partNameSafe}${boleta}
+              </div>
+              <div class="text-xs text-zinc-500 mt-0.5">${areaSafe}</div>
+            </div>
+            ${paidBadge}
+          </div>
 
-        <div class="text-xs text-zinc-400 mt-1">
-        ${new Date(r.created_at).toLocaleString("es-MX")}
-        ${r.paid && r.paid_at ? " • Pagó: " + new Date(r.paid_at).toLocaleString("es-MX"): ""}
-        </div>
+          <div class="flex flex-wrap items-center gap-2">
+            ${picksBadge}
+            <span class="text-[11px] text-zinc-500">📅 ${createdLabel}</span>
+            ${paidAtLabel ? '<span class="text-[11px] text-emerald-400/80">💰 ' + paidAtLabel + '</span>' : ''}
+          </div>
 
-        <div class="text-xs mt-1 ${picksTextClass}">
-        ${picksEmoji} Picks ${pickCount}/${matchesTotal}
-        </div>
-        </div>
-
-        <div class="flex items-center gap-2 shrink-0">
-        <span class="text-xs px-2 py-1 rounded-full border ${badge}">
-        ${r.paid ? "Pagado": "Pendiente"}
-        </span>
-        ${actionBtn}
-        </div>
+          <div class="flex items-center gap-2 pt-0.5">
+            ${actionBtn}
+            ${deleteBtn}
+          </div>
         </div>
         `;
     }).join("");
