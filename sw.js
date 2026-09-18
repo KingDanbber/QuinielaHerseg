@@ -1,5 +1,5 @@
 // Quiniela Arcángel — Service Worker
-const CACHE_NAME = "qa-admin-v10";
+const CACHE_NAME = "qa-admin-v12";
 const ASSETS = [
   "./index.html",
   "./styles.css",
