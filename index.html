@@ -32,10 +32,13 @@
 
     <header class="flex justify-between items-center mb-6">
       <div>
-        <h1 class="text-xl font-bold"><span style="-webkit-text-fill-color:initial;background:none;">⚽</span> Admin Quiniela Arcángel</h1>
+        <h1 class="text-xl font-bold flex items-center gap-2">
+          <span class="inline-flex text-emerald-400" data-ico="soccer" data-ico-size="ico-lg"></span>
+          Admin Quiniela Arcángel
+        </h1>
         <p class="text-sm text-zinc-400">Panel privado (solo administradores)</p>
       </div>
-      <button onclick="openSettingsModal()" class="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-lg shrink-0" title="Configuración">⚙️</button>
+      <button onclick="openSettingsModal()" class="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center shrink-0 text-zinc-300" title="Configuración" data-ico="settings" data-ico-size="ico-md"></button>
     </header>
 
     <div id="alert" class="hidden mb-4 p-3 rounded border text-sm"></div>
@@ -329,12 +332,12 @@
       </button>
 
       <button type="button" class="participant-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="active">
-        <div class="font-semibold">✅ Activos</div>
+        <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="check-circle" data-ico-size="ico-sm"></span> Activos</div>
         <div class="text-xs opacity-80" id="participantCountActive">0</div>
       </button>
 
       <button type="button" class="participant-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="archived">
-        <div class="font-semibold">📦 Archivados</div>
+        <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="package" data-ico-size="ico-sm"></span> Archivados</div>
         <div class="text-xs opacity-80" id="participantCountArchived">0</div>
       </button>
     </div>
@@ -394,15 +397,15 @@
       <button id="btnWaJornada" type="button"
         onclick="sendWhatsAppJornadaNotification()"
         class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 flex items-center justify-center gap-2">
-        📲 Notificar jornada por WhatsApp
+        <span data-ico="phone" data-ico-size="ico-sm"></span> Notificar jornada por WhatsApp
       </button>
 
-      <button id="btnCloseActivePool" type="button" class="w-full bg-rose-600 hover:bg-rose-500 rounded-xl font-semibold py-3">
-        🔒 Cerrar jornada activa
+      <button id="btnCloseActivePool" type="button" class="w-full bg-rose-600 hover:bg-rose-500 rounded-xl font-semibold py-3 inline-flex items-center justify-center gap-2">
+        <span data-ico="lock" data-ico-size="ico-sm"></span> Cerrar jornada activa
       </button>
 
-      <button id="btnOpenActivePool" type="button" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-        🔓 Reabrir jornada cerrada más reciente
+      <button id="btnOpenActivePool" type="button" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 inline-flex items-center justify-center gap-2">
+        <span data-ico="unlock" data-ico-size="ico-sm"></span> Reabrir jornada cerrada más reciente
       </button>
     </div>
 
@@ -437,16 +440,16 @@
         Guardar plantilla
       </button>
 
-      <button type="button" id="btnClearTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-        🧹 Limpiar editor
+      <button type="button" id="btnClearTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 inline-flex items-center justify-center gap-2">
+        <span data-ico="x" data-ico-size="ico-sm"></span> Limpiar editor
       </button>
 
-      <button type="button" id="btnLoadTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-        📥 Cargar plantilla guardada al editor
+      <button type="button" id="btnLoadTemplateEditor" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 inline-flex items-center justify-center gap-2">
+        <span data-ico="download" data-ico-size="ico-sm"></span> Cargar plantilla guardada al editor
       </button>
 
-      <button type="button" id="btnDeleteTemplate" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-        🗑️ Borrar plantilla de esta jornada
+      <button type="button" id="btnDeleteTemplate" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 inline-flex items-center justify-center gap-2">
+        <span data-ico="trash" data-ico-size="ico-sm"></span> Borrar plantilla de esta jornada
       </button>
     </div>
 
@@ -464,8 +467,8 @@
     </div>
 
     <div class="grid grid-cols-2 gap-2">
-  <button type="button" id="btnRefreshTemplatePreview" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
-    👁️ Ver / actualizar preview
+  <button type="button" id="btnRefreshTemplatePreview" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3 inline-flex items-center justify-center gap-2">
+    <span data-ico="eye" data-ico-size="ico-sm"></span> Ver / actualizar preview
   </button>
 
   <button type="button" id="btnExportCurrentPNG" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold py-3">
@@ -563,27 +566,27 @@
     </button>
 
     <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="paid">
-      <div class="font-semibold">✅ Pagados</div>
+      <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="check-circle" data-ico-size="ico-sm"></span> Pagados</div>
       <div class="text-xs opacity-80" id="entriesCountPaid">0</div>
     </button>
 
     <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="pending">
-      <div class="font-semibold">⏳ Pendientes</div>
+      <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="clock" data-ico-size="ico-sm"></span> Pendientes</div>
       <div class="text-xs opacity-80" id="entriesCountPending">0</div>
     </button>
 
     <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="complete">
-      <div class="font-semibold">✅ Picks completos</div>
+      <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="check" data-ico-size="ico-sm"></span> Picks completos</div>
       <div class="text-xs opacity-80" id="entriesCountComplete">0</div>
     </button>
 
     <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="partial">
-      <div class="font-semibold">🟡 Incompletos</div>
+      <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="alert" data-ico-size="ico-sm"></span> Incompletos</div>
       <div class="text-xs opacity-80" id="entriesCountPartial">0</div>
     </button>
 
     <button type="button" class="entries-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="nopicks">
-      <div class="font-semibold">⏳ Sin picks</div>
+      <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="clock" data-ico-size="ico-sm"></span> Sin picks</div>
       <div class="text-xs opacity-80" id="entriesCountNoPicks">0</div>
     </button>
   </div>
@@ -651,13 +654,13 @@
     </div>
   </div>
 
-  <div id="pickLegendBox" class="hidden mb-3 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-300">
-  <div>✅ Capturado completo</div>
-  <div>🟡 Captura incompleta</div>
-  <div>⏳ Pendiente</div>
-  <div>🚫 Sin boleto</div>
-  <div>👁️ Abrir boleto</div>
-  <div>🖼️ Descargar imagen</div>
+  <div id="pickLegendBox" class="hidden mb-3 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-300 space-y-1.5">
+  <div class="inline-flex items-center gap-2"><span data-ico="check-circle" data-ico-size="ico-sm" class="text-emerald-400"></span> Capturado completo</div>
+  <div class="inline-flex items-center gap-2"><span data-ico="alert" data-ico-size="ico-sm" class="text-yellow-400"></span> Captura incompleta</div>
+  <div class="inline-flex items-center gap-2"><span data-ico="clock" data-ico-size="ico-sm" class="text-zinc-400"></span> Pendiente</div>
+  <div class="inline-flex items-center gap-2"><span data-ico="xcircle" data-ico-size="ico-sm" class="text-zinc-500"></span> Sin boleto</div>
+  <div class="inline-flex items-center gap-2"><span data-ico="eye" data-ico-size="ico-sm"></span> Abrir boleto</div>
+  <div class="inline-flex items-center gap-2"><span data-ico="image" data-ico-size="ico-sm"></span> Descargar imagen</div>
 </div>
 
 <div id="pickStatusFilters" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
@@ -667,22 +670,22 @@
   </button>
 
   <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="complete">
-    <div class="font-semibold">✅ Completos</div>
+    <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="check-circle" data-ico-size="ico-sm"></span> Completos</div>
     <div class="text-xs opacity-80" id="pickCountComplete">0</div>
   </button>
 
   <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="partial">
-    <div class="font-semibold">🟡 Incompletos</div>
+    <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="alert" data-ico-size="ico-sm"></span> Incompletos</div>
     <div class="text-xs opacity-80" id="pickCountPartial">0</div>
   </button>
 
   <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="pending">
-    <div class="font-semibold">⏳ Pendientes</div>
+    <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="clock" data-ico-size="ico-sm"></span> Pendientes</div>
     <div class="text-xs opacity-80" id="pickCountPending">0</div>
   </button>
 
   <button type="button" class="pick-filter-btn px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-left" data-filter="noboleto">
-    <div class="font-semibold">🚫 Sin boleto</div>
+    <div class="font-semibold inline-flex items-center gap-1.5"><span data-ico="xcircle" data-ico-size="ico-sm"></span> Sin boleto</div>
     <div class="text-xs opacity-80" id="pickCountNoBoleto">0</div>
   </button>
 </div>
@@ -702,22 +705,23 @@
 </div>
 
     <!-- Banner jornada cerrada -->
-    <div id="pickClosedBanner" class="hidden mt-4 p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm text-center">
-      🔒 Esta jornada está cerrada. Los pronósticos son de solo lectura.
+    <div id="pickClosedBanner" class="hidden mt-4 p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm text-center inline-flex items-center justify-center gap-2 w-full">
+      <span data-ico="lock" data-ico-size="ico-sm"></span>
+      Esta jornada está cerrada. Los pronósticos son de solo lectura.
     </div>
 
     <!-- Campeón de Goleo: puro (pool GOLEO) u opt-in desde Sencilla -->
     <div id="goalChampionSection" class="hidden mt-4 p-4 bg-zinc-900 border border-amber-500/30 rounded-2xl">
       <!-- Modo pool GOLEO puro -->
       <div id="goalChampionPureBlock">
-        <div class="text-sm font-bold text-amber-400 mb-1">⚽ Campeón de Goleo</div>
+        <div class="text-sm font-bold text-amber-400 mb-1 inline-flex items-center gap-1.5"><span data-ico="soccer" data-ico-size="ico-sm"></span> Campeón de Goleo</div>
         <div class="text-xs text-zinc-400 mb-3">¿Cuántos goles crees que habrá en total en esta jornada?</div>
         <div class="flex gap-2">
           <input id="goalChampionInput" type="number" min="0" max="300" placeholder="Ej: 42"
             class="flex-1 p-3 bg-zinc-950 border border-amber-500/30 rounded-xl text-center text-lg font-black text-amber-400" />
           <button id="btnSaveGoalChampion" type="button"
-            class="px-4 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold text-sm text-white">
-            💾 Guardar
+            class="px-4 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold text-sm text-white inline-flex items-center gap-1.5">
+            <span data-ico="save" data-ico-size="ico-sm"></span> Guardar
           </button>
         </div>
       </div>
@@ -896,42 +900,40 @@
 
     <div class="flex items-center justify-between mb-4">
       <h3 class="font-semibold text-lg">Más secciones</h3>
-      <button id="btnCloseMoreMenu" class="w-10 h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-lg">
-        ✕
-      </button>
+      <button id="btnCloseMoreMenu" class="w-10 h-10 rounded-xl bg-zinc-900 hover:bg-zinc-800 flex items-center justify-center text-zinc-300" data-ico="x" data-ico-size="ico-md"></button>
     </div>
 
     <div class="grid grid-cols-2 gap-3 pb-4">
   <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-templates">
-    <div class="text-2xl mb-1">🧾</div>
+    <div class="more-ico" data-ico="clipboard" data-ico-size="ico-lg"></div>
     <div class="font-semibold">Plantillas</div>
     <div class="text-xs text-zinc-400 mt-1">Editor, preview y exportación</div>
   </button>
 
   <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-payments">
-    <div class="text-2xl mb-1">💵</div>
+    <div class="more-ico" data-ico="banknote" data-ico-size="ico-lg"></div>
     <div class="font-semibold">Pagos</div>
     <div class="text-xs text-zinc-400 mt-1">Boletos y bolsa</div>
     <span id="moreBadgePayments" class="hidden absolute top-3 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">0</span>
   </button>
 
   <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-results">
-    <div class="text-2xl mb-1">📊</div>
+    <div class="more-ico" data-ico="bar-chart" data-ico-size="ico-lg"></div>
     <div class="font-semibold">Resultados</div>
     <div class="text-xs text-zinc-400 mt-1">Goles y marcadores</div>
     <span id="moreBadgeResults" class="hidden absolute top-3 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">0</span>
   </button>
 
   <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative" data-tab="tab-standings">
-  <div class="text-2xl mb-1">🏅</div>
-  <div class="font-semibold">Aciertos</div>
-  <div class="text-xs text-zinc-400 mt-1">Tabla y ganador</div>
-  <span id="moreBadgeStandings" class="hidden absolute top-3 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] leading-[18px] text-center font-bold">1</span>
-</button>
+    <div class="more-ico" data-ico="medal" data-ico-size="ico-lg"></div>
+    <div class="font-semibold">Aciertos</div>
+    <div class="text-xs text-zinc-400 mt-1">Tabla y ganador</div>
+    <span id="moreBadgeStandings" class="hidden absolute top-3 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] leading-[18px] text-center font-bold">1</span>
+  </button>
 
   <button class="more-menu-btn p-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-left relative col-span-2" data-tab="tab-mundial">
     <div class="flex items-center gap-3">
-      <span class="text-3xl">🌍</span>
+      <span class="more-ico mb-0" data-ico="globe" data-ico-size="ico-xl"></span>
       <div>
         <div class="font-bold">Mundial 2026</div>
         <div class="text-xs text-zinc-400 mt-0.5">Tabla en tiempo real · Liga de Goleo</div>
@@ -949,35 +951,31 @@
   <nav id="bottomNav" class="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 border-t border-zinc-800 backdrop-blur">
   <div class="grid grid-cols-5 gap-1 px-2 py-2">
     <button class="bottom-nav-btn active flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-home">
-      <span class="text-2xl">🏠</span>
+      <span class="nav-ico" data-ico="home" data-ico-size="ico-md"></span>
       <small>Inicio</small>
     </button>
 
     <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-participants">
-      <span class="text-2xl">👥</span>
+      <span class="nav-ico" data-ico="users" data-ico-size="ico-md"></span>
       <small>Particip.</small>
     </button>
 
     <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm" data-tab="tab-pools">
-      <span class="text-2xl">🏆</span>
+      <span class="nav-ico" data-ico="trophy" data-ico-size="ico-md"></span>
       <small>Jornadas</small>
     </button>
 
     <button class="bottom-nav-btn flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm relative" data-tab="tab-picks">
-  <span class="text-2xl">🎯</span>
-  <small>Picks</small>
-  <span id="navBadgePicks" class="hidden absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">
-    0
-  </span>
-</button>
+      <span class="nav-ico" data-ico="target" data-ico-size="ico-md"></span>
+      <small>Picks</small>
+      <span id="navBadgePicks" class="hidden absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">0</span>
+    </button>
 
-<button id="btnMoreMenu" class="flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm bg-zinc-900 hover:bg-zinc-800 relative">
-  <span class="text-2xl">☰</span>
-  <small>Más</small>
-  <span id="navBadgeMore" class="hidden absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">
-    0
-  </span>
-</button>
+    <button id="btnMoreMenu" class="flex flex-col items-center justify-center gap-1 rounded-2xl py-2 text-sm bg-zinc-900 hover:bg-zinc-800 relative">
+      <span class="nav-ico" data-ico="menu" data-ico-size="ico-md"></span>
+      <small>Más</small>
+      <span id="navBadgeMore" class="hidden absolute top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-bold">0</span>
+    </button>
   </div>
 </nav>
 
