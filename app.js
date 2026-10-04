@@ -6004,7 +6004,7 @@ async function fillResultsPoolsSelect() {
     refreshPremiumSelect("resultsPool");
 }
 
-// Renders de Partidos
+// Renders de Partidos (móvil-first: nombres completos sin desbordar)
 function renderResultRow(match) {
     const hg = match.home_goals ?? "";
     const ag = match.away_goals ?? "";
@@ -6022,36 +6022,58 @@ function renderResultRow(match) {
         else outcome = "Visita";
     }
 
+    var homeName = escapeHTML(match.home_team || "—");
+    var awayName = escapeHTML(match.away_team || "—");
+    var homeLogo = typeof getTeamLogo === "function" ? getTeamLogo(match.home_team) : "";
+    var awayLogo = typeof getTeamLogo === "function" ? getTeamLogo(match.away_team) : "";
+    var homeLogoHtml = homeLogo
+        ? '<img src="' + homeLogo + '" alt="" class="w-7 h-7 object-contain shrink-0 rounded-sm" loading="lazy" onerror="this.style.display=\'none\'">'
+        : '<span class="w-7 h-7 shrink-0 rounded-sm bg-zinc-800 inline-block"></span>';
+    var awayLogoHtml = awayLogo
+        ? '<img src="' + awayLogo + '" alt="" class="w-7 h-7 object-contain shrink-0 rounded-sm" loading="lazy" onerror="this.style.display=\'none\'">'
+        : '<span class="w-7 h-7 shrink-0 rounded-sm bg-zinc-800 inline-block"></span>';
+
     return `
-    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
-    <div class="text-xs text-zinc-400 mb-2">Partido #${match.match_no}</div>
-    <div class="flex items-center gap-2">
-    <div class="flex-1 min-w-0 text-right">
-    <div class="text-xs text-zinc-400 mb-0.5">Local</div>
-    <div class="text-sm font-bold truncate">${match.home_team}</div>
-    </div>
-    <input type="number" min="0" inputmode="numeric"
-    data-result-home="${match.id}" value="${hg}"
-    class="w-14 shrink-0 p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-lg font-black" />
-    <div class="text-zinc-500 font-bold text-xs shrink-0">vs</div>
-    <input type="number" min="0" inputmode="numeric"
-    data-result-away="${match.id}" value="${ag}"
-    class="w-14 shrink-0 p-2 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-lg font-black" />
-    <div class="flex-1 min-w-0">
-    <div class="text-xs text-zinc-400 mb-0.5">Visita</div>
-    <div class="text-sm font-bold truncate">${match.away_team}</div>
-    </div>
-    </div>
-    <div class="mt-2 flex items-center justify-between text-xs">
-    <div class="text-zinc-400">Resultado: <span data-result-outcome="${match.id}" class="font-semibold text-zinc-200">${outcome}</span></div>
-    <div class="flex items-center gap-2">
-    <div class="text-zinc-400">Goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span></div>
-    <button data-save-row="${match.id}" onclick="saveOneResult('${match.id}')"
-    class="px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 font-bold text-xs border border-emerald-500/20">
-    💾
-    </button>
-    </div>
-    </div>
+    <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+      <div class="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold mb-2.5">Partido #${match.match_no}</div>
+
+      <div class="flex items-center gap-2.5 min-w-0">
+        ${homeLogoHtml}
+        <div class="min-w-0 flex-1 overflow-hidden">
+          <div class="text-[10px] uppercase tracking-wide text-zinc-500 leading-none mb-0.5">Local</div>
+          <div class="text-[13px] font-bold text-zinc-100 leading-snug break-words">${homeName}</div>
+        </div>
+        <input type="number" min="0" inputmode="numeric"
+          data-result-home="${match.id}" value="${hg}"
+          class="w-12 h-11 shrink-0 p-1 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-lg font-black" />
+      </div>
+
+      <div class="flex items-center justify-center my-1.5">
+        <span class="text-[10px] font-bold text-zinc-600 tracking-widest">VS</span>
+      </div>
+
+      <div class="flex items-center gap-2.5 min-w-0">
+        ${awayLogoHtml}
+        <div class="min-w-0 flex-1 overflow-hidden">
+          <div class="text-[10px] uppercase tracking-wide text-zinc-500 leading-none mb-0.5">Visita</div>
+          <div class="text-[13px] font-bold text-zinc-100 leading-snug break-words">${awayName}</div>
+        </div>
+        <input type="number" min="0" inputmode="numeric"
+          data-result-away="${match.id}" value="${ag}"
+          class="w-12 h-11 shrink-0 p-1 bg-zinc-900 border border-zinc-700 rounded-xl text-center text-lg font-black" />
+      </div>
+
+      <div class="flex items-center justify-between gap-2 text-xs mt-3 pt-2.5 border-t border-zinc-800/80">
+        <div class="text-zinc-400 min-w-0">
+          Resultado: <span data-result-outcome="${match.id}" class="font-semibold text-zinc-200">${outcome}</span>
+          <span class="text-zinc-600 mx-1">·</span>
+          Goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span>
+        </div>
+        <button data-save-row="${match.id}" onclick="saveOneResult('${match.id}')"
+          class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 font-bold text-xs border border-emerald-500/20">
+          💾
+        </button>
+      </div>
     </div>
     `;
 }
