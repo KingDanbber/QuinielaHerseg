@@ -423,21 +423,61 @@ button:disabled {
   box-shadow: none !important;
 }
 
-.bottom-nav-btn span { font-size: 22px; line-height: 1; transition: transform var(--transition); }
+.bottom-nav-btn .nav-ico,
+.bottom-nav-btn span.ico-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: transform var(--transition), color var(--transition), filter var(--transition);
+}
+.bottom-nav-btn .nav-ico svg,
+.bottom-nav-btn .ico {
+  width: 22px;
+  height: 22px;
+}
 .bottom-nav-btn small { font-size: 10px; font-weight: 500; transition: color var(--transition); }
 
 .bottom-nav-btn:hover {
   color: var(--text-secondary) !important;
   background: rgba(255,255,255,0.05) !important;
 }
-.bottom-nav-btn:hover span { transform: translateY(-2px); }
+.bottom-nav-btn:hover .nav-ico { transform: translateY(-2px); }
 
 .bottom-nav-btn.active {
   color: var(--green-bright) !important;
   background: var(--green-soft) !important;
 }
 .bottom-nav-btn.active small { color: var(--green-bright) !important; }
-.bottom-nav-btn.active span  { filter: drop-shadow(0 0 6px var(--green)); }
+.bottom-nav-btn.active .nav-ico {
+  color: var(--green-bright);
+  filter: drop-shadow(0 0 6px var(--green));
+}
+
+/* SVG icon system */
+.ico {
+  display: inline-block;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ico-fill { fill: currentColor; stroke: none; }
+.ico-sm { width: 16px; height: 16px; }
+.ico-md { width: 20px; height: 20px; }
+.ico-lg { width: 24px; height: 24px; }
+.ico-xl { width: 28px; height: 28px; }
+
+.more-menu-btn .more-ico {
+  width: 28px;
+  height: 28px;
+  color: #a7f3d0;
+  margin-bottom: 6px;
+}
+.more-menu-btn:hover .more-ico { color: #6ee7b7; }
 
 /* Active glow dot */
 .bottom-nav-btn.active::after {
@@ -1180,6 +1220,139 @@ select.ps-native-hidden {
   margin-top: 3px;
   font-size: 0.72rem;
   color: #8a94a6;
+}
+
+.ps-tools {
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ps-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ps-search-ico {
+  position: absolute;
+  left: 12px;
+  color: #8a94a6;
+  pointer-events: none;
+  display: flex;
+}
+
+.ps-search {
+  width: 100%;
+  padding: 11px 12px 11px 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+  color: #f0f4f8;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.ps-search:focus {
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+}
+
+.ps-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ps-sort-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ps-area-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 2px;
+  transition: max-height 0.22s ease, opacity 0.18s ease, margin 0.18s ease;
+}
+
+.ps-area-row.ps-area-collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ps-filters-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  max-width: 42%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ps-filters-toggle:active {
+  background: rgba(16, 185, 129, 0.18);
+}
+
+.ps-filters-caret {
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+
+.ps-chip {
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #a1aab8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ps-chip-on {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.ps-group-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6ee7b7;
+  padding: 8px 4px 2px;
+  opacity: 0.9;
+}
+
+.ps-empty {
+  text-align: center;
+  color: #8a94a6;
+  font-size: 0.85rem;
+  padding: 28px 12px;
 }
 
 .ps-check {

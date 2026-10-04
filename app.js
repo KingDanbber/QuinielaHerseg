@@ -359,6 +359,76 @@ function escapeHTML(value) {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Iconos SVG premium (estilo Lucide) — sin dependencia externa.
+ * Uso: ico("home") | ico("trophy", "ico-lg") | ico("check", "ico-sm text-emerald-400")
+ */
+var ICON_PATHS = {
+    home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-5h4v5h5V9.5"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    trophy: '<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M5 9a3 3 0 0 1-3-3V5h5"/><path d="M19 9a3 3 0 0 0 3-3V5h-5"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    menu: '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    "check-circle": '<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>',
+    xcircle: '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+    save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5a2 2 0 0 0-2.8 0L6 20"/>',
+    phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.5-1.1a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z"/>',
+    banknote: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+    "bar-chart": '<path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-9"/>',
+    medal: '<path d="M7.2 9.2 4 21l4-1 2 2 2-2 4 1-3.2-11.8"/><circle cx="12" cy="6" r="4"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>',
+    clipboard: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+    package: '<path d="m16.5 9.4-9-5.2"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.3-2.3"/>',
+    pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/>',
+    refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/>',
+    arrowRight: '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+    arrowLeft: '<path d="M19 12H5"/><path d="m11 18-6-6 6-6"/>',
+    download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+    upload: '<path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/>',
+    zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
+    alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 11h18"/>',
+    soccer: '<circle cx="12" cy="12" r="9"/><path d="M12 3v3"/><path d="m6.5 5.5 2 2.5"/><path d="m17.5 5.5-2 2.5"/><path d="M8.5 8 12 12l3.5-4"/><path d="M12 12v9"/><path d="m5 16 3.5-2"/><path d="m19 16-3.5-2"/>',
+    wallet: '<path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 14h.01"/><path d="M2 9h20"/>',
+    ticket: '<path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z"/><path d="M9 5v14"/>',
+    list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+    history: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>',
+    crown: '<path d="m2 8 4 2 3-6 3 6 4-2 1 12H1Z"/>',
+    star: '<path d="m12 3 2.8 5.7 6.3.9-4.5 4.4 1.1 6.3L12 17.8 6.3 20.3l1.1-6.3L2.9 9.6l6.3-.9Z"/>'
+};
+
+function ico(name, className) {
+    var paths = ICON_PATHS[name];
+    if (!paths) return "";
+    var cls = className || "ico ico-md";
+    if (cls.indexOf("ico") === -1) cls = "ico ico-md " + cls;
+    return '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + paths + '</svg>';
+}
+
+/** Reemplaza [data-ico="name"] por el SVG correspondiente. */
+function hydrateIcons(root) {
+    var scope = root || document;
+    scope.querySelectorAll("[data-ico]").forEach(function(el) {
+        var name = el.getAttribute("data-ico");
+        if (!name || !ICON_PATHS[name]) return;
+        var size = el.getAttribute("data-ico-size") || "ico-md";
+        var extra = el.getAttribute("data-ico-class") || "";
+        el.innerHTML = ico(name, "ico " + size + (extra ? " " + extra : ""));
+        el.removeAttribute("data-ico");
+    });
+}
+
 
 const _externalScriptPromises = new Map();
 
@@ -1363,38 +1433,141 @@ function openPremiumSelectSheet(selectId) {
     var title = PREMIUM_SELECT_TITLES[selectId] || "Seleccionar";
     var options = Array.from(sel.options);
     var current = sel.value;
+    var isPoolLike = ["tplPool", "entryPool", "pickPool", "resultsPool", "standingsPool"].indexOf(selectId) >= 0;
+    var isParticipantSelect = ["entryParticipant", "pickParticipant"].indexOf(selectId) >= 0;
 
     var sheet = document.createElement("div");
     sheet.id = "premiumSelectSheet";
     sheet.className = "ps-sheet-root";
 
-    var listHtml = options.map(function(opt, idx) {
-        var val = opt.value;
-        var label = opt.textContent || opt.label || "";
-        var selected = val === current;
-        var meta = parsePoolOptionMeta(label);
-        var isPoolLike = ["tplPool", "entryPool", "pickPool", "resultsPool", "standingsPool"].indexOf(selectId) >= 0;
-        var badge = "";
-        if (isPoolLike && meta.mode) {
-            badge = '<span class="ps-badge ' + modeBadgeClass(meta.mode) + '">' + escapeHTML(meta.mode) + '</span>';
+    function parseParticipantLabel(label) {
+        var raw = String(label || "");
+        var parts = raw.split(" • ");
+        if (parts.length >= 2) {
+            return { name: parts[0].trim(), area: parts.slice(1).join(" • ").trim() };
         }
-        var statusLine = meta.status
-            ? '<div class="ps-opt-sub">' + escapeHTML(meta.status) + '</div>'
-            : (meta.subtitle && !isPoolLike
-                ? '<div class="ps-opt-sub">' + escapeHTML(meta.subtitle) + '</div>'
-                : "");
+        return { name: raw.trim(), area: "" };
+    }
 
-        return [
-            '<button type="button" class="ps-opt' + (selected ? " ps-opt-on" : "") + '" data-value="' + escapeHTML(val) + '" data-idx="' + idx + '">',
-            '<div class="ps-opt-main">',
-            '<div class="ps-opt-title">' + escapeHTML(isPoolLike ? meta.title : label) + '</div>',
-            statusLine,
+    // Áreas únicas (solo participantes)
+    var areas = [];
+    if (isParticipantSelect) {
+        var seenArea = {};
+        options.forEach(function(opt) {
+            if (!opt.value) return;
+            var area = (opt.getAttribute("data-area") || parseParticipantLabel(opt.textContent || "").area || "").trim();
+            if (area && !seenArea[area]) {
+                seenArea[area] = true;
+                areas.push(area);
+            }
+        });
+        areas.sort(function(a, b) {
+            return a.localeCompare(b, "es", { sensitivity: "base" });
+        });
+    }
+
+    function buildListHtml(filterText, sortMode, areaFilter) {
+        filterText = String(filterText || "").trim().toLowerCase();
+        sortMode = sortMode || "az";
+        areaFilter = areaFilter || "all";
+
+        var items = options.filter(function(opt) {
+            if (!opt.value && isParticipantSelect) return false; // omit placeholder
+            var label = (opt.textContent || opt.label || "").toLowerCase();
+            if (filterText && label.indexOf(filterText) === -1) return false;
+            if (isParticipantSelect && areaFilter !== "all") {
+                var a = (opt.getAttribute("data-area") || parseParticipantLabel(opt.textContent || "").area || "").trim();
+                if (a !== areaFilter) return false;
+            }
+            return true;
+        });
+
+        if (isParticipantSelect) {
+            items = items.slice().sort(function(a, b) {
+                var pa = parseParticipantLabel(a.textContent || "");
+                var pb = parseParticipantLabel(b.textContent || "");
+                if (sortMode === "area") {
+                    var ca = (pa.area || "zzz").localeCompare(pb.area || "zzz", "es", { sensitivity: "base" });
+                    if (ca !== 0) return ca;
+                }
+                return pa.name.localeCompare(pb.name, "es", { sensitivity: "base" });
+            });
+        }
+
+        if (!items.length) {
+            return '<div class="ps-empty">Sin resultados</div>';
+        }
+
+        var lastArea = null;
+        return items.map(function(opt, idx) {
+            var val = opt.value;
+            var label = opt.textContent || opt.label || "";
+            var selected = val === current;
+            var meta = parsePoolOptionMeta(label);
+            var badge = "";
+            if (isPoolLike && meta.mode) {
+                badge = '<span class="ps-badge ' + modeBadgeClass(meta.mode) + '">' + escapeHTML(meta.mode) + '</span>';
+            }
+            var statusLine = "";
+            var titleText = label;
+            var headerHtml = "";
+
+            if (isParticipantSelect) {
+                var pmeta = parseParticipantLabel(label);
+                titleText = pmeta.name;
+                statusLine = pmeta.area ? '<div class="ps-opt-sub">' + escapeHTML(pmeta.area) + '</div>' : "";
+                if (sortMode === "area" && pmeta.area && pmeta.area !== lastArea) {
+                    lastArea = pmeta.area;
+                    headerHtml = '<div class="ps-group-label">' + escapeHTML(pmeta.area) + '</div>';
+                }
+            } else {
+                statusLine = meta.status
+                    ? '<div class="ps-opt-sub">' + escapeHTML(meta.status) + '</div>'
+                    : (meta.subtitle && !isPoolLike
+                        ? '<div class="ps-opt-sub">' + escapeHTML(meta.subtitle) + '</div>'
+                        : "");
+                titleText = isPoolLike ? meta.title : label;
+            }
+
+            return headerHtml + [
+                '<button type="button" class="ps-opt' + (selected ? " ps-opt-on" : "") + '" data-value="' + escapeHTML(val) + '" data-idx="' + idx + '">',
+                '<div class="ps-opt-main">',
+                '<div class="ps-opt-title">' + escapeHTML(titleText) + '</div>',
+                statusLine,
+                '</div>',
+                badge,
+                selected ? '<span class="ps-check">✓</span>' : '<span class="ps-radio"></span>',
+                '</button>'
+            ].join("");
+        }).join("");
+    }
+
+    var searchBar = "";
+    if (isParticipantSelect) {
+        var areaChips = '<button type="button" class="ps-chip ps-chip-on" data-area="all">Todas</button>' +
+            areas.map(function(a) {
+                return '<button type="button" class="ps-chip" data-area="' + escapeHTML(a) + '">' + escapeHTML(a) + '</button>';
+            }).join("");
+        searchBar = [
+            '<div class="ps-tools">',
+            '<div class="ps-search-wrap">',
+            '<span class="ps-search-ico">' + ico("search", "ico ico-sm") + '</span>',
+            '<input type="search" id="psSearch" class="ps-search" placeholder="Buscar por nombre o área…" autocomplete="off" />',
             '</div>',
-            badge,
-            selected ? '<span class="ps-check">✓</span>' : '<span class="ps-radio"></span>',
-            '</button>'
+            '<div class="ps-toolbar-row">',
+            '<div class="ps-sort-row">',
+            '<button type="button" class="ps-chip ps-chip-on" data-sort="az">A → Z</button>',
+            '<button type="button" class="ps-chip" data-sort="area">Por área</button>',
+            '</div>',
+            '<button type="button" class="ps-filters-toggle" id="psFiltersToggle" aria-expanded="false">',
+            '<span>Filtros</span>',
+            '<span class="ps-filters-caret" id="psFiltersCaret">↓</span>',
+            '</button>',
+            '</div>',
+            '<div class="ps-area-row ps-area-collapsed" id="psAreaRow">' + areaChips + '</div>',
+            '</div>'
         ].join("");
-    }).join("");
+    }
 
     sheet.innerHTML = [
         '<div class="ps-backdrop" id="psBackdrop"></div>',
@@ -1402,21 +1575,35 @@ function openPremiumSelectSheet(selectId) {
         '<div class="ps-handle"></div>',
         '<div class="ps-header">',
         '<div class="ps-title">' + escapeHTML(title) + '</div>',
-        '<button type="button" class="ps-close" id="psCloseBtn" aria-label="Cerrar">✕</button>',
+        '<button type="button" class="ps-close" id="psCloseBtn" aria-label="Cerrar">' + ico("x", "ico ico-sm") + '</button>',
         '</div>',
-        '<div class="ps-list">' + listHtml + '</div>',
+        searchBar,
+        '<div class="ps-list" id="psList">' + buildListHtml("", "az", "all") + '</div>',
         '</div>'
     ].join("");
 
     document.body.appendChild(sheet);
     document.body.classList.add("overflow-hidden");
 
-    // animate in
     requestAnimationFrame(function() {
         sheet.classList.add("ps-open");
+        var searchInput = document.getElementById("psSearch");
+        if (searchInput) {
+            searchInput.focus();
+        }
     });
 
+    var state = { sort: "az", area: "all", q: "" };
+
+    function rerender() {
+        var listEl = document.getElementById("psList");
+        if (!listEl) return;
+        listEl.innerHTML = buildListHtml(state.q, state.sort, state.area);
+        bindOptClicks();
+    }
+
     function pick(val) {
+        if (!val && isParticipantSelect) return;
         var prev = sel.value;
         sel.value = val;
         syncPremiumSelectTrigger(selectId);
@@ -1428,13 +1615,63 @@ function openPremiumSelectSheet(selectId) {
         closePremiumSelectSheet();
     }
 
+    function bindOptClicks() {
+        sheet.querySelectorAll(".ps-opt").forEach(function(btn) {
+            btn.addEventListener("click", function() {
+                pick(btn.getAttribute("data-value") || "");
+            });
+        });
+    }
+
     document.getElementById("psBackdrop").addEventListener("click", closePremiumSelectSheet);
     document.getElementById("psCloseBtn").addEventListener("click", closePremiumSelectSheet);
-    sheet.querySelectorAll(".ps-opt").forEach(function(btn) {
-        btn.addEventListener("click", function() {
-            pick(btn.getAttribute("data-value") || "");
+    bindOptClicks();
+
+    if (isParticipantSelect) {
+        var searchInput = document.getElementById("psSearch");
+        if (searchInput) {
+            searchInput.addEventListener("input", function() {
+                state.q = searchInput.value || "";
+                rerender();
+            });
+        }
+        sheet.querySelectorAll("[data-sort]").forEach(function(btn) {
+            btn.addEventListener("click", function() {
+                state.sort = btn.getAttribute("data-sort") || "az";
+                sheet.querySelectorAll("[data-sort]").forEach(function(b) {
+                    b.classList.toggle("ps-chip-on", b === btn);
+                });
+                rerender();
+            });
         });
-    });
+        sheet.querySelectorAll("#psAreaRow [data-area]").forEach(function(btn) {
+            btn.addEventListener("click", function() {
+                state.area = btn.getAttribute("data-area") || "all";
+                sheet.querySelectorAll("#psAreaRow [data-area]").forEach(function(b) {
+                    b.classList.toggle("ps-chip-on", b === btn);
+                });
+                // Actualizar etiqueta del toggle
+                var toggleLabel = document.querySelector("#psFiltersToggle span");
+                if (toggleLabel) {
+                    toggleLabel.textContent = state.area === "all" ? "Filtros" : ("Área: " + state.area);
+                }
+                rerender();
+            });
+        });
+
+        var filtersToggle = document.getElementById("psFiltersToggle");
+        var areaRow = document.getElementById("psAreaRow");
+        var caret = document.getElementById("psFiltersCaret");
+        if (filtersToggle && areaRow) {
+            filtersToggle.addEventListener("click", function() {
+                var open = areaRow.classList.toggle("ps-area-collapsed") === false;
+                // classList.toggle returns true if class was ADDED; we want open when NOT collapsed
+                open = !areaRow.classList.contains("ps-area-collapsed");
+                filtersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+                if (caret) caret.textContent = open ? "↑" : "↓";
+            });
+        }
+    }
 }
 
 function syncPremiumSelectTrigger(selectId) {
@@ -1870,32 +2107,32 @@ async function loadParticipants() {
         <!-- Fila inferior: botones de acción -->
         <div class="flex items-center gap-1 mt-2 pt-2 border-t border-zinc-800">
         <button type="button"
-        class="participant-wa-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
+        class="participant-wa-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1 text-zinc-200"
         onclick="openWhatsApp('${safeRawWhatsapp}')"
-        title="Abrir WhatsApp">💬</button>
+        title="Abrir WhatsApp">${ico("phone", "ico ico-sm")}</button>
         <button type="button"
-        class="participant-edit-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
+        class="participant-edit-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1 text-zinc-200"
         data-id="${p.id}"
         data-name="${safeRawName}"
         data-area="${safeRawArea}"
         data-whatsapp="${safeRawWhatsapp}"
-        title="Editar datos">✏️</button>
+        title="Editar datos">${ico("pencil", "ico ico-sm")}</button>
         <button type="button"
-        class="participant-history-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
+        class="participant-history-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1 text-zinc-200"
         data-id="${p.id}"
         data-name="${safeRawName}"
-        title="Historial picks">📋</button>
+        title="Historial picks">${ico("clipboard", "ico ico-sm")}</button>
         <button type="button"
-        class="participant-entry-hist-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
+        class="participant-entry-hist-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1 text-zinc-200"
         data-id="${p.id}"
         data-name="${safeRawName}"
-        title="Historial boletos">🎫</button>
+        title="Historial boletos">${ico("ticket", "ico ico-sm")}</button>
         <button type="button"
-        class="participant-toggle-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1"
+        class="participant-toggle-btn flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center justify-center gap-1 text-zinc-200"
         data-id="${p.id}"
         data-active="${isActive ? "1": "0"}"
         data-name="${safeRawName}"
-        title="${isActive ? "Archivar": "Restaurar"}">${isActive ? "📦": "♻️"}</button>
+        title="${isActive ? "Archivar": "Restaurar"}">${isActive ? ico("package", "ico ico-sm") : ico("refresh", "ico ico-sm")}</button>
         </div>
         </div>
         `;
@@ -2572,19 +2809,28 @@ async function fillEntryParticipantsSelect() {
         error
     } = await supabaseClient
     .from("participants")
-    .select("id, name, area")
-    .order("created_at", {
-        ascending: false
+    .select("id, name, area, is_active")
+    .eq("is_active", true)
+    .order("name", {
+        ascending: true
     })
-    .limit(200);
+    .limit(400);
 
     if (error) return showAlert(error.message, "error");
 
+    // Orden A-Z (por si el server no collate bien) y agrupar visualmente por área en el label
+    var list = (data || []).slice().sort(function(a, b) {
+        var na = String(a.name || "").localeCompare(String(b.name || ""), "es", { sensitivity: "base" });
+        if (na !== 0) return na;
+        return String(a.area || "").localeCompare(String(b.area || ""), "es", { sensitivity: "base" });
+    });
+
     const sel = $("entryParticipant");
-    sel.innerHTML = (data || []).map(p => {
+    sel.innerHTML = '<option value="">Elige participante…</option>' + list.map(function(p) {
         const safeName = escapeHTML(p.name || "—");
-        const safeArea = p.area ? ` • ${escapeHTML(p.area)}`: "";
-        return `<option value="${p.id}">${safeName}${safeArea}</option>`;
+        const safeArea = p.area ? ` • ${escapeHTML(p.area)}` : "";
+        // data-area en option no es estándar en todos, se parsea del texto
+        return '<option value="' + p.id + '" data-area="' + escapeHTML(p.area || "") + '">' + safeName + safeArea + '</option>';
     }).join("");
 
     refreshPremiumSelect("entryParticipant");
@@ -3452,7 +3698,7 @@ async function loadPickStatusList() {
         const dataName = escapeHTML(String(participant.name || "").toLowerCase());
         const dataArea = escapeHTML(String(area || "").toLowerCase());
 
-        let statusEmoji = "🚫";
+        let statusEmoji = ico("xcircle", "ico ico-md text-zinc-500");
         let statusTitle = "Sin boleto";
         let statusKey = "noboleto";
         let actionBtn = "";
@@ -3482,7 +3728,7 @@ async function loadPickStatusList() {
                 if (entryProgress.length === 1) {
                     var g0 = entryProgress[0];
                     progressHtml = g0.hasGoals
-                        ? `<div class="text-xs mt-1"><span class="text-amber-300 font-semibold">⚽ Goles: ${g0.goals}</span></div>`
+                        ? `<div class="text-xs mt-1"><span class="text-amber-300 font-semibold inline-flex items-center gap-1">${ico("soccer", "ico ico-sm")} Goles: ${g0.goals}</span></div>`
                         : `<div class="text-xs mt-1"><span class="text-zinc-500">Sin pronóstico de goles</span></div>`;
                 } else {
                     var goalsBits = entryProgress.map(function(item, idx) {
@@ -3492,27 +3738,27 @@ async function loadPickStatusList() {
                     }).join(" · ");
                     progressHtml = `
                     <div class="text-xs mt-1">
-                    <span class="${allComplete ? "text-emerald-300": "text-amber-300"} font-semibold">
-                    ⚽ ${completeEntries}/${entryProgress.length} boletas
+                    <span class="${allComplete ? "text-emerald-300": "text-amber-300"} font-semibold inline-flex items-center gap-1">
+                    ${ico("soccer", "ico ico-sm")} ${completeEntries}/${entryProgress.length} boletas
                     </span>
                     <span class="text-zinc-400"> · ${goalsBits}</span>
                     </div>`;
                 }
 
                 if (allComplete) {
-                    statusEmoji = "✅";
+                    statusEmoji = ico("check-circle", "ico ico-md text-emerald-400");
                     statusTitle = "Pronóstico de goles listo";
                     statusKey = "complete";
                     cardClass = "bg-emerald-500/5 border-emerald-500/20";
                     iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
                 } else if (allEmpty) {
-                    statusEmoji = "⏳";
+                    statusEmoji = ico("clock", "ico ico-md text-amber-400");
                     statusTitle = "Pendiente de goles";
                     statusKey = "pending";
                     cardClass = "bg-amber-500/5 border-amber-500/20";
                     iconWrapClass = "border-amber-500/30 bg-amber-500/10";
                 } else {
-                    statusEmoji = "🟡";
+                    statusEmoji = ico("alert", "ico ico-md text-yellow-400");
                     statusTitle = "Parcial";
                     statusKey = "partial";
                     cardClass = "bg-yellow-500/5 border-yellow-500/20";
@@ -3530,19 +3776,19 @@ async function loadPickStatusList() {
                     return `
                     <button type="button" class="${openBtnClass}"
                     data-participant-id="${participant.id}" data-entry-id="${e.id}"
-                    title="Abrir boleta ${multiEntry ? idx + 1 : ""}">👁️${boletaLabel}</button>
+                    title="Abrir boleta ${multiEntry ? idx + 1 : ""}">${ico("eye", "ico ico-sm")}${boletaLabel}</button>
                     ${hasG ? `
                     <button type="button"
-                    class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
+                    class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
                     data-participant-id="${participant.id}" data-entry-id="${e.id}"
-                    title="Descargar comprobante Goleó">🖼️</button>
-                    <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
-                    data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">📲</button>` : ""}
+                    title="Descargar comprobante Goleó">${ico("image", "ico ico-sm")}</button>
+                    <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                    data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">${ico("phone", "ico ico-sm")}</button>` : ""}
                     <button type="button"
                     class="entry-delete flex items-center justify-center w-9 h-9 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300"
                     data-entry-id="${e.id}"
                     data-participant-name="${safeParticipantName}"
-                    title="Eliminar boleto">🗑️</button>
+                    title="Eliminar boleto">${ico("trash", "ico ico-sm")}</button>
                     `;
                 }).join("");
             } else {
@@ -3589,19 +3835,19 @@ async function loadPickStatusList() {
             }
 
             if (allComplete) {
-                statusEmoji = "✅";
+                statusEmoji = ico("check-circle", "ico ico-md text-emerald-400");
                 statusTitle = "Todas las boletas completas";
                 statusKey = "complete";
                 cardClass = "bg-emerald-500/5 border-emerald-500/20";
                 iconWrapClass = "border-emerald-500/30 bg-emerald-500/10";
             } else if (allEmpty) {
-                statusEmoji = "⏳";
+                statusEmoji = ico("clock", "ico ico-md text-amber-400");
                 statusTitle = "Pendiente";
                 statusKey = "pending";
                 cardClass = "bg-amber-500/5 border-amber-500/20";
                 iconWrapClass = "border-amber-500/30 bg-amber-500/10";
             } else {
-                statusEmoji = "🟡";
+                statusEmoji = ico("alert", "ico ico-md text-yellow-400");
                 statusTitle = "Una o más boletas incompletas";
                 statusKey = "partial";
                 cardClass = "bg-yellow-500/5 border-yellow-500/20";
@@ -3623,23 +3869,23 @@ async function loadPickStatusList() {
                 data-participant-id="${participant.id}"
                 data-entry-id="${e.id}"
                 title="Abrir boleta ${multiEntry ? idx + 1: ""}">
-                👁️${boletaLabel}
+                ${ico("eye", "ico ico-sm")}${boletaLabel}
                 </button>
                 ${pickCountE > 0 ? `
                 <button type="button"
-                class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700"
+                class="pick-status-export flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
                 data-participant-id="${participant.id}"
                 data-entry-id="${e.id}"
                 title="Descargar boleta ${multiEntry ? idx + 1: ""}">
-                🖼️
+                ${ico("image", "ico ico-sm")}
                 </button>
-                <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">📲</button>
-                <button type="button" class="pick-status-physical flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Ver boleta con resultados">🎯</button>`: ""}
+                <button type="button" class="pick-status-wa flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Enviar por WhatsApp">${ico("phone", "ico ico-sm")}</button>
+                <button type="button" class="pick-status-physical flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-participant-id="${participant.id}" data-entry-id="${e.id}" title="Ver boleta con resultados">${ico("target", "ico ico-sm")}</button>`: ""}
                 <button type="button"
                 class="entry-delete flex items-center justify-center w-9 h-9 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300"
                 data-entry-id="${e.id}"
                 data-participant-name="${safeParticipantName}"
-                title="Eliminar boleto">🗑️</button>
+                title="Eliminar boleto">${ico("trash", "ico ico-sm")}</button>
                 `;
             }).join("");
             } // end !isGoleoPool
@@ -4712,24 +4958,24 @@ async function loadEntriesAndStats() {
             : "";
 
         const paidBadge = r.paid
-            ? '<span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">✅ Pagado</span>'
-            : '<span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300">⏳ Pendiente</span>';
+            ? '<span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">' + ico("check-circle", "ico ico-sm") + ' Pagado</span>'
+            : '<span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300">' + ico("clock", "ico ico-sm") + ' Pendiente</span>';
 
         const picksBadge = picksStatus === "complete"
-            ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300">✅ ' + pickCount + '/' + matchesTotal + ' picks</span>'
+            ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300">' + ico("check", "ico ico-sm") + ' ' + pickCount + '/' + matchesTotal + ' picks</span>'
             : picksStatus === "partial"
-            ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-yellow-300">🟡 ' + pickCount + '/' + matchesTotal + ' picks</span>'
-            : '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400">⏳ ' + pickCount + '/' + matchesTotal + ' picks</span>';
+            ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-yellow-300">' + ico("alert", "ico ico-sm") + ' ' + pickCount + '/' + matchesTotal + ' picks</span>'
+            : '<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400">' + ico("clock", "ico ico-sm") + ' ' + pickCount + '/' + matchesTotal + ' picks</span>';
 
         const actionBtn = isClosed
-            ? '<button type="button" class="flex-1 h-10 rounded-xl bg-zinc-800 text-zinc-500 text-sm font-semibold cursor-not-allowed" disabled>🔒 Cerrada</button>'
+            ? '<button type="button" class="flex-1 h-10 rounded-xl bg-zinc-800 text-zinc-500 text-sm font-semibold cursor-not-allowed inline-flex items-center justify-center gap-1.5" disabled>' + ico("lock", "ico ico-sm") + ' Cerrada</button>'
             : r.paid
-            ? '<button type="button" class="entry-mark-pending flex-1 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-sm font-semibold" data-entry-id="' + r.id + '">↩️ Marcar pendiente</button>'
-            : '<button type="button" class="entry-mark-paid flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-bold shadow-lg shadow-emerald-900/30" data-entry-id="' + r.id + '">✅ Registrar pago</button>';
+            ? '<button type="button" class="entry-mark-pending flex-1 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-sm font-semibold inline-flex items-center justify-center gap-1.5" data-entry-id="' + r.id + '">' + ico("arrowLeft", "ico ico-sm") + ' Marcar pendiente</button>'
+            : '<button type="button" class="entry-mark-paid flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-bold shadow-lg shadow-emerald-900/30 inline-flex items-center justify-center gap-1.5" data-entry-id="' + r.id + '">' + ico("check", "ico ico-sm") + ' Registrar pago</button>';
 
         const deleteBtn = isClosed
             ? ""
-            : '<button type="button" class="entry-delete shrink-0 w-10 h-10 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 flex items-center justify-center" data-entry-id="' + r.id + '" data-participant-name="' + partNameSafe + '" title="Eliminar boleto">🗑️</button>';
+            : '<button type="button" class="entry-delete shrink-0 w-10 h-10 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 flex items-center justify-center" data-entry-id="' + r.id + '" data-participant-name="' + partNameSafe + '" title="Eliminar boleto">' + ico("trash", "ico ico-sm") + '</button>';
 
         const cardBorder = r.paid
             ? "border-emerald-500/20 bg-emerald-500/[0.04]"
@@ -6070,8 +6316,8 @@ function renderResultRow(match) {
           Goles: <span data-result-total="${match.id}" class="font-semibold text-zinc-200">${totalGoals}</span>
         </div>
         <button data-save-row="${match.id}" onclick="saveOneResult('${match.id}')"
-          class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 font-bold text-xs border border-emerald-500/20">
-          💾
+          class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 font-bold text-xs border border-emerald-500/20 inline-flex items-center justify-center">
+          ${ico("save", "ico ico-sm")}
         </button>
       </div>
     </div>
@@ -13962,6 +14208,7 @@ supabaseClient.auth.onAuthStateChange(function(event, session) {
 
 async function init() {
     hideAlert();
+    try { hydrateIcons(document); } catch (e) { /* ignore */ }
 
     const {
         data: sessionData
@@ -14048,6 +14295,7 @@ async function init() {
 }
 
 // Arranque
+try { hydrateIcons(document); } catch (e) { /* ignore */ }
 setView("viewLogin");
 safeInit();
 
