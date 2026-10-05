@@ -1283,12 +1283,12 @@ function renderActivePoolsBanner(actives) {
 
     if (banner) banner.classList.remove("hidden");
 
-    // Orden: por jornada (round) y luego por modo
+    // Orden: por jornada (round) y luego Sencilla → Goleó
     var sorted = list.slice().sort(function(a, b) {
         var ra = Number(a.round);
         var rb = Number(b.round);
         if (!isNaN(ra) && !isNaN(rb) && ra !== rb) return ra - rb;
-        return String(a.mode_code || "").localeCompare(String(b.mode_code || ""));
+        return modeSortRank(a.mode_code) - modeSortRank(b.mode_code);
     });
 
     nameEl.innerHTML = sorted.map(function(p) {
@@ -1333,6 +1333,49 @@ function formatModeShort(mode) {
         default:
             return mode || "—";
     }
+}
+
+/** Orden de modos en selects: Sencilla → Acumulada → Goleó → otros */
+function modeSortRank(modeCode) {
+    var m = String(modeCode || "SENCILLA").toUpperCase();
+    if (m === "SENCILLA") return 0;
+    if (m === "ACUMULADA") return 1;
+    if (m === "GOLEO") return 2;
+    if (m === "CAMPEON_CAMPEONES") return 3;
+    return 9;
+}
+
+/**
+ * Orden premium para listas de jornadas:
+ * 1) Activas → borrador → cerradas
+ * 2) Misma jornada juntas (por nombre)
+ * 3) Dentro del par: Sencilla, luego Goleó
+ * 4) Más recientes primero
+ */
+function sortPoolsForSelect(list) {
+    var statusRank = { open: 0, draft: 1, closed: 2 };
+    return (list || []).slice().sort(function(a, b) {
+        var sa = statusRank[a.status] != null ? statusRank[a.status] : 9;
+        var sb = statusRank[b.status] != null ? statusRank[b.status] : 9;
+        if (sa !== sb) return sa - sb;
+
+        var na = String(a.name || "").localeCompare(String(b.name || ""), "es", { sensitivity: "base" });
+        if (na !== 0) {
+            // Si nombres distintos, preferir created_at reciente entre grupos
+            var ca = a.created_at ? new Date(a.created_at).getTime() : 0;
+            var cb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            if (ca !== cb) return cb - ca;
+            return na;
+        }
+
+        var ma = modeSortRank(a.mode_code);
+        var mb = modeSortRank(b.mode_code);
+        if (ma !== mb) return ma - mb;
+
+        var ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        var tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
+    });
 }
 
 function formatPoolStatusTag(status) {
@@ -2391,6 +2434,75 @@ function updateParticipantFilterCounts() {
 // =======================
 // Crear y Guardar Jornadas
 
+function renderPoolCardHtml(p) {
+    const badge =
+        p.status === "open"
+        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+        : p.status === "draft"
+        ? "bg-sky-500/10 border-sky-500/20 text-sky-300"
+        : "bg-amber-500/10 border-amber-500/20 text-amber-300";
+
+    const statusLabel =
+        p.status === "open" ? "Activa"
+        : p.status === "draft" ? "Borrador"
+        : "Cerrada";
+
+    const actionBtn =
+        p.status === "draft"
+        ? '<button data-open="' + p.id + '" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">Activar</button>'
+        : p.status === "open"
+        ? '<button data-close="' + p.id + '" class="px-3 py-2 rounded bg-rose-600 hover:bg-rose-500 text-xs">Cerrar</button>'
+        : '<button data-draft="' + p.id + '" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">Reabrir a borrador</button>';
+
+    const modeLabel = typeof formatModeShort === "function"
+        ? formatModeShort(p.mode_code || "SENCILLA")
+        : (p.mode_code || "—");
+    const modeClass = String(p.mode_code || "").toUpperCase() === "GOLEO"
+        ? "text-amber-300"
+        : "text-emerald-300";
+
+    return [
+        '<div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">',
+        '<div class="flex items-center justify-between gap-2 flex-wrap">',
+        '<div class="min-w-0">',
+        '<div class="font-semibold break-words">' + escapeHTML(p.name || "Jornada") + '</div>',
+        '<div class="text-xs text-zinc-400 mt-1 break-words">',
+        '$' + Number(p.price || 0).toFixed(0) + ' • Comisión ' + Number(p.commission_pct || 0).toFixed(0) + '%',
+        (p.competition ? ' • ' + escapeHTML(p.competition) : ''),
+        (p.season ? ' • ' + escapeHTML(p.season) : ''),
+        '</div>',
+        '<div class="text-xs ' + modeClass + ' mt-1 font-semibold">Modo: ' + escapeHTML(modeLabel) + '</div>',
+        p.date_label ? '<div class="text-xs text-emerald-300/90 mt-1">Fechas: ' + escapeHTML(p.date_label) + '</div>' : '',
+        p.carryover_enabled ? '<div class="text-xs text-sky-300/90 mt-1">Acumulado habilitado</div>' : '',
+        '</div>',
+        '<div class="flex items-center gap-2 flex-wrap">',
+        '<span class="text-xs px-2 py-1 rounded-full border ' + badge + '">' + statusLabel + '</span>',
+        '<button data-dates="' + p.id + '" data-curdates="' + escapeHTML(p.date_label || "") + '" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">Editar fechas</button>',
+        (p.status === "open" || p.status === "draft")
+            ? '<button data-editprice="' + p.id + '" data-curprice="' + (p.price || 20) + '" data-curcomm="' + (p.commission_pct || 15) + '" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">💲 Precio/Comisión</button>'
+            : '',
+        '<button data-duplicatematches="' + p.id + '" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">📋 Copiar partidos</button>',
+        '<button data-poollog="' + p.id + '" data-poolname="' + escapeHTML(p.name || "Jornada") + '" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">📅 Historial</button>',
+        actionBtn,
+        '</div>',
+        '</div>',
+        '</div>'
+    ].join("");
+}
+
+/** Orden interno de jornadas: round DESC, luego Sencilla → Goleó */
+function sortPoolsWithinGroup(list) {
+    return (list || []).slice().sort(function(a, b) {
+        var ra = Number(a.round);
+        var rb = Number(b.round);
+        if (!isNaN(ra) && !isNaN(rb) && ra !== rb) return rb - ra; // J10 antes que J9
+        if (String(a.name || "") !== String(b.name || "")) {
+            return String(b.name || "").localeCompare(String(a.name || ""), "es", { sensitivity: "base" });
+        }
+        return modeSortRank(a.mode_code) - modeSortRank(b.mode_code);
+    });
+}
+
 async function loadPools() {
     const {
         data,
@@ -2408,91 +2520,129 @@ async function loadPools() {
     const actives = rows.filter(function(p) { return p.status === "open"; });
     renderActivePoolsBanner(actives);
 
-    $("poolsList").innerHTML = rows.map(p => {
-        const badge =
-        p.status === "open"
-        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300": p.status === "draft"
-        ? "bg-sky-500/10 border-sky-500/20 text-sky-300": "bg-amber-500/10 border-amber-500/20 text-amber-300";
+    // 1) Activas primero (todas, ordenadas)
+    // 2) Resto agrupado: Competencia → Temporada → jornadas (round DESC, Sencilla→Goleó)
+    var activeIds = {};
+    actives.forEach(function(p) { activeIds[p.id] = true; });
+    var rest = rows.filter(function(p) { return !activeIds[p.id]; });
 
-        const statusLabel =
-        p.status === "open"
-        ? "Activa": p.status === "draft"
-        ? "Borrador": "Cerrada";
+    // Agrupar rest por competition → season
+    var byComp = {};
+    rest.forEach(function(p) {
+        var comp = (p.competition && String(p.competition).trim()) || "Otras competencias";
+        var sea = (p.season && String(p.season).trim()) || "Sin temporada";
+        if (!byComp[comp]) byComp[comp] = {};
+        if (!byComp[comp][sea]) byComp[comp][sea] = [];
+        byComp[comp][sea].push(p);
+    });
 
-        const actionBtn =
-        p.status === "draft"
-        ? `
-        <button data-open="${p.id}" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">
-        Activar
-        </button>
-        `: p.status === "open"
-        ? `
-        <button data-close="${p.id}" class="px-3 py-2 rounded bg-rose-600 hover:bg-rose-500 text-xs">
-        Cerrar
-        </button>
-        `: `
-        <button data-draft="${p.id}" class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-        Reabrir a borrador
-        </button>
-        `;
+    var compKeys = Object.keys(byComp).sort(function(a, b) {
+        // Liga MX, Fecha FIFA, Mundial… alfabético con preferencia conocida
+        var rank = function(c) {
+            var u = c.toUpperCase();
+            if (u.indexOf("LIGA MX") >= 0) return 0;
+            if (u.indexOf("FECHA FIFA") >= 0 || u.indexOf("FIFA") >= 0) return 1;
+            if (u.indexOf("MUNDIAL") >= 0) return 2;
+            if (c === "Otras competencias") return 99;
+            return 50;
+        };
+        var d = rank(a) - rank(b);
+        if (d !== 0) return d;
+        return a.localeCompare(b, "es", { sensitivity: "base" });
+    });
 
-        return `
-        <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">
-        <div class="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-        <div class="font-semibold">${p.name}</div>
+    function seasonSort(a, b) {
+        // Preferir año más reciente; Apertura antes de Clausura del mismo año si aplica
+        var ya = (a.match(/20\d{2}/) || [])[0] || "0";
+        var yb = (b.match(/20\d{2}/) || [])[0] || "0";
+        if (ya !== yb) return Number(yb) - Number(ya);
+        var ra = /clausura/i.test(a) ? 1 : /apertura/i.test(a) ? 0 : 2;
+        var rb = /clausura/i.test(b) ? 1 : /apertura/i.test(b) ? 0 : 2;
+        if (ra !== rb) return ra - rb;
+        return a.localeCompare(b, "es", { sensitivity: "base" });
+    }
 
-        <div class="text-xs text-zinc-400 mt-1">
-        $${Number(p.price || 0).toFixed(0)} • Comisión ${Number(p.commission_pct || 0).toFixed(0)}% • ${p.competition || "—"} • ${p.season || "—"}
-        </div>
+    var htmlParts = [];
+    var groupIdx = 0;
 
-        <div class="text-xs text-emerald-300 mt-1">
-        Modo: ${p.mode_code || "—"}
-        </div>
+    // Sección: Activas (expandida por defecto)
+    if (actives.length) {
+        var activeBodyId = "poolGroupBody_active";
+        htmlParts.push(
+            '<div class="pool-group mb-3" data-pool-group="active">',
+            '<button type="button" class="pool-group-toggle w-full flex items-center justify-between gap-2 px-1 py-2 text-left" data-target="' + activeBodyId + '" aria-expanded="true">',
+            '<span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2 min-w-0">',
+            '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>',
+            '<span class="truncate">Jornadas activas</span>',
+            '<span class="text-zinc-500 font-semibold normal-case tracking-normal">(' + actives.length + ')</span>',
+            '</span>',
+            '<span class="pool-group-caret text-emerald-400/80 text-xs shrink-0">↑</span>',
+            '</button>',
+            '<div id="' + activeBodyId + '" class="pool-group-body space-y-2">',
+            sortPoolsWithinGroup(actives).map(renderPoolCardHtml).join(""),
+            '</div></div>'
+        );
+    }
 
-        ${p.date_label ? `<div class="text-xs text-emerald-300/90 mt-1">Fechas: ${p.date_label}</div>`: ""}
+    // Secciones por competencia / temporada (colapsables)
+    compKeys.forEach(function(comp) {
+        var seasons = Object.keys(byComp[comp]).sort(seasonSort);
+        var totalInComp = seasons.reduce(function(n, s) { return n + byComp[comp][s].length; }, 0);
+        var compId = "poolGroupBody_c" + (groupIdx++);
+        // Grupos grandes colapsados por defecto para no saturar el móvil
+        var compOpen = totalInComp <= 8;
 
-        ${p.carryover_enabled ? `<div class="text-xs text-sky-300/90 mt-1">Acumulado habilitado</div>`: ""}
-        </div>
+        htmlParts.push(
+            '<div class="pool-group mb-2 mt-4" data-pool-group="comp">',
+            '<button type="button" class="pool-group-toggle w-full flex items-center justify-between gap-2 px-1 py-2 text-left rounded-lg hover:bg-white/[0.03]" data-target="' + compId + '" aria-expanded="' + (compOpen ? "true" : "false") + '">',
+            '<span class="text-[11px] font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2 min-w-0">',
+            '<span class="w-1 h-4 rounded-full bg-zinc-600 shrink-0"></span>',
+            '<span class="truncate">' + escapeHTML(comp) + '</span>',
+            '<span class="text-zinc-600 font-semibold normal-case tracking-normal">(' + totalInComp + ')</span>',
+            '</span>',
+            '<span class="pool-group-caret text-zinc-500 text-xs shrink-0">' + (compOpen ? "↑" : "↓") + '</span>',
+            '</button>',
+            '<div id="' + compId + '" class="pool-group-body' + (compOpen ? "" : " pool-group-collapsed") + '">'
+        );
 
-        <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs px-2 py-1 rounded-full border ${badge}">
-        ${statusLabel}
-        </span>
+        seasons.forEach(function(sea) {
+            var group = sortPoolsWithinGroup(byComp[comp][sea]);
+            var seaId = "poolGroupBody_s" + (groupIdx++);
+            var seaOpen = group.length <= 6 && compOpen;
 
-        <button
-        data-dates="${p.id}"
-        data-curdates="${(p.date_label || "").replace(/"/g, "&quot;")}"
-        class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-        Editar fechas
-        </button>
+            htmlParts.push(
+                '<div class="pool-group mb-2 mt-2 ml-1" data-pool-group="season">',
+                '<button type="button" class="pool-group-toggle w-full flex items-center justify-between gap-2 px-1 py-1.5 text-left rounded-md hover:bg-white/[0.03]" data-target="' + seaId + '" aria-expanded="' + (seaOpen ? "true" : "false") + '">',
+                '<span class="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 truncate">',
+                escapeHTML(sea),
+                ' <span class="text-zinc-600">· ' + group.length + '</span>',
+                '</span>',
+                '<span class="pool-group-caret text-zinc-600 text-[10px] shrink-0">' + (seaOpen ? "↑" : "↓") + '</span>',
+                '</button>',
+                '<div id="' + seaId + '" class="pool-group-body space-y-2' + (seaOpen ? "" : " pool-group-collapsed") + '">',
+                group.map(renderPoolCardHtml).join(""),
+                '</div></div>'
+            );
+        });
 
-        ${(p.status === "open" || p.status === "draft") ? `
-        <button
-        data-editprice="${p.id}"
-        data-curprice="${p.price || 20}"
-        data-curcomm="${p.commission_pct || 15}"
-        class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-        💲 Precio/Comisión
-        </button>`: ""}
-        <button
-        data-duplicatematches="${p.id}"
-        class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-        📋 Copiar partidos
-        </button>
-        <button
-        data-poollog="${p.id}"
-        data-poolname="${p.name || "Jornada"}"
-        class="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs">
-        📅 Historial
-        </button>
+        htmlParts.push('</div></div>');
+    });
 
-        ${actionBtn}
-        </div>
-        </div>
-        </div>
-        `;
-    }).join("");
+    $("poolsList").innerHTML = htmlParts.join("") ||
+        '<div class="text-sm text-zinc-400 p-3">No hay jornadas creadas.</div>';
+
+    // Toggle contraer / expandir
+    document.querySelectorAll("#poolsList .pool-group-toggle").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            var targetId = btn.getAttribute("data-target");
+            var body = targetId ? document.getElementById(targetId) : null;
+            if (!body) return;
+            var collapsed = body.classList.toggle("pool-group-collapsed");
+            btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+            var caret = btn.querySelector(".pool-group-caret");
+            if (caret) caret.textContent = collapsed ? "↓" : "↑";
+        });
+    });
 
     // Activar jornada
     document.querySelectorAll("[data-open]").forEach(btn => {
@@ -2792,13 +2942,18 @@ async function fillEntryPoolsSelect() {
 
     if (error) return showAlert(error.message, "error");
 
+    const sorted = sortPoolsForSelect(data || []);
     const sel = $("entryPool");
     if (!sel) return;
-    sel.innerHTML = (data || []).map(function(p) {
+    sel.innerHTML = sorted.map(function(p) {
         return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
-    if ((data || [])[0]) sel.value = data[0].id;
+    // Preferir Sencilla activa de la jornada más reciente
+    var prefer = sorted.find(function(p) {
+        return String(p.mode_code || "").toUpperCase() === "SENCILLA";
+    }) || sorted[0];
+    if (prefer) sel.value = prefer.id;
 
     refreshPremiumSelect("entryPool");
 }
@@ -2850,18 +3005,22 @@ async function fillPickPoolsSelect() {
 
     if (error) return showAlert(error.message, "error");
 
+    const sorted = sortPoolsForSelect(data || []);
     const sel = $("pickPool");
     if (!sel) return;
 
-    sel.innerHTML = (data || []).map(function(p) {
+    sel.innerHTML = sorted.map(function(p) {
         return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
-    // Preferir activa; si hay varias activas, la más reciente
-    const openPool = (data || []).find(function(p) {
+    // Preferir Sencilla activa; si no hay, primera activa; si no, primera de la lista
+    const openSencilla = sorted.find(function(p) {
+        return p.status === "open" && String(p.mode_code || "").toUpperCase() === "SENCILLA";
+    });
+    const openAny = sorted.find(function(p) {
         return p.status === "open";
     });
-    const defaultPool = openPool || (data || [])[0];
+    const defaultPool = openSencilla || openAny || sorted[0];
     if (defaultPool) sel.value = defaultPool.id;
 
     refreshPremiumSelect("pickPool");
@@ -4745,7 +4904,8 @@ async function addEntry() {
 
     const pool_id = $("entryPool").value;
     const participant_id = $("entryParticipant").value;
-    const paid = $("entryPaid").checked;
+    // Registrar boleto siempre como pendiente; "Registrar y pagar" usa addEntryAndPay
+    const paid = false;
 
     if (!pool_id || !participant_id) {
         return showAlert("Falta seleccionar pool/participante.", "error");
@@ -4771,7 +4931,7 @@ async function addEntry() {
         pool_id,
         participant_id,
         paid,
-        paid_at: paid ? new Date().toISOString(): null
+        paid_at: null
     };
 
     const {
@@ -4783,7 +4943,6 @@ async function addEntry() {
     if (error) return showAlert(error.message, "error");
 
     showAlert("Boleto registrado ✅", "ok");
-    $("entryPaid").checked = false;
 
     await loadEntriesAndStats();
 
@@ -5118,9 +5277,10 @@ async function fillTplPools() {
 
     if (error) return showAlert(error.message, "error");
 
+    const sorted = sortPoolsForSelect(data || []);
     const sel = $("tplPool");
     if (!sel) return;
-    sel.innerHTML = (data || []).map(function(p) {
+    sel.innerHTML = sorted.map(function(p) {
         return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
@@ -6196,7 +6356,7 @@ async function fillPickSelectors() {
 
     if (poolsRes.error) return showAlert(poolsRes.error.message, "error");
 
-    $("pickPool").innerHTML = (poolsRes.data || []).map(function(p) {
+    $("pickPool").innerHTML = sortPoolsForSelect(poolsRes.data || []).map(function(p) {
         return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
@@ -6235,17 +6395,22 @@ async function fillResultsPoolsSelect() {
 
     if (error) return showAlert(error.message, "error");
 
+    const sorted = sortPoolsForSelect(data || []);
     const sel = $("resultsPool");
     if (!sel) return;
-    sel.innerHTML = (data || []).map(function(p) {
+    sel.innerHTML = sorted.map(function(p) {
         return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
-    const active = (data || []).find(function(p) {
+    const activeSencilla = sorted.find(function(p) {
+        return p.status === "open" && String(p.mode_code || "").toUpperCase() === "SENCILLA";
+    });
+    const active = sorted.find(function(p) {
         return p.status === "open";
     });
-    if (active) sel.value = active.id;
-    else if ((data || []).length) sel.value = data[0].id;
+    if (activeSencilla) sel.value = activeSencilla.id;
+    else if (active) sel.value = active.id;
+    else if (sorted.length) sel.value = sorted[0].id;
 
     refreshPremiumSelect("resultsPool");
 }
@@ -6603,17 +6768,22 @@ async function fillStandingsPoolsSelect() {
 
     if (error) return showAlert(error.message, "error");
 
+    const sorted = sortPoolsForSelect(data || []);
     const sel = $("standingsPool");
     if (!sel) return;
-    sel.innerHTML = (data || []).map(function(p) {
+    sel.innerHTML = sorted.map(function(p) {
         return '<option value="' + p.id + '">' + escapeHTML(formatPoolOptionLabel(p)) + '</option>';
     }).join("");
 
-    const active = (data || []).find(function(p) {
+    const activeSencilla = sorted.find(function(p) {
+        return p.status === "open" && String(p.mode_code || "").toUpperCase() === "SENCILLA";
+    });
+    const active = sorted.find(function(p) {
         return p.status === "open";
     });
-    if (active) sel.value = active.id;
-    else if ((data || []).length) sel.value = data[0].id;
+    if (activeSencilla) sel.value = activeSencilla.id;
+    else if (active) sel.value = active.id;
+    else if (sorted.length) sel.value = sorted[0].id;
 
     refreshPremiumSelect("standingsPool");
 }
@@ -6630,61 +6800,84 @@ function renderStandingsPodium(rows) {
 
     function makeCard(item, place) {
         if (!item) {
-            return `
-            <div class="p-3 rounded-xl border bg-zinc-950 border-zinc-800 text-center opacity-50">
-            <div class="text-2xl mb-1">—</div>
-            <div class="text-sm text-zinc-500">Sin dato</div>
-            </div>
-            `;
+            return [
+                '<div class="p-2.5 sm:p-3 rounded-2xl border bg-zinc-950 border-zinc-800 text-center opacity-40 flex flex-col items-center justify-center min-h-[120px]">',
+                '<div class="text-lg text-zinc-600">—</div>',
+                '<div class="text-[10px] text-zinc-600 mt-1">Sin dato</div>',
+                '</div>'
+            ].join("");
         }
 
-        let emoji = "🏅";
-        let title = "Lugar";
-        let boxClass = "bg-zinc-950 border-zinc-800";
-        let pointsClass = "text-white";
+        var medal = place === 1 ? "🥇" : place === 2 ? "🥈" : place === 3 ? "🥉" : "🏅";
+        var title = place === 1 ? "1er" : place === 2 ? "2do" : place === 3 ? "3er" : "#";
+        var boxClass = place === 1
+            ? "bg-yellow-500/10 border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.08)]"
+            : place === 2
+            ? "bg-slate-400/10 border-slate-400/25"
+            : place === 3
+            ? "bg-amber-700/10 border-amber-600/25"
+            : "bg-zinc-950 border-zinc-800";
+        var pointsClass = place === 1 ? "text-yellow-300" : place === 2 ? "text-slate-200" : place === 3 ? "text-amber-300" : "text-white";
+        var lift = place === 1 ? "sm:-mt-2 sm:mb-0" : place === 2 ? "sm:mt-3" : "sm:mt-5";
 
-        if (place === 1) {
-            emoji = "🥇";
-            title = "1er lugar";
-            boxClass = "bg-yellow-500/10 border-yellow-500/20";
-            pointsClass = "text-yellow-300";
-        } else if (place === 2) {
-            emoji = "🥈";
-            title = "2do lugar";
-            boxClass = "bg-slate-400/10 border-slate-400/20";
-            pointsClass = "text-slate-200";
-        } else if (place === 3) {
-            emoji = "🥉";
-            title = "3er lugar";
-            boxClass = "bg-amber-700/10 border-amber-700/20";
-            pointsClass = "text-amber-300";
-        }
+        var name = escapeHTML(item.name || "—");
+        var area = escapeHTML(item.area || "Sin área");
 
-        return `
-        <div class="p-3 rounded-xl border ${boxClass} text-center">
-        <div class="text-3xl mb-1">${emoji}</div>
-        <div class="text-xs uppercase tracking-wide text-zinc-400">${title}</div>
-        <div class="mt-2 font-extrabold text-white truncate">${item.name}</div>
-        <div class="text-xs text-zinc-400 mt-1 truncate">${item.area || "Sin área"}</div>
-        <div class="mt-2 text-lg font-extrabold ${pointsClass}">${item.points}</div>
-        <div class="text-xs text-zinc-400">aciertos</div>
-        </div>
-        `;
+        return [
+            '<div class="p-2.5 sm:p-3 rounded-2xl border ' + boxClass + ' text-center flex flex-col ' + lift + ' min-w-0 overflow-hidden">',
+            '<div class="text-2xl sm:text-3xl leading-none mb-0.5">' + medal + '</div>',
+            '<div class="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-zinc-400">' + title + ' lugar</div>',
+            '<div class="mt-1.5 text-[11px] sm:text-sm font-extrabold text-white leading-snug break-words hyphens-auto">' + name + '</div>',
+            '<div class="text-[10px] sm:text-xs text-zinc-400 mt-0.5 leading-snug break-words">' + area + '</div>',
+            '<div class="mt-auto pt-2">',
+            '<div class="text-base sm:text-lg font-black ' + pointsClass + ' leading-none">' + item.points + '</div>',
+            '<div class="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5">aciertos</div>',
+            '</div>',
+            '</div>'
+        ].join("");
     }
 
-    return `
-    <div class="grid grid-cols-3 gap-2">
-    ${makeCard(second, 2)}
-    ${makeCard(first, 1)}
-    ${makeCard(third, 3)}
-    </div>
-    `;
-    // Auto-seleccionar jornada activa
-    const activePool = (data || []).find(function(p) {
-        return p.status === "open";
-    });
-    if (activePool) sel.value = activePool.id;
-    else if ((data || []).length) sel.value = data[0].id;
+    // Móvil: lista vertical clara · sm+: podio 2º | 1º | 3º
+    function makeRow(item, place) {
+        if (!item) return "";
+        var medal = place === 1 ? "🥇" : place === 2 ? "🥈" : "🥉";
+        var title = place === 1 ? "1er" : place === 2 ? "2do" : "3er";
+        var ring = place === 1
+            ? "border-yellow-500/30 bg-yellow-500/10"
+            : place === 2
+            ? "border-slate-400/25 bg-slate-400/10"
+            : "border-amber-600/25 bg-amber-700/10";
+        var pts = place === 1 ? "text-yellow-300" : place === 2 ? "text-slate-200" : "text-amber-300";
+        return [
+            '<div class="flex items-center gap-3 p-3 rounded-2xl border ' + ring + ' min-w-0">',
+            '<div class="text-2xl shrink-0">' + medal + '</div>',
+            '<div class="min-w-0 flex-1">',
+            '<div class="text-[10px] uppercase tracking-wider font-bold text-zinc-400">' + title + ' lugar</div>',
+            '<div class="text-sm font-extrabold text-white leading-snug break-words">' + escapeHTML(item.name || "—") + '</div>',
+            '<div class="text-[11px] text-zinc-400 break-words">' + escapeHTML(item.area || "Sin área") + '</div>',
+            '</div>',
+            '<div class="text-right shrink-0">',
+            '<div class="text-lg font-black ' + pts + ' leading-none">' + item.points + '</div>',
+            '<div class="text-[10px] text-zinc-500">aciertos</div>',
+            '</div>',
+            '</div>'
+        ].join("");
+    }
+
+    return [
+        // Mobile: ranking vertical (nombres completos)
+        '<div class="grid gap-2 sm:hidden">',
+        makeRow(first, 1),
+        makeRow(second, 2),
+        makeRow(third, 3),
+        '</div>',
+        // Tablet/desktop: podio clásico
+        '<div class="hidden sm:grid grid-cols-3 gap-2 items-end">',
+        makeCard(second, 2),
+        makeCard(first, 1),
+        makeCard(third, 3),
+        '</div>'
+    ].join("");
 }
 
 
@@ -6783,27 +6976,33 @@ function renderSimpleWinnerBox(rows, poolStats, completionInfo, winnerSummary) {
     var titleClass = isTie ? "text-amber-300": isFinished ? "text-sky-300": "text-emerald-300";
     var prizeClass = titleClass;
 
-    var winnerNames = winners.map(function(x) {
-        return x.name;
-    }).join(", ");
-    var winnerAreas = [...new Set(winners.map(function(x) {
-        return x.area || "";
-    }).filter(Boolean))].join(", ");
+    // Lista de ganadores (uno por fila en empates — legible en móvil)
+    var winnersListHtml = winners.map(function(x, idx) {
+        return [
+            '<div class="flex items-start gap-2 py-2' + (idx < winners.length - 1 ? ' border-b border-white/5' : '') + '">',
+            isTie ? ('<span class="text-[10px] font-bold text-zinc-500 mt-0.5 shrink-0">#' + (idx + 1) + '</span>') : '',
+            '<div class="min-w-0 flex-1">',
+            '<div class="text-[15px] font-extrabold text-white leading-snug break-words">' + escapeHTML(x.name || "—") + '</div>',
+            '<div class="text-[11px] text-zinc-400 mt-0.5 break-words">' + escapeHTML(x.area || "Sin área") + '</div>',
+            '</div>',
+            '</div>'
+        ].join("");
+    }).join("");
 
     return [
-        '<div class="p-4 ' + boxClass + ' border rounded-xl">',
-        '<div class="text-xs uppercase tracking-wide ' + titleClass + '">' + titleLabel + '</div>',
-        '<div class="mt-2 text-xl font-extrabold text-white">' + winnerNames + '</div>',
-        '<div class="text-sm text-zinc-300 mt-1">' + (winnerAreas || "Sin área") + ' • ' + winningPoints + ' aciertos</div>',
-        '<div class="text-xs text-zinc-400 mt-2">' + progressText + '</div>',
+        '<div class="p-4 ' + boxClass + ' border rounded-2xl overflow-hidden">',
+        '<div class="text-[10px] sm:text-xs uppercase tracking-wide font-bold ' + titleClass + ' leading-snug">' + titleLabel + '</div>',
+        '<div class="mt-2">' + winnersListHtml + '</div>',
+        '<div class="text-sm text-zinc-300 mt-2 font-semibold">' + winningPoints + ' aciertos' + (isTie ? ' · ' + winnersCount + ' ganadores' : '') + '</div>',
+        '<div class="text-xs text-zinc-400 mt-1">' + progressText + '</div>',
         '<div class="grid grid-cols-2 gap-2 mt-4 text-sm">',
-        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Bolsa actual</div><div class="font-bold text-white">' + money(prizePool) + '</div></div>',
-        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Premio automático' + (isTie ? " por persona": "") + '</div><div class="font-bold ' + prizeClass + '">' + money(prizePerWinner) + '</div></div>',
+        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl min-w-0"><div class="text-[10px] sm:text-xs text-zinc-400">Bolsa actual</div><div class="font-bold text-white break-words">' + money(prizePool) + '</div></div>',
+        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl min-w-0"><div class="text-[10px] sm:text-xs text-zinc-400">Premio' + (isTie ? " c/u": "") + '</div><div class="font-bold ' + prizeClass + ' break-words">' + money(prizePerWinner) + '</div></div>',
         '</div>',
         '<div class="grid grid-cols-3 gap-2 mt-2 text-sm">',
-        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Pagados</div><div class="font-bold text-white">' + paidCount + '</div></div>',
-        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Total</div><div class="font-bold text-white">' + money(totalCollected) + '</div></div>',
-        '<div class="p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl"><div class="text-xs text-zinc-400">Comisión</div><div class="font-bold text-white">' + money(commissionAmount) + '</div></div>',
+        '<div class="p-2.5 sm:p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl min-w-0"><div class="text-[10px] text-zinc-400">Pagados</div><div class="font-bold text-white text-sm">' + paidCount + '</div></div>',
+        '<div class="p-2.5 sm:p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl min-w-0"><div class="text-[10px] text-zinc-400">Total</div><div class="font-bold text-white text-sm break-words">' + money(totalCollected) + '</div></div>',
+        '<div class="p-2.5 sm:p-3 bg-zinc-900/70 border border-zinc-800 rounded-xl min-w-0"><div class="text-[10px] text-zinc-400">Comisión</div><div class="font-bold text-white text-sm break-words">' + money(commissionAmount) + '</div></div>',
         '</div>',
         '</div>'
     ].join("");
@@ -6842,7 +7041,68 @@ async function loadStandings() {
         $("standingsWinnerBox").innerHTML = "";
         if ($("standingsInfoBox")) $("standingsInfoBox").innerHTML = "";
         if ($("standingsPodiumBox")) $("standingsPodiumBox").innerHTML = "";
+        if ($("goalChampionResults")) {
+            $("goalChampionResults").classList.add("hidden");
+            $("goalChampionResults").innerHTML = "";
+        }
         return showAlert("Selecciona una jornada.", "error");
+    }
+
+    // Detectar modo de la jornada
+    var poolModeRes = await supabaseClient
+        .from("pools")
+        .select("id, mode_code, name, status, round")
+        .eq("id", pool_id)
+        .maybeSingle();
+    if (poolModeRes.error) return showAlert(poolModeRes.error.message, "error");
+
+    var modeCode = String((poolModeRes.data && poolModeRes.data.mode_code) || "SENCILLA").toUpperCase();
+    var isGoleo = modeCode === "GOLEO";
+
+    // ── MODO GOLEÓ: solo tabla/datos de Campeón de Goleó ──
+    if (isGoleo) {
+        // Ocultar UI de Quiniela Sencilla
+        if ($("standingsPodiumBox")) $("standingsPodiumBox").innerHTML = "";
+        $("standingsWinnerBox").innerHTML = "";
+        $("standingsList").innerHTML = "";
+
+        // Total de goles
+        var goalsGoleoRes = await supabaseClient
+            .from("pool_goals_total")
+            .select("total_goals")
+            .eq("pool_id", pool_id)
+            .maybeSingle();
+        $("standingsGoalsTotal").textContent = String(
+            (goalsGoleoRes.data && goalsGoleoRes.data.total_goals) || 0
+        );
+
+        var completionGoleo = await getPoolCompletionInfo(pool_id);
+        var isFinishedGoleo = completionGoleo && completionGoleo.isFinished;
+
+        if ($("standingsInfoBox")) {
+            $("standingsInfoBox").innerHTML = [
+                '<div class="p-3 border rounded-xl text-sm ',
+                isFinishedGoleo
+                    ? 'bg-amber-500/10 border-amber-500/25 text-amber-200'
+                    : 'bg-amber-500/10 border-amber-500/20 text-amber-300',
+                '">',
+                isFinishedGoleo
+                    ? '⚽ Campeón de Goleó · jornada finalizada. Solo acierto <strong>exacto</strong> gana la bolsa.'
+                    : '⚽ Campeón de Goleó · tabla por cercanía al total de goles (puede cambiar).',
+                '<div class="text-xs mt-1 opacity-80">Solo participan boletos <strong>pagados</strong>. Si nadie acierta exacto, la bolsa se acumula.</div>',
+                '</div>'
+            ].join("");
+        }
+
+        await loadGoalChampionStandings();
+        return;
+    }
+
+    // ── MODO SENCILLA (u otros 1X2): podio + tabla de aciertos ──
+    // Ocultar bloque Goleó si venía de otra jornada
+    if ($("goalChampionResults")) {
+        $("goalChampionResults").classList.add("hidden");
+        $("goalChampionResults").innerHTML = "";
     }
 
     // Solo entries pagados de la jornada
@@ -6972,8 +7232,6 @@ async function loadStandings() {
     if ($("standingsPodiumBox")) {
         $("standingsPodiumBox").innerHTML = renderStandingsPodium(rows);
     }
-    // Load Goleo standings if applicable
-    await loadGoalChampionStandings();
 
     // Stats de la jornada
     const {
@@ -9008,12 +9266,87 @@ async function previewAndSavePicks() {
     if (!currentPickEntryId) return showAlert("Primero carga un boleto.", "error");
 
     var pool_id = currentPickPoolId || $("pickPool").value;
+    var participant_id = currentPickParticipantId || ($("pickParticipant") && $("pickParticipant").value);
 
     var poolRes = await supabaseClient.from("pools")
-    .select("id, status, name, round").eq("id", pool_id).maybeSingle();
+    .select("id, status, name, round, mode_code").eq("id", pool_id).maybeSingle();
     if (poolRes.error) return showAlert(poolRes.error.message, "error");
     if (!poolRes.data || poolRes.data.status !== "open")
         return showAlert("Esta jornada ya esta cerrada.", "error");
+
+    // Participante + área
+    var partName = "—";
+    var partArea = "";
+    if (participant_id) {
+        var partRes = await supabaseClient.from("participants")
+            .select("id, name, area").eq("id", participant_id).maybeSingle();
+        if (partRes.data) {
+            partName = partRes.data.name || "—";
+            partArea = partRes.data.area || "";
+        }
+    } else {
+        // Fallback: label del select
+        var selPart = $("pickParticipant");
+        if (selPart && selPart.selectedIndex >= 0) {
+            var raw = (selPart.options[selPart.selectedIndex].textContent || "").trim();
+            var bits = raw.split(" • ");
+            partName = bits[0] || raw || "—";
+            partArea = bits.slice(1).join(" • ");
+        }
+    }
+
+    // Nº de boleto del participante en esta jornada (1, 2, 3…)
+    var boletoNo = 1;
+    var boletoTotal = 1;
+    try {
+        var entriesRes = await supabaseClient
+            .from("entries")
+            .select("id, created_at")
+            .eq("pool_id", pool_id)
+            .eq("participant_id", participant_id)
+            .order("created_at", { ascending: true });
+        var entriesList = entriesRes.data || [];
+        boletoTotal = entriesList.length || 1;
+        for (var ei = 0; ei < entriesList.length; ei++) {
+            if (entriesList[ei].id === currentPickEntryId) {
+                boletoNo = ei + 1;
+                break;
+            }
+        }
+    } catch (e) { /* ignore */ }
+
+    // Estado de pago del boleto actual
+    var paidLabel = "";
+    try {
+        var entryRes = await supabaseClient
+            .from("entries")
+            .select("paid")
+            .eq("id", currentPickEntryId)
+            .maybeSingle();
+        if (entryRes.data) {
+            paidLabel = entryRes.data.paid ? "Pagado" : "Pendiente";
+        }
+    } catch (e) { /* ignore */ }
+
+    // Goleó: casilla opt-in o pool puro GOLEO
+    var goleoGoals = null;
+    var isGoleoMode = String(poolRes.data.mode_code || "").toUpperCase() === "GOLEO";
+    var optChk = $("goalChampionOptIn");
+    var optInActive = optChk && optChk.checked;
+    var pureBlock = $("goalChampionPureBlock");
+    var pureVisible = pureBlock && !pureBlock.classList.contains("hidden") && isGoleoMode;
+
+    if (optInActive) {
+        var optIn = $("goalChampionOptInInput");
+        if (optIn && optIn.value !== "" && !isNaN(Number(optIn.value))) {
+            goleoGoals = Number(optIn.value);
+        }
+    } else if (pureVisible || isGoleoMode) {
+        var pureIn = $("goalChampionInput");
+        if (pureIn && pureIn.value !== "" && !isNaN(Number(pureIn.value))) {
+            goleoGoals = Number(pureIn.value);
+        }
+    }
 
     // Recolectar seleccion actual
     var selected = {};
@@ -9021,7 +9354,9 @@ async function previewAndSavePicks() {
         selected[btn.getAttribute("data-match-id")] = btn.getAttribute("data-pick");
     });
 
-    if (!Object.keys(selected).length) return showAlert("No seleccionaste pronosticos.", "error");
+    if (!Object.keys(selected).length && !isGoleoMode) {
+        return showAlert("No seleccionaste pronosticos.", "error");
+    }
 
     // Construir preview con los partidos del DOM
     var matchDivs = document.querySelectorAll("#pickMatches > div[class*='p-3']");
@@ -9031,10 +9366,8 @@ async function previewAndSavePicks() {
     }
 
     matchDivs.forEach(function(div, i) {
-        // Get match name from the div
         var matchName = div.querySelector(".text-sm.font-semibold, .font-semibold");
         var label = matchName ? matchName.textContent.trim(): ("Partido " + (i+1));
-        // Find selected pick for this match's buttons
         var btns = div.querySelectorAll(".pick-btn, .pickbtn");
         var pick = null;
         btns.forEach(function(b) {
@@ -9043,36 +9376,82 @@ async function previewAndSavePicks() {
             }
         });
         if (!pick) {
-            // Try from selected map using match_id
             btns.forEach(function(b) {
                 var mid = b.getAttribute("data-match-id") || b.getAttribute("data-mid");
                 if (mid && selected[mid]) pick = selected[mid];
             });
         }
-        var arrow = pick === "H" ? "->": pick === "A" ? "<-": pick === "D" ? "=": "?";
-        previewLines.push((i+1) + ". " + label + "  " + arrow + " " + (pick ? pickLabel(pick): "Sin pick"));
+        var arrow = pick === "H" ? "→": pick === "A" ? "←": pick === "D" ? "=": "?";
+        var pickColor = pick === "H" ? "#34d399" : pick === "A" ? "#38bdf8" : pick === "D" ? "#fbbf24" : "#8a94a6";
+        previewLines.push(
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);">' +
+            '<div style="font-size:13px;color:#e5e7eb;line-height:1.35;min-width:0;">' +
+            '<span style="color:#8a94a6;font-weight:700;margin-right:4px;">' + (i + 1) + '.</span>' +
+            escapeHTML(label) +
+            '</div>' +
+            '<div style="flex-shrink:0;font-size:12px;font-weight:800;color:' + pickColor + ';">' +
+            arrow + ' ' + (pick ? pickLabel(pick) : "—") +
+            '</div></div>'
+        );
     });
 
-    // Show preview modal
-    var jornada = poolRes.data.round ? "Jornada " + poolRes.data.round: poolRes.data.name;
-    var partName = $("pickEntryLabel") ? $("pickEntryLabel").textContent.split("•")[0].trim(): "";
+    var jornada = poolRes.data.round ? "Jornada " + poolRes.data.round : (poolRes.data.name || "Jornada");
+    var modeShort = typeof formatModeShort === "function"
+        ? formatModeShort(poolRes.data.mode_code || "SENCILLA")
+        : (poolRes.data.mode_code || "Sencilla");
+
+    // Meta chips
+    var metaChips = [];
+    metaChips.push('<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.28);color:#a7f3d0;">' + escapeHTML(jornada) + '</span>');
+    metaChips.push('<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#cbd5e1;">' + escapeHTML(modeShort) + '</span>');
+    if (paidLabel) {
+        var paidColor = paidLabel === "Pagado"
+            ? "background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.28);color:#a7f3d0;"
+            : "background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.28);color:#fcd34d;";
+        metaChips.push('<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid;' + paidColor + '">' + paidLabel + '</span>');
+    }
+    if (boletoTotal > 1) {
+        metaChips.push('<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.28);color:#c7d2fe;">Boleto #' + boletoNo + ' de ' + boletoTotal + '</span>');
+    }
+
+    var goleoBlock = "";
+    if (goleoGoals != null) {
+        goleoBlock =
+            '<div style="margin:12px 0 4px;padding:12px 14px;border-radius:14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);">' +
+            '<div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fbbf24;margin-bottom:4px;">Campeón de Goleó</div>' +
+            '<div style="font-size:22px;font-weight:900;color:#fde68a;line-height:1;">' + goleoGoals + ' <span style="font-size:13px;font-weight:600;color:#fbbf24;">goles</span></div>' +
+            '</div>';
+    } else if (optInActive) {
+        goleoBlock =
+            '<div style="margin:12px 0 4px;padding:10px 14px;border-radius:14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.22);font-size:12px;color:#fbbf24;">' +
+            'Goleó activado · falta capturar el total de goles' +
+            '</div>';
+    }
 
     var modal = document.createElement("div");
     modal.id = "picksPreviewModal";
     modal.style.cssText = "position:fixed;inset:0;z-index:9998;display:flex;align-items:flex-end;padding:0;";
 
-    var previewHtml = previewLines.map(function(l) {
-        return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;color:#e5e7eb;">' + l + '</div>';
-    }).join("");
-
     modal.innerHTML = [
         '<div style="position:absolute;inset:0;background:rgba(0,0,0,.7);" id="picksPreviewBg"></div>',
         '<div style="position:relative;width:100%;background:#0c1018;border:1px solid rgba(255,255,255,.1);',
-        'border-radius:24px 24px 0 0;padding:24px;max-height:80vh;overflow-y:auto;">',
+        'border-radius:24px 24px 0 0;padding:24px;max-height:85vh;overflow-y:auto;">',
         '<div style="width:48px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 18px;"></div>',
-        '<div style="font-size:17px;font-weight:800;color:#f0f4f8;margin-bottom:4px;">Vista previa</div>',
-        '<div style="font-size:13px;color:#8a94a6;margin-bottom:16px;">' + jornada + (partName ? " - " + partName: "") + '</div>',
-        '<div style="margin-bottom:16px;">' + previewHtml + '</div>',
+        '<div style="font-size:17px;font-weight:800;color:#f0f4f8;margin-bottom:12px;">Vista previa</div>',
+
+        // Participante
+        '<div style="padding:12px 14px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);margin-bottom:12px;">',
+        '<div style="font-size:15px;font-weight:800;color:#f0f4f8;line-height:1.25;">' + escapeHTML(partName) + '</div>',
+        partArea ? ('<div style="font-size:12px;color:#8a94a6;margin-top:3px;">' + escapeHTML(partArea) + '</div>') : '',
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">' + metaChips.join("") + '</div>',
+        '</div>',
+
+        goleoBlock,
+
+        previewLines.length
+            ? ('<div style="margin:8px 0 16px;">' + previewLines.join("") + '</div>')
+            : '<div style="margin:8px 0 16px;font-size:13px;color:#8a94a6;">Sin partidos 1X2 (modo Goleó)</div>',
+
         '<div style="display:grid;gap:10px;">',
         '<button id="picksPreviewConfirm" style="width:100%;padding:14px;border-radius:14px;border:none;',
         'background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:15px;font-weight:700;cursor:pointer;">',
@@ -10742,7 +11121,6 @@ async function addEntryAndPay() {
     if (error) return showAlert(error.message, "error");
 
     showAlert("Boleto registrado y pagado ✅", "ok");
-    $("entryPaid").checked = false;
     await loadEntriesAndStats();
     await fillPickParticipantsSelect();
     await loadPickStatusList();
@@ -13317,24 +13695,65 @@ async function loadGoalChampionStandings() {
         console.warn("countConsecutiveDryGoleoJornadas", e);
     }
 
+    // Premio por persona si hay acertantes exactos (empate reparte equitativo)
+    var winnersCount = exactWinners.length;
+    var prizePerWinner = hasExact && winnersCount > 0
+        ? Math.floor(Number(bag.total_bag || 0) / winnersCount)
+        : 0;
+    var paidCount = Number(bag.paid_count || 0);
+    var predsCount = rows.length;
+    var closestDiff = rows.length && rows[0].diff != null ? rows[0].diff : null;
+
     var jornada = pool.round != null && pool.round !== "" ? ("Jornada " + pool.round) : pool.name;
     var ruleText = actualGoals !== null
         ? (hasExact
-            ? ("✅ " + exactWinners.length + " acertante" + (exactWinners.length > 1 ? "s" : "") + " exacto" + (exactWinners.length > 1 ? "s" : "") + " · se reparte la bolsa")
+            ? ("✅ " + winnersCount + " acertante" + (winnersCount > 1 ? "s" : "") + " exacto" + (winnersCount > 1 ? "s" : "") +
+                (winnersCount > 1
+                    ? (" · se reparte la bolsa → " + money(prizePerWinner) + " c/u")
+                    : (" · gana " + money(bag.total_bag))))
             : "❌ Sin acertante exacto · la bolsa se acumula a la próxima jornada Goleó")
         : "Captura los resultados para definir ganador (solo acierto exacto)";
 
     var bagHtml = [
-        '<div class="grid grid-cols-2 gap-2 mb-3">',
-        '<div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">',
+        '<div class="grid grid-cols-2 gap-2 mb-2">',
+        // Bolsa total
+        '<div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl min-w-0">',
         '<div class="text-[10px] text-zinc-500 uppercase tracking-wide">Bolsa total</div>',
         '<div class="text-lg font-black text-amber-400">' + money(bag.total_bag) + '</div>',
-        '<div class="text-[10px] text-zinc-500 mt-0.5">premio ' + money(bag.prize_pool) + ' + acum. ' + money(bag.carryover_amount) + '</div>',
+        '<div class="text-[10px] text-zinc-500 mt-0.5 leading-snug">premio ' + money(bag.prize_pool) + ' + acum. ' + money(bag.carryover_amount) + '</div>',
         '</div>',
-        '<div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl">',
-        '<div class="text-[10px] text-zinc-500 uppercase tracking-wide">Sin acertante</div>',
-        '<div class="text-lg font-black text-sky-400">' + dryInfo.dry + ' jornada' + (dryInfo.dry === 1 ? "" : "s") + '</div>',
-        '<div class="text-[10px] text-zinc-500 mt-0.5">consecutivas cerradas</div>',
+        // Premio por persona O jornadas en seco
+        hasExact
+            ? [
+                '<div class="p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-xl min-w-0">',
+                '<div class="text-[10px] text-emerald-400/80 uppercase tracking-wide">Premio' + (winnersCount > 1 ? " c/u" : "") + '</div>',
+                '<div class="text-lg font-black text-emerald-300">' + money(prizePerWinner) + '</div>',
+                '<div class="text-[10px] text-emerald-400/70 mt-0.5">' + winnersCount + ' acertante' + (winnersCount > 1 ? "s" : "") + ' · ' + money(bag.total_bag) + ' ÷ ' + winnersCount + '</div>',
+                '</div>'
+            ].join("")
+            : [
+                '<div class="p-3 bg-zinc-950 border border-zinc-800 rounded-xl min-w-0">',
+                '<div class="text-[10px] text-zinc-500 uppercase tracking-wide">Sin acertante</div>',
+                '<div class="text-lg font-black text-sky-400">' + dryInfo.dry + ' jornada' + (dryInfo.dry === 1 ? "" : "s") + '</div>',
+                '<div class="text-[10px] text-zinc-500 mt-0.5">consecutivas cerradas</div>',
+                '</div>'
+            ].join(""),
+        '</div>',
+        // Fila de stats extra
+        '<div class="grid grid-cols-3 gap-2 mb-3">',
+        '<div class="p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-center min-w-0">',
+        '<div class="text-[10px] text-zinc-500">Pagados</div>',
+        '<div class="text-sm font-bold text-white">' + paidCount + '</div>',
+        '</div>',
+        '<div class="p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-center min-w-0">',
+        '<div class="text-[10px] text-zinc-500">Pronósticos</div>',
+        '<div class="text-sm font-bold text-white">' + predsCount + '</div>',
+        '</div>',
+        '<div class="p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-center min-w-0">',
+        '<div class="text-[10px] text-zinc-500">' + (hasExact ? "Exactos" : "Más cerca") + '</div>',
+        '<div class="text-sm font-bold ' + (hasExact ? "text-emerald-300" : "text-amber-300") + '">',
+        hasExact ? winnersCount : (closestDiff != null ? "±" + closestDiff : "—"),
+        '</div>',
         '</div>',
         '</div>'
     ].join("");
@@ -13382,18 +13801,22 @@ async function loadGoalChampionStandings() {
                     ? "bg-emerald-500/20 border-emerald-500/40"
                     : "bg-zinc-950 border-zinc-800";
                 var badge = r.isExact
-                    ? '<span class="text-xs text-emerald-400 font-bold">EXACTO ✅</span>'
-                    : (r.diff !== null ? '<span class="text-xs text-zinc-500">±' + r.diff + '</span>' : '');
+                    ? '<span class="text-[10px] sm:text-xs text-emerald-400 font-bold shrink-0">EXACTO ✅</span>'
+                    : (r.diff !== null ? '<span class="text-[10px] sm:text-xs text-zinc-500 shrink-0">±' + r.diff + '</span>' : '');
+                var prizeLine = r.isExact && prizePerWinner > 0
+                    ? '<div class="text-[11px] font-bold text-emerald-300 mt-0.5">' + money(prizePerWinner) + (winnersCount > 1 ? ' c/u' : '') + '</div>'
+                    : '';
                 return [
-                    '<div class="flex items-center justify-between p-3 border rounded-xl mb-2 ' + bg + '">',
-                    '<div>',
-                    '<div class="font-semibold text-sm">' + (i + 1) + '. ' + r.name + '</div>',
-                    '<div class="text-xs text-zinc-400">' + r.area + '</div>',
+                    '<div class="flex items-center justify-between gap-2 p-3 border rounded-xl mb-2 ' + bg + ' min-w-0">',
+                    '<div class="min-w-0 flex-1">',
+                    '<div class="font-semibold text-sm leading-snug break-words">' + (i + 1) + '. ' + escapeHTML(r.name || "—") + '</div>',
+                    '<div class="text-xs text-zinc-400 break-words">' + escapeHTML(r.area || "") + '</div>',
+                    prizeLine,
                     '</div>',
-                    '<div class="text-right flex items-center gap-3">',
+                    '<div class="text-right flex items-center gap-2 sm:gap-3 shrink-0">',
                     '<div>',
-                    '<div class="text-lg font-black">' + r.predicted + '</div>',
-                    '<div class="text-xs text-zinc-400">goles pred.</div>',
+                    '<div class="text-lg font-black leading-none">' + r.predicted + '</div>',
+                    '<div class="text-[10px] text-zinc-400 mt-0.5">goles pred.</div>',
                     '</div>',
                     badge,
                     '</div>',
