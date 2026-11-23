@@ -7944,7 +7944,7 @@ function drawWinnerCanvas(opts) {
         : winners.map(function(w) { return w.name || "?"; }).join(" & ");
     var title;
     if (isGoleo) {
-        if (noExactWinner) title = isFinished ? "Bolsa Acumulada" : "Sin Acertante";
+        if (noExactWinner) title = "Sin Acertante Exacto";
         else if (isTie) title = isFinished ? "Empate Goleó" : "Empate Provisional Goleó";
         else title = isFinished ? "Campeón de Goleó" : "Líder Goleó";
     } else {
@@ -7954,7 +7954,7 @@ function drawWinnerCanvas(opts) {
     }
 
     var W = 900;
-    var H = 1000;
+    var H = noExactWinner && isGoleo ? 1100 : 1000;
     var scale = 2;
     var canvas = document.createElement("canvas");
     canvas.width = W * scale;
@@ -7965,7 +7965,7 @@ function drawWinnerCanvas(opts) {
 
     // Fondo dark premium
     var bg = ctx.createRadialGradient(W / 2, 120, 20, W / 2, H * 0.4, H * 0.9);
-    bg.addColorStop(0, "#0c1a2e");
+    bg.addColorStop(0, noExactWinner && isGoleo ? "#1a1208" : "#0c1a2e");
     bg.addColorStop(0.5, "#050810");
     bg.addColorStop(1, "#03060c");
     ctx.fillStyle = bg;
@@ -7980,13 +7980,18 @@ function drawWinnerCanvas(opts) {
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
     }
-    glow(W / 2, 280, 240, "rgba(251,191,36,0.16)");
-    glow(60, 40, 150, "rgba(16,185,129,0.12)");
+    if (noExactWinner && isGoleo) {
+        glow(W / 2, 320, 280, "rgba(251,191,36,0.18)");
+        glow(80, 60, 160, "rgba(245,158,11,0.10)");
+    } else {
+        glow(W / 2, 280, 240, "rgba(251,191,36,0.16)");
+        glow(60, 40, 150, "rgba(16,185,129,0.12)");
+    }
 
     // Línea top
     var lg = ctx.createLinearGradient(W * 0.15, 0, W * 0.85, 0);
     lg.addColorStop(0, "transparent");
-    lg.addColorStop(0.5, "#fbbf24");
+    lg.addColorStop(0.5, noExactWinner && isGoleo ? "#f59e0b" : "#fbbf24");
     lg.addColorStop(1, "transparent");
     ctx.fillStyle = lg;
     ctx.fillRect(W * 0.15, 0, W * 0.7, 3);
@@ -8003,7 +8008,7 @@ function drawWinnerCanvas(opts) {
         }
     } else {
         ctx.font = "32px Arial";
-        ctx.fillText("🏆", W / 2, hy + 28);
+        ctx.fillText(noExactWinner && isGoleo ? "⚽" : "🏆", W / 2, hy + 28);
         hy += 52;
     }
 
@@ -8013,20 +8018,20 @@ function drawWinnerCanvas(opts) {
     hy += 40;
 
     // Título estado
-    ctx.fillStyle = isFinished ? "#fbbf24" : "#38bdf8";
+    ctx.fillStyle = noExactWinner && isGoleo ? "#f59e0b" : (isFinished ? "#fbbf24" : "#38bdf8");
     ctx.font = "800 14px Arial";
     ctx.fillText(title.toUpperCase(), W / 2, hy);
     hy += 44;
 
-    // Avatar círculo ganador
-    var avR = 64;
+    // Avatar círculo
+    var avR = noExactWinner && isGoleo ? 72 : 64;
     var avCy = hy + avR;
     var ringGrad = ctx.createLinearGradient(W / 2 - avR, avCy - avR, W / 2 + avR, avCy + avR);
     ringGrad.addColorStop(0, "#fde68a");
     ringGrad.addColorStop(1, "#b45309");
     ctx.beginPath();
     ctx.arc(W / 2, avCy, avR + 6, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(251,191,36,0.25)";
+    ctx.fillStyle = noExactWinner && isGoleo ? "rgba(245,158,11,0.28)" : "rgba(251,191,36,0.25)";
     ctx.fill();
     ctx.beginPath();
     ctx.arc(W / 2, avCy, avR + 3, 0, Math.PI * 2);
@@ -8041,39 +8046,56 @@ function drawWinnerCanvas(opts) {
     if (noExactWinner) initials = "⚽";
     else if (isTie) initials = "🤝";
     ctx.fillStyle = "#fbbf24";
-    ctx.font = (isTie || noExactWinner) ? "40px Arial" : "900 36px Arial";
+    ctx.font = (isTie || noExactWinner) ? "44px Arial" : "900 36px Arial";
     ctx.textBaseline = "middle";
     ctx.fillText(initials, W / 2, avCy + 1);
     ctx.textBaseline = "alphabetic";
 
     hy = avCy + avR + 36;
 
-    // Nombres
+    // Nombres / mensaje principal
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 32px Arial";
-    wrapText(ctx, names, W / 2, hy, W - 80, 36);
-    hy += 48;
+    ctx.font = noExactWinner && isGoleo ? "900 28px Arial" : "900 32px Arial";
+    var mainText = noExactWinner && isGoleo
+        ? "Nadie acertó el total exacto"
+        : names;
+    wrapText(ctx, mainText, W / 2, hy, W - 100, 34);
+    hy += noExactWinner && isGoleo ? 56 : 48;
 
     // Subtítulo jornada
     ctx.fillStyle = "#8a94a6";
     ctx.font = "600 15px Arial";
     ctx.fillText(poolName + (season ? "  ·  " + season : ""), W / 2, hy);
-    hy += 40;
+    hy += 36;
+
+    // Mensaje especial de acumulación (solo Goleó sin acertante)
+    if (isGoleo && noExactWinner) {
+        ctx.fillStyle = "#fbbf24";
+        ctx.font = "700 16px Arial";
+        wrapText(ctx, "La bolsa se acumula y pasa a la próxima jornada Goleó", W / 2, hy, W - 120, 22);
+        hy += 52;
+    }
 
     // Stats cards
     var cards;
     if (isGoleo) {
-        cards = [
-            { label: "Goles reales", value: String(actualGoals), color: "#34d399" },
-            { label: "Bolsa", value: (typeof money === "function" ? money(prizePool) : ("$" + prizePool)), color: "#fbbf24" },
-            {
-                label: noExactWinner ? "Acumula" : (isTie ? "Por persona" : "Premio"),
-                value: noExactWinner
-                    ? (typeof money === "function" ? money(prizePool) : ("$" + prizePool))
-                    : (typeof money === "function" ? money(prizePerWinner) : ("$" + prizePerWinner)),
-                color: "#38bdf8"
-            }
-        ];
+        if (noExactWinner) {
+            cards = [
+                { label: "Goles reales", value: String(actualGoals), color: "#34d399" },
+                { label: "Bolsa que acumula", value: (typeof money === "function" ? money(prizePool) : ("$" + prizePool)), color: "#f59e0b" },
+                { label: "Destino", value: "Próxima Goleó", color: "#38bdf8" }
+            ];
+        } else {
+            cards = [
+                { label: "Goles reales", value: String(actualGoals), color: "#34d399" },
+                { label: "Bolsa", value: (typeof money === "function" ? money(prizePool) : ("$" + prizePool)), color: "#fbbf24" },
+                {
+                    label: isTie ? "Por persona" : "Premio",
+                    value: (typeof money === "function" ? money(prizePerWinner) : ("$" + prizePerWinner)),
+                    color: "#38bdf8"
+                }
+            ];
+        }
     } else {
         cards = [
             { label: "Aciertos", value: String(winningPoints), color: "#34d399" },
@@ -8081,34 +8103,34 @@ function drawWinnerCanvas(opts) {
             { label: isTie ? "Por persona" : "Premio", value: (typeof money === "function" ? money(prizePerWinner) : ("$" + prizePerWinner)), color: "#38bdf8" }
         ];
     }
-    var cardW = 240;
-    var cardGap = 18;
+    var cardW = noExactWinner && isGoleo ? 250 : 240;
+    var cardGap = 16;
     var cardsTotal = cards.length * cardW + (cards.length - 1) * cardGap;
     var cx0 = (W - cardsTotal) / 2;
     cards.forEach(function(c, i) {
         var x = cx0 + i * (cardW + cardGap);
         ctx.fillStyle = "rgba(255,255,255,0.04)";
-        ctx.strokeStyle = "rgba(255,255,255,0.10)";
+        ctx.strokeStyle = noExactWinner && isGoleo && i === 1 ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.10)";
         ctx.lineWidth = 1;
-        roundRect(ctx, x, hy, cardW, 88, 16);
+        roundRect(ctx, x, hy, cardW, 92, 16);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = "#8a94a6";
-        ctx.font = "700 12px Arial";
+        ctx.font = "700 11px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(c.label.toUpperCase(), x + cardW / 2, hy + 28);
+        ctx.fillText(c.label.toUpperCase(), x + cardW / 2, hy + 30);
         ctx.fillStyle = c.color;
-        ctx.font = "900 26px Arial";
-        ctx.fillText(c.value, x + cardW / 2, hy + 62);
+        ctx.font = "900 24px Arial";
+        ctx.fillText(c.value, x + cardW / 2, hy + 64);
     });
-    hy += 120;
+    hy += 130;
 
-    // Ganadores count / nota Goleó
+    // Nota adicional Goleó sin acertante
     if (isGoleo && noExactWinner) {
-        ctx.fillStyle = "#fbbf24";
-        ctx.font = "700 14px Arial";
-        ctx.fillText("Nadie acertó exacto · la bolsa pasa a la próxima jornada", W / 2, hy);
-        hy += 28;
+        ctx.fillStyle = "#a1aab8";
+        ctx.font = "600 13px Arial";
+        wrapText(ctx, "El premio (bolsa de esta jornada + acumulados previos, después de comisión) se suma a la siguiente quiniela del mismo modo Goleó.", W / 2, hy, W - 100, 20);
+        hy += 60;
     } else if (isTie) {
         ctx.fillStyle = "#fbbf24";
         ctx.font = "700 14px Arial";
@@ -8130,13 +8152,14 @@ function drawWinnerCanvas(opts) {
     ctx.stroke();
     ctx.fillStyle = "#ffffff";
     ctx.font = "800 16px Arial";
-    ctx.fillText("¡Gracias por participar! 🏆", W / 2, fy + 12);
+    ctx.fillText(noExactWinner && isGoleo ? "¡La bolsa sigue creciendo! ⚽" : "¡Gracias por participar! 🏆", W / 2, fy + 12);
     ctx.fillStyle = "#8a94a6";
     ctx.font = "600 12px Arial";
     ctx.fillText("Quiniela Arcángel — Pasión X Ganar", W / 2, fy + 32);
 
     return canvas;
 }
+
 
 async function exportWinnerCard() {
     hideAlert();
