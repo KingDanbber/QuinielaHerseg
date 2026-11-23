@@ -5677,7 +5677,27 @@ function makeTemplateCard(opts) {
     const teamFont = exportMode ? "14px": "11px";
     const colGap = exportMode ? "10px": "6px";
 
-    matches.forEach(function(m) {
+    // Detectar jornada Ida y Vuelta (8 partidos)
+    var isIdaVuelta = matches.length === 8;
+
+    matches.forEach(function(m, idx) {
+        // Separadores visuales Ida / Vuelta
+        if (isIdaVuelta && idx === 0) {
+            var idaLabel = document.createElement("div");
+            idaLabel.style.cssText = `grid-column:1/-1;text-align:center;font-weight:900;font-size:${exportMode?"12px":"9px"};color:${exportMode?"#059669":"#34d399"};letter-spacing:0.5px;padding:${exportMode?"6px 0 4px":"3px 0 2px"};border-bottom:1px solid ${exportMode?"#d1fae5":"rgba(16,185,129,.3)"};margin-bottom:${exportMode?"4px":"2px"};`;
+            idaLabel.textContent = "PARTIDOS DE IDA";
+            table.appendChild(idaLabel);
+        }
+        if (isIdaVuelta && idx === 4) {
+            var sep = document.createElement("div");
+            sep.style.cssText = `grid-column:1/-1;height:1px;background:${border};margin:${exportMode?"8px 0 4px":"4px 0 2px"};`;
+            table.appendChild(sep);
+            var vueltaLabel = document.createElement("div");
+            vueltaLabel.style.cssText = `grid-column:1/-1;text-align:center;font-weight:900;font-size:${exportMode?"12px":"9px"};color:${exportMode?"#b45309":"#fbbf24"};letter-spacing:0.5px;padding:${exportMode?"6px 0 4px":"3px 0 2px"};border-bottom:1px solid ${exportMode?"#fde68a":"rgba(245,158,11,.3)"};margin-bottom:${exportMode?"4px":"2px"};`;
+            vueltaLabel.textContent = "PARTIDOS DE VUELTA";
+            table.appendChild(vueltaLabel);
+        }
+
         const homeLogo = getTeamLogo(m.home_team);
         const awayLogo = getTeamLogo(m.away_team);
 
@@ -10113,7 +10133,29 @@ async function printTemplateCopiesPage() {
         var matchWrap = document.createElement("div");
         matchWrap.style.cssText = "flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:1px;padding:1px 0;";
 
-        matches.forEach(function(m) {
+        // Detectar jornada Ida y Vuelta (8 partidos: primeros 4 ida, últimos 4 vuelta)
+        var isIdaVuelta = matches.length === 8;
+        var BOX = '<div style="width:12px;height:12px;border:1.2px solid #333;border-radius:2px;background:#fff;flex-shrink:0;box-sizing:border-box;display:inline-block;vertical-align:middle;"></div>';
+        var EBOX = '<div style="width:12px;height:12px;border:1.2px solid #333;border-radius:2px;background:#fff;box-sizing:border-box;margin:0 auto;"></div>';
+
+        matches.forEach(function(m, idx) {
+            // Separador visual Ida / Vuelta
+            if (isIdaVuelta && idx === 0) {
+                var idaLabel = document.createElement("div");
+                idaLabel.style.cssText = "font-size:7px;font-weight:900;color:#059669;text-align:center;letter-spacing:0.5px;padding:1px 0 2px;border-bottom:1px solid #d1fae5;margin-bottom:1px;";
+                idaLabel.textContent = "PARTIDOS DE IDA";
+                matchWrap.appendChild(idaLabel);
+            }
+            if (isIdaVuelta && idx === 4) {
+                var sep = document.createElement("div");
+                sep.style.cssText = "height:1px;background:#ccc;margin:3px 0 2px;";
+                matchWrap.appendChild(sep);
+                var vueltaLabel = document.createElement("div");
+                vueltaLabel.style.cssText = "font-size:7px;font-weight:900;color:#b45309;text-align:center;letter-spacing:0.5px;padding:1px 0 2px;border-bottom:1px solid #fde68a;margin-bottom:1px;";
+                vueltaLabel.textContent = "PARTIDOS DE VUELTA";
+                matchWrap.appendChild(vueltaLabel);
+            }
+
             // Row layout: [□ NOMBRE LOCAL] [□] [NOMBRE VISITA □]
             var row = document.createElement("div");
             row.style.cssText = [
@@ -10124,9 +10166,6 @@ async function printTemplateCopiesPage() {
                 "min-height:" + rowMinHeight,
                 "padding:" + rowPadding
             ].join(";");
-
-            var BOX = '<div style="width:12px;height:12px;border:1.2px solid #333;border-radius:2px;background:#fff;flex-shrink:0;box-sizing:border-box;display:inline-block;vertical-align:middle;"></div>';
-            var EBOX = '<div style="width:12px;height:12px;border:1.2px solid #333;border-radius:2px;background:#fff;box-sizing:border-box;margin:0 auto;"></div>';
 
             row.innerHTML =
             // Local: checkbox left, then name
